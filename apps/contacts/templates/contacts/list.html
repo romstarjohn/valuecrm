@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Contacts | ValuedCRM{% endblock %}
+
+{% block content %}
+{% include "includes/page_header.html" with title="Contacts" subtitle="Comprehensive list of students and contact data from ClickFunnels." action_label="Add New Contact" action_url="/contacts/add/" action_icon="fa-solid fa-user-plus" %}
+
+<div class="container-fluid px-4 fade-in">
+    <div class="table-container mb-4 shadow-sm border-0">
+        <!-- Toolbar -->
+        {% include "components/table_toolbar.html" with has_search=True search_placeholder="Search students..." has_filters=True %}
+            {% block table_filters %}
+                <div class="dropdown">
+                    <button class="btn btn-crm-outline btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="fa-solid fa-filter me-1 small"></i> Status: {{ status_filter|default:"All" }}
+                    </button>
+                    <ul class="dropdown-menu shadow border-0">
+                        <li><a class="dropdown-item" href="?{% if query %}q={{ query }}&{% endif %}{% if source_filter %}source={{ source_filter }}&{% endif %}">All Statuses</a></li>
+                        {% for opt in status_options %}
+                        <li><a class="dropdown-item" href="?status={{ opt }}{% if query %}&q={{ query }}{% endif %}{% if source_filter %}&source={{ source_filter }}{% endif %}">{{ opt }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endblock %}
+        
+        <!-- Data Table -->
+        {% if page_obj %}
+            {% include "components/table_start.html" with selectable=True headers=headers has_actions=True %}
+                {% for contact in page_obj %}
+                <tr>
+                    <td class="table-check">
+                        <input class="form-check-input row-select" type="checkbox" value="{{ contact.id }}">
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <div class="bg-primary text-white rounded-circle me-3 d-flex align-items-center justify-content-center fw-bold shadow-sm" style="width: 40px; height: 40px; font-size: 0.9rem;">
+                                {{ contact.first_name|slice:":1"|upper }}{{ contact.last_name|slice:":1"|upper }}
+                            </div>
+                            <div>
+                                <a href="{% url 'contacts:detail' contact.id %}" class="text-decoration-none fw-bold text-dark h6 mb-0">
+                                    {{ contact.first_name }} {{ contact.last_name }}
+                                </a>
+                                <div class="text-muted small">{{ contact.email }}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        {% include "components/status_badge.html" with status=contact.status %}
+                    </td>
+                    <td>
+                        <span class="badge bg-light text-muted border rounded-pill px-2">
+                            <i class="fa-solid fa-tags me-1 small"></i>{{ contact.tags|length }}
+                        </span>
+                    </td>
+                    <td><span class="small fw-medium">{{ contact.source|default:"--" }}</span></td>
+                    <td class="text-end">
+                        {% include "components/action_menu.html" %}
+                            {% block menu_items %}
+                                <li><a class="dropdown-item" href="{% url 'contacts:detail' contact.id %}"><i class="fa-solid fa-user me-2 small"></i>View Profile</a></li>
+                                <li><a class="dropdown-item" href="{% url 'contacts:edit' contact.id %}"><i class="fa-solid fa-edit me-2 small"></i>Edit Contact</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-primary" href="{% url 'enrollments:new' %}?email={{ contact.email }}"><i class="fa-solid fa-user-plus me-2 small"></i>Enroll</a></li>
+                            {% endblock %}
+                    </td>
+                </tr>
+                {% endfor %}
+            {% include "components/table_end.html" %}
+        {% else %}
+            {% include "components/table_empty_state.html" with title="No contacts found" description="Adjust your filters or add a new student to your workspace." action_label="Add New Contact" action_url="/contacts/add/" action_icon="fa-solid fa-plus" %}
+        {% endif %}
+    </div>
+
+    {% if page_obj %}
+        {% include "components/pagination.html" with page_obj=page_obj %}
+    {% endif %}
+</div>
+
+<!-- Bulk Actions -->
+{% include "components/bulk_actions.html" %}
+    {% block bulk_buttons %}
+        <button class="btn btn-sm btn-primary rounded-pill px-3">Enroll in Course</button>
+        <button class="btn btn-sm btn-outline-light rounded-pill px-3 border-0">Export Selected</button>
+    {% endblock %}
+{% endblock %}

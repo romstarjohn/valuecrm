@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Bulk Enrollment | ValuedCRM{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-4">
+    
+    <div class="mb-4">
+        <a href="{% url 'enrollments:list' %}" class="text-decoration-none small text-muted">
+            <i class="fa-solid fa-arrow-left me-1"></i> Back to History
+        </a>
+        <h2 class="fw-bold mt-2">Bulk Enrollment</h2>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-12">
+            {% if bulk_result %}
+                <div class="crm-card mb-4 border-start border-4 border-info">
+                    <h5 class="fw-bold mb-4">Bulk Processing Summary</h5>
+                    <div class="row g-4 text-center">
+                        <div class="col-md-4 border-end">
+                            <h3 class="fw-bold mb-0">{{ bulk_result.total }}</h3>
+                            <div class="text-muted small text-uppercase">Total Processed</div>
+                        </div>
+                        <div class="col-md-4 border-end">
+                            <h3 class="fw-bold mb-0 text-success">{{ bulk_result.success_count }}</h3>
+                            <div class="text-muted small text-uppercase">Successful</div>
+                        </div>
+                        <div class="col-md-4">
+                            <h3 class="fw-bold mb-0 text-danger">{{ bulk_result.failure_count }}</h3>
+                            <div class="text-muted small text-uppercase">Failed</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-container mb-4">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th>Status</th>
+                                <th class="text-end">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for res in bulk_result.results %}
+                            <tr>
+                                <td class="fw-medium">{{ res.contact_email }}</td>
+                                <td>{% include "components/status_badge.html" with status=res.status %}</td>
+                                <td class="text-end">
+                                    {% if res.enrollment_attempt_id %}
+                                        <a href="{% url 'enrollments:detail' res.enrollment_attempt_id %}" class="btn btn-sm btn-link py-0">Audit</a>
+                                    {% else %}
+                                        <span class="text-muted small italic">{{ res.error_message|default:"Internal Error" }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex justify-content-center mb-5">
+                    <a href="{% url 'enrollments:bulk' %}" class="btn btn-crm btn-outline-secondary">Start New Bulk Process</a>
+                </div>
+
+            {% else %}
+                <div class="row">
+                    <div class="col-lg-8">
+                        <div class="crm-card">
+                            <form method="post">
+                                {% csrf_token %}
+                                <div class="mb-4">
+                                    <label class="form-label small fw-bold text-muted">Select Target Course</label>
+                                    {{ form.course_id }}
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <label class="form-label small fw-bold text-muted">Email Addresses</label>
+                                    {{ form.emails }}
+                                    <div class="form-text small mt-2">Paste emails one per line. We'll automatically identify existing contacts.</div>
+                                    {% if form.emails.errors %}
+                                        <div class="text-danger small mt-1">{{ form.emails.errors }}</div>
+                                    {% endif %}
+                                </div>
+
+                                <button type="submit" class="btn btn-crm btn-crm-primary w-100 py-3 fs-5">
+                                    <i class="fa-solid fa-bolt me-2"></i>Run Bulk Enrollment
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="crm-card bg-dark text-white border-0 h-100">
+                            <h5 class="fw-bold mb-4">Bulk Process Rules</h5>
+                            <ul class="list-unstyled">
+                                <li class="mb-3 d-flex align-items-top">
+                                    <i class="fa-solid fa-circle-check text-primary mt-1 me-3"></i>
+                                    <span>Maximum of 50 emails per request.</span>
+                                </li>
+                                <li class="mb-3 d-flex align-items-top">
+                                    <i class="fa-solid fa-circle-check text-primary mt-1 me-3"></i>
+                                    <span>Each student is verified/created in CF before enrollment.</span>
+                                </li>
+                                <li class="mb-3 d-flex align-items-top">
+                                    <i class="fa-solid fa-circle-check text-primary mt-1 me-3"></i>
+                                    <span>Failed individual enrollments won't stop the queue.</span>
+                                </li>
+                                <li class="mb-3 d-flex align-items-top">
+                                    <i class="fa-solid fa-circle-check text-primary mt-1 me-3"></i>
+                                    <span>Audit logs are created for every single student attempt.</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

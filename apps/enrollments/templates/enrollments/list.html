@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Enrollment History | ValuedCRM{% endblock %}
+
+{% block content %}
+{% include "includes/page_header.html" with title="Enrollment History" subtitle="Audit log of all student enrollment transactions and their statuses." action_label="New Enrollment" action_url="/enrollments/new/" action_icon="fa-solid fa-plus" %}
+
+<div class="container-fluid px-4 fade-in">
+    <div class="table-container mb-4 shadow-sm border-0">
+        <!-- Toolbar -->
+        {% include "components/table_toolbar.html" with has_search=True search_placeholder="Search email or course..." has_filters=True %}
+            {% block table_filters %}
+                <div class="dropdown">
+                    <button class="btn btn-crm-outline btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="fa-solid fa-filter me-1 small"></i> Status: {{ status_filter|default:"All" }}
+                    </button>
+                    <ul class="dropdown-menu shadow border-0">
+                        <li><a class="dropdown-item" href="?{% if query %}q={{ query }}&{% endif %}{% if course_filter %}course_id={{ course_filter }}&{% endif %}">All Statuses</a></li>
+                        {% for val, label in status_options %}
+                        <li><a class="dropdown-item" href="?status={{ val }}{% if query %}&q={{ query }}{% endif %}{% if course_filter %}&course_id={{ course_filter }}{% endif %}">{{ label }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endblock %}
+            {% block table_actions %}
+                <a href="{% url 'enrollments:bulk' %}" class="btn btn-crm btn-outline-primary btn-sm rounded-pill px-3">
+                    <i class="fa-solid fa-layer-group me-2"></i>Bulk Enroll
+                </a>
+            {% endblock %}
+        
+        <!-- Data Table -->
+        {% if page_obj %}
+            {% include "components/table_start.html" with selectable=False headers=headers has_actions=True %}
+                {% for attempt in page_obj %}
+                <tr>
+                    <td class="fw-medium">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-primary bg-opacity-10 text-primary rounded-circle me-3 d-flex align-items-center justify-content-center fw-bold" style="width: 32px; height: 32px; font-size: 0.75rem;">
+                                {{ attempt.contact.first_name|slice:":1"|upper }}{{ attempt.contact.last_name|slice:":1"|upper }}
+                            </div>
+                            <div>
+                                <a href="{% url 'contacts:detail' attempt.contact.id %}" class="text-decoration-none text-dark fw-bold">
+                                    {{ attempt.contact.email }}
+                                </a>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <a href="{% url 'courses:detail' attempt.course.cf_course_id %}" class="text-decoration-none text-muted small fw-bold">
+                            {{ attempt.course.name }}
+                        </a>
+                    </td>
+                    <td>
+                        {% include "components/status_badge.html" with status=attempt.status %}
+                    </td>
+                    <td><code class="small text-muted">{{ attempt.cf_enrollment_id|default:"--" }}</code></td>
+                    <td class="text-muted small">{{ attempt.created_at|date:"M d, Y H:i" }}</td>
+                    <td class="text-end">
+                        {% include "components/action_menu.html" %}
+                            {% block menu_items %}
+                                <li><a class="dropdown-item" href="{% url 'enrollments:detail' attempt.id %}"><i class="fa-solid fa-list-check me-2 small"></i>View Audit</a></li>
+                                <li><a class="dropdown-item text-primary" href="{% url 'enrollments:new' %}?email={{ attempt.contact.email }}&course_id={{ attempt.course.cf_course_id }}"><i class="fa-solid fa-rotate me-2 small"></i>Retry</a></li>
+                            {% endblock %}
+                    </td>
+                </tr>
+                {% endfor %}
+            {% include "components/table_end.html" %}
+        {% else %}
+            {% include "components/table_empty_state.html" with title="No enrollment attempts" description="Your transaction history is empty. Start by enrolling a student." action_label="New Enrollment" action_url="/enrollments/new/" action_icon="fa-solid fa-plus" %}
+        {% endif %}
+    </div>
+
+    {% if page_obj %}
+        {% include "components/pagination.html" with page_obj=page_obj %}
+    {% endif %}
+</div>
+{% endblock %}

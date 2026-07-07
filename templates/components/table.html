@@ -1,0 +1,16 @@
+<div class="table-container">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    {% for header in headers %}
+                        <th class="text-muted">{{ header }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% block table_rows %}{% endblock %}
+            </tbody>
+        </table>
+    </div>
+</div>

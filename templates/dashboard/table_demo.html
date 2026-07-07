@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Table Components Demo | ValuedCRM{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 fw-bold mb-1">CRM Components Demo</h1>
+            <p class="text-muted small mb-0">Showcasing the reusable table and UI components.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-crm btn-crm-outline">Secondary Action</button>
+            <button class="btn btn-crm btn-crm-primary">Primary Action</button>
+        </div>
+    </div>
+
+    <!-- Toolbar Demo -->
+    <div class="table-container shadow-sm border-0 mb-4">
+        {% include "components/table_toolbar.html" with has_search=True search_placeholder="Search demo data..." has_filters=True %}
+            {% block table_filters %}
+                {% include "components/filter_dropdown.html" with label="Status" options=status_options %}
+            {% endblock %}
+            {% block table_actions %}
+                <button class="btn btn-crm btn-crm-primary btn-sm">
+                    <i class="fa-solid fa-plus me-2"></i>Add Record
+                </button>
+            {% endblock %}
+        
+        <!-- Table Demo -->
+        {% include "components/table_start.html" with selectable=True headers=headers has_actions=True %}
+            {% block table_rows %}
+                {% for item in dummy_data %}
+                <tr>
+                    <td class="table-check">
+                        <input class="form-check-input row-select" type="checkbox" value="{{ item.id }}">
+                    </td>
+                    <td class="fw-medium">{{ item.name }}</td>
+                    <td>{{ item.email }}</td>
+                    <td>
+                        {% include "components/status_badge.html" with status=item.status %}
+                    </td>
+                    <td class="text-end">
+                        {% include "components/action_menu.html" %}
+                            {% block menu_items %}
+                                <li><a class="dropdown-item" href="#"><i class="fa-solid fa-edit me-2 small"></i>Edit</a></li>
+                                <li><a class="dropdown-item text-danger" href="#"><i class="fa-solid fa-trash me-2 small"></i>Delete</a></li>
+                            {% endblock %}
+                    </td>
+                </tr>
+                {% endfor %}
+            {% endblock %}
+        {% include "components/table_end.html" %}
+    </div>
+
+    <!-- Pagination Demo -->
+    {% include "components/pagination.html" with page_obj=page_obj %}
+
+    <hr class="my-5">
+
+    <!-- Empty State Demo -->
+    <h4 class="mb-4">Empty State Variation</h4>
+    {% include "components/table_empty_state.html" with title="No contacts found" description="Try adjusting your search or filters to find what you're looking for." action_label="Add New Contact" action_url="#" action_icon="fa-solid fa-plus" %}
+
+</div>
+
+<!-- Bulk Actions Mockup -->
+{% include "components/bulk_actions.html" %}
+    {% block bulk_buttons %}
+        <button class="btn btn-sm btn-primary rounded-pill px-3">Bulk Delete</button>
+        <button class="btn btn-sm btn-outline-light rounded-pill px-3">Bulk Export</button>
+    {% endblock %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const selects = document.querySelectorAll('.row-select');
+        const bulkBar = document.getElementById('bulk-actions-bar');
+        const countSpan = bulkBar.querySelector('.selected-count');
+        const selectAll = document.querySelector('.select-all');
+
+        function updateBar() {
+            const checked = document.querySelectorAll('.row-select:checked').length;
+            countSpan.textContent = checked;
+            if (checked > 0) {
+                bulkBar.classList.add('show');
+            } else {
+                bulkBar.classList.remove('show');
+            }
+        }
+
+        selects.forEach(s => s.addEventListener('change', updateBar));
+        
+        if(selectAll) {
+            selectAll.addEventListener('change', function() {
+                selects.forEach(s => s.checked = this.checked);
+                updateBar();
+            });
+        }
+
+        document.querySelector('.cancel-selection').addEventListener('click', () => {
+            selects.forEach(s => s.checked = false);
+            if(selectAll) selectAll.checked = false;
+            updateBar();
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,17 @@
+<div class="table-toolbar">
+    <div class="d-flex align-items-center flex-grow-1 gap-3">
+        {% if has_search %}
+            {% include "components/search_bar.html" with placeholder=search_placeholder %}
+        {% endif %}
+        
+        {% if has_filters %}
+            <div class="d-flex gap-2">
+                {% block table_filters %}{% endblock %}
+            </div>
+        {% endif %}
+    </div>
+    
+    <div class="d-flex align-items-center gap-2">
+        {% block table_actions %}{% endblock %}
+    </div>
+</div>

@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}API Configuration | ValuedCRM{% endblock %}
+
+{% block content %}
+{% include "includes/page_header.html" with title="API Configuration" subtitle="Build your secure bridge to ClickFunnels 2.0." %}
+
+<div class="container-fluid px-4 fade-in pb-5">
+    <div class="row g-4">
+        <!-- Main Configuration Path -->
+        <div class="col-lg-8">
+            
+            <!-- Step 1: Token -->
+            <div class="crm-card border-0 shadow-sm mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h5 class="fw-bold mb-0"><span class="badge bg-primary rounded-circle me-2">1</span> API Access Token</h5>
+                    {% if config.validation_status == 'VALID' %}
+                        <span class="badge bg-success rounded-pill px-3"><i class="fa-solid fa-check me-1"></i> Authorized</span>
+                    {% endif %}
+                </div>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="save_token">
+                    
+                    <div class="row g-4">
+                        <div class="col-md-12">
+                            <label class="form-label small text-uppercase fw-bold text-muted">Friendly Name</label>
+                            {{ token_form.name }}
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label small text-uppercase fw-bold text-muted">API Access Token</label>
+                            {{ token_form.api_access_token }}
+                            <div class="form-text small mt-2">
+                                <i class="fa-solid fa-shield-halved me-1 text-success"></i> 
+                                Tokens are encrypted with Fernet AES-256. Leave blank to keep the current secure token.
+                            </div>
+                        </div>
+
+                        <div class="col-md-12">
+                            <label class="form-label small text-uppercase fw-bold text-muted">User Agent String</label>
+                            {{ token_form.api_user_agent }}
+                        </div>
+
+                        <div class="col-12">
+                            <div class="form-check form-switch p-3 bg-light rounded-3 border border-dashed">
+                                <div class="ms-1">
+                                    {{ token_form.is_active }}
+                                    <label class="form-check-label fw-bold ms-2">Set as Active Configuration</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-crm btn-crm-outline px-4">Save Settings</button>
+                        <button type="submit" name="action" value="verify_token" formmethod="post" class="btn btn-crm btn-crm-primary px-4 shadow-sm">
+                            <i class="fa-solid fa-bolt me-2"></i> Verify & Fetch Teams
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Step 2: Select Team -->
+            <div class="crm-card border-0 shadow-sm mb-4 {% if config.validation_status != 'VALID' %}opacity-50{% endif %}">
+                <h5 class="fw-bold mb-4"><span class="badge bg-primary rounded-circle me-2">2</span> Select Team</h5>
+                
+                {% if team_form %}
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="select_team">
+                        <div class="mb-4">
+                            <label class="form-label small text-uppercase fw-bold text-muted">Available Teams</label>
+                            {{ team_form.team_id }}
+                        </div>
+                        <button type="submit" class="btn btn-crm btn-crm-primary px-4">Confirm Team</button>
+                    </form>
+                {% else %}
+                    <p class="text-muted small italic">Verify your token first to load available teams.</p>
+                {% endif %}
+            </div>
+
+            <!-- Step 3: Select Workspace -->
+            <div class="crm-card border-0 shadow-sm mb-4 {% if not config.team_id %}opacity-50{% endif %}">
+                <h5 class="fw-bold mb-4"><span class="badge bg-primary rounded-circle me-2">3</span> Select Workspace</h5>
+                
+                {% if workspace_form %}
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="select_workspace">
+                        <div class="mb-4">
+                            <label class="form-label small text-uppercase fw-bold text-muted">Team Workspaces</label>
+                            {{ workspace_form.workspace_id }}
+                            <div class="form-text small mt-2">Selecting a workspace will automatically link the required API subdomain.</div>
+                        </div>
+                        <button type="submit" class="btn btn-crm btn-crm-primary px-4">Activate Workspace</button>
+                    </form>
+                {% else %}
+                    <p class="text-muted small italic">Select a team first to load available workspaces.</p>
+                {% endif %}
+            </div>
+
+            <!-- Advanced Details -->
+            <div class="crm-card border-0 shadow-sm bg-light">
+                <h6 class="text-uppercase text-muted fw-bold small mb-4 letter-spacing-wider">Advanced Connection Details</h6>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Team ID</label>
+                        <code class="small text-dark">{{ config.team_id|default:"--" }}</code>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Workspace ID</label>
+                        <code class="small text-dark">{{ config.workspace_id|default:"--" }}</code>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="text-muted x-small fw-bold text-uppercase d-block mb-1">API Subdomain</label>
+                        <code class="small text-primary fw-bold">{{ config.workspace_subdomain|default:"--" }}</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar / Status -->
+        <div class="col-lg-4">
+            <div class="crm-card bg-dark text-white border-0 shadow-lg p-4 sticky-top" style="top: 100px;">
+                <h5 class="fw-bold mb-4 text-white">Bridge Readiness</h5>
+                
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="small fw-bold text-uppercase opacity-50">Token Status</span>
+                        {% if config.validation_status == 'VALID' %}
+                            <span class="text-success small fw-bold">VALID</span>
+                        {% else %}
+                            <span class="text-danger small fw-bold">INVALID</span>
+                        {% endif %}
+                    </div>
+                    <div class="progress" style="height: 6px; background-color: rgba(255,255,255,0.1);">
+                        <div class="progress-bar bg-success" style="width: {% if config.validation_status == 'VALID' %}100%{% else %}0%{% endif %}"></div>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="small fw-bold text-uppercase opacity-50">Team Selected</span>
+                        {% if config.team_id %}
+                            <span class="text-success small fw-bold">YES</span>
+                        {% else %}
+                            <span class="text-warning small fw-bold">NO</span>
+                        {% endif %}
+                    </div>
+                    <div class="progress" style="height: 6px; background-color: rgba(255,255,255,0.1);">
+                        <div class="progress-bar bg-success" style="width: {% if config.team_id %}100%{% else %}0%{% endif %}"></div>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="small fw-bold text-uppercase opacity-50">Workspace Active</span>
+                        {% if config.workspace_id %}
+                            <span class="text-success small fw-bold">YES</span>
+                        {% else %}
+                            <span class="text-warning small fw-bold">NO</span>
+                        {% endif %}
+                    </div>
+                    <div class="progress" style="height: 6px; background-color: rgba(255,255,255,0.1);">
+                        <div class="progress-bar bg-success" style="width: {% if config.workspace_id %}100%{% else %}0%{% endif %}"></div>
+                    </div>
+                </div>
+
+                {% if config.workspace_subdomain %}
+                    <div class="alert alert-success border-0 bg-white bg-opacity-10 text-white small mb-0 mt-4">
+                        <i class="fa-solid fa-check-circle me-2"></i> Bridge is ready for transactions.
+                    </div>
+                {% else %}
+                    <div class="alert alert-warning border-0 bg-white bg-opacity-10 text-white small mb-0 mt-4">
+                        <i class="fa-solid fa-circle-exclamation me-2"></i> Select a workspace to finish.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .border-dashed { border-style: dashed !important; }
+    .x-small { font-size: 0.65rem; }
+    .opacity-50 { opacity: 0.5; pointer-events: none; }
+</style>
+{% endblock %}

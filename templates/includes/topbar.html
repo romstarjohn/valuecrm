@@ -1,0 +1,28 @@
+<nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom py-3 px-4 shadow-sm sticky-top">
+    <div class="container-fluid p-0">
+        <button class="btn border-0 d-md-none me-3 p-0" id="menu-toggle">
+            <i class="fa-solid fa-bars fs-4"></i>
+        </button>
+        
+        <div class="navbar-nav me-auto d-none d-lg-flex">
+            <span class="text-muted small fw-bold text-uppercase letter-spacing-wider" style="letter-spacing: 0.05em;">Portal</span>
+        </div>
+
+        <div class="ms-auto d-flex align-items-center">
+            <div class="dropdown">
+                <a class="nav-link dropdown-toggle d-flex align-items-center fw-bold text-dark px-0" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                    <div class="bg-primary text-white rounded-circle me-2 d-flex align-items-center justify-content-center shadow-sm" style="width: 32px; height: 32px; font-size: 0.75rem;">
+                        {{ user.username|slice:":1"|upper }}
+                    </div>
+                    <span class="d-none d-sm-inline">{{ user.username }}</span>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-3">
+                    <li><h6 class="dropdown-header small text-uppercase">Account</h6></li>
+                    <li><a class="dropdown-item py-2" href="/admin/password_change/"><i class="fa-solid fa-key me-2 small opacity-50"></i>Change Password</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item py-2 text-danger fw-bold" href="/admin/logout/"><i class="fa-solid fa-right-from-bracket me-2 small"></i>Sign Out</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</nav>

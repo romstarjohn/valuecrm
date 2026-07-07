@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}New Enrollment | ValuedCRM{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-4">
+    
+    <div class="mb-4">
+        <a href="{% url 'enrollments:list' %}" class="text-decoration-none small text-muted">
+            <i class="fa-solid fa-arrow-left me-1"></i> Back to History
+        </a>
+        <h2 class="fw-bold mt-2">New Enrollment</h2>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="crm-card">
+                <h5 class="fw-bold mb-4">Enrollment Details</h5>
+                
+                {% if config %}
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">Student Email</label>
+                            {{ form.email }}
+                            {% if form.email.errors %}
+                                <div class="text-danger small mt-1">{{ form.email.errors }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold text-muted">Select Course</label>
+                            {{ form.course_id }}
+                            {% if form.course_id.errors %}
+                                <div class="text-danger small mt-1">{{ form.course_id.errors }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="alert alert-info border-0 small mb-4">
+                            <i class="fa-solid fa-circle-info me-2"></i>
+                            This will verify if the student exists in ClickFunnels, create them if missing, and then trigger the course enrollment.
+                        </div>
+
+                        <button type="submit" class="btn btn-crm btn-crm-primary w-100 py-3 fs-5">
+                            <i class="fa-solid fa-user-plus me-2"></i>Complete Enrollment
+                        </button>
+                    </form>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fa-solid fa-plug-circle-xmark text-danger fs-1 mb-3 opacity-25"></i>
+                        <h5 class="fw-bold">Integration Not Ready</h5>
+                        <p class="text-muted">You need an active ClickFunnels configuration to perform enrollments.</p>
+                        <a href="/admin/configuration/clickfunnelsconfig/" class="btn btn-crm btn-crm-primary mt-3">Configure Now</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="col-lg-6">
+            <div class="crm-card bg-light border-0">
+                <h5 class="fw-bold mb-4">Current Context</h5>
+                <div class="mb-3">
+                    <label class="text-muted small fw-bold text-uppercase d-block">Active Workspace</label>
+                    <div class="fw-medium">{{ config.workspace_name|default:"Not Configured" }}</div>
+                    <code class="small text-muted">{{ config.workspace_id|default:"--" }}</code>
+                </div>
+                <div class="mb-3">
+                    <label class="text-muted small fw-bold text-uppercase d-block">Integration Status</label>
+                    {% include "components/status_badge.html" with status=config.validation_status %}
+                </div>
+                <hr>
+                <p class="small text-muted mb-0">Enrollments are processed synchronously. Successful completions will redirect you to the audit record.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

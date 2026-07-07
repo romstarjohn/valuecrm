@@ -1,0 +1,9 @@
+{% if status|lower == 'success' or status|lower == 'active' or status|lower == 'valid' %}
+    <span class="badge-status badge-success">{{ status|upper }}</span>
+{% elif status|lower == 'failure' or status|lower == 'inactive' or status|lower == 'invalid' %}
+    <span class="badge-status badge-danger">{{ status|upper }}</span>
+{% elif status|lower == 'pending' %}
+    <span class="badge-status badge-warning">{{ status|upper }}</span>
+{% else %}
+    <span class="badge-status badge-info">{{ status|upper }}</span>
+{% endif %}

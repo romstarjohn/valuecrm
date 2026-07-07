@@ -1,0 +1,15 @@
+<div class="empty-state card">
+    <div class="card-body py-5">
+        <div class="empty-state-icon">
+            <i class="{% if icon %}{{ icon }}{% else %}fa-solid fa-folder-open{% endif %}"></i>
+        </div>
+        <h4 class="fw-bold">{{ title }}</h4>
+        <p class="text-muted mx-auto" style="max-width: 400px;">{{ message }}</p>
+        {% if action_url %}
+            <a href="{{ action_url }}" class="btn btn-primary px-4 mt-3">
+                {% if action_icon %}<i class="{{ action_icon }} me-2"></i>{% endif %}
+                {{ action_label }}
+            </a>
+        {% endif %}
+    </div>
+</div>

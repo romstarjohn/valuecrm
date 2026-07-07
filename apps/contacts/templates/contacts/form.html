@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} | ValuedCRM{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-4">
+    
+    <div class="mb-4">
+        <a href="{% url 'contacts:list' %}" class="text-decoration-none small text-muted">
+            <i class="fa-solid fa-arrow-left me-1"></i> Back to List
+        </a>
+        <h2 class="fw-bold mt-2">{{ title }}</h2>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="crm-card">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">First Name</label>
+                            {{ form.first_name }}
+                            {% if form.first_name.errors %}
+                                <div class="text-danger small mt-1">{{ form.first_name.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Last Name</label>
+                            {{ form.last_name }}
+                            {% if form.last_name.errors %}
+                                <div class="text-danger small mt-1">{{ form.last_name.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-bold text-muted">Email Address</label>
+                            {{ form.email }}
+                            {% if form.email.errors %}
+                                <div class="text-danger small mt-1">{{ form.email.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Phone</label>
+                            {{ form.phone }}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted">Status</label>
+                            {{ form.status }}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted">Source</label>
+                            {{ form.source }}
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-bold text-muted">Time Zone</label>
+                            {{ form.time_zone }}
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-bold text-muted">Tags (JSON)</label>
+                            {{ form.tags }}
+                            <div class="form-text small">Provide tags as a JSON list, e.g., <code>["student", "active"]</code></div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="fw-bold mb-3">Address Information</h5>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Shipping Address (JSON)</label>
+                            {{ form.shipping_address }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Billing Address (JSON)</label>
+                            {{ form.billing_address }}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="fw-bold mb-3">Placeholders</h5>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Payment Method Placeholder</label>
+                            {{ form.payment_method_placeholder }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Order Info Placeholder</label>
+                            {{ form.order_information_placeholder }}
+                        </div>
+                    </div>
+
+                    <div class="mt-5 d-flex gap-2 justify-content-end">
+                        <a href="{% if contact %}{% url 'contacts:detail' contact.pk %}{% else %}{% url 'contacts:list' %}{% endif %}" class="btn btn-crm btn-outline-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-crm btn-crm-primary px-5">Save Contact</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="alert alert-info border-0 shadow-sm rounded-4">
+                <h6 class="fw-bold"><i class="fa-solid fa-circle-info me-2"></i>Note</h6>
+                <p class="small mb-0">Changes made here are local. Use the <strong>Enroll</strong> action to sync or update data with ClickFunnels.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

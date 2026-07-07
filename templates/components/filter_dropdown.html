@@ -1,0 +1,14 @@
+<div class="dropdown">
+    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+        <i class="fa-solid fa-filter me-1"></i> {{ label }}
+    </button>
+    <ul class="dropdown-menu shadow-sm border-0">
+        {% for option in options %}
+        <li>
+            <a class="dropdown-item {% if option.active %}active{% endif %}" href="{{ option.url }}">
+                {{ option.label }}
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</div>

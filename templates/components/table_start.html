@@ -1,0 +1,25 @@
+<div class="table-responsive">
+    <table class="table table-hover align-middle">
+        <thead>
+            <tr>
+                {% if selectable %}
+                <th class="table-check">
+                    <input class="form-check-input select-all" type="checkbox">
+                </th>
+                {% endif %}
+                
+                {% for header in headers %}
+                <th class="{% if header.sortable %}sortable{% endif %}" {% if header.id %}id="{{ header.id }}"{% endif %}>
+                    {{ header.label }}
+                    {% if header.sortable %}
+                    <i class="fa-solid fa-sort"></i>
+                    {% endif %}
+                </th>
+                {% endfor %}
+                
+                {% if has_actions %}
+                <th class="text-end">Actions</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}Sync Courses | ValuedCRM{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-4">
+    
+    <div class="mb-4">
+        <a href="{% url 'courses:list' %}" class="text-decoration-none small text-muted">
+            <i class="fa-solid fa-arrow-left me-1"></i> Back to Catalog
+        </a>
+        <h2 class="fw-bold mt-2">Sync Courses</h2>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="crm-card border-0 shadow-sm">
+                <h5 class="fw-bold mb-4">ClickFunnels Integration Status</h5>
+                
+                {% if active_config %}
+                    <div class="d-flex align-items-center mb-4 p-3 bg-light rounded-3 border">
+                        {% if active_config.workspace_subdomain %}
+                            <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px;">
+                                <i class="fa-solid fa-check"></i>
+                            </div>
+                            <div>
+                                <div class="fw-bold">Active Workspace: {{ active_config.workspace_name }}</div>
+                                <div class="text-muted small">Subdomain: <code>{{ active_config.workspace_subdomain }}</code></div>
+                            </div>
+                        {% else %}
+                            <div class="bg-warning text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px;">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                            </div>
+                            <div>
+                                <div class="fw-bold text-dark">Workspace Not Configured</div>
+                                <div class="text-muted small">Please finish the 3-step setup in settings.</div>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="alert alert-info border-0 small mb-4">
+                            <i class="fa-solid fa-circle-info me-2"></i>
+                            This operation will fetch all courses/products from your <strong>active workspace</strong>. Existing records will be updated, and new ones will be created.
+                        </div>
+
+                        {% if active_config.workspace_subdomain %}
+                        <button type="submit" class="btn btn-crm btn-crm-primary w-100 py-3 fs-5 shadow-sm">
+                            <i class="fa-solid fa-sync me-2"></i>Start Sync Process
+                        </button>
+                        {% else %}
+                        <a href="{% url 'configuration:settings' %}" class="btn btn-crm btn-crm-primary w-100 py-3">
+                            <i class="fa-solid fa-sliders me-2"></i>Configure Workspace
+                        </a>
+                        {% endif %}
+                    </form>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fa-solid fa-plug-circle-xmark text-danger fs-1 mb-3 opacity-25"></i>
+                        <h5 class="fw-bold">No Active Configuration</h5>
+                        <p class="text-muted px-4">You need to set up and activate a ClickFunnels API configuration before you can sync courses.</p>
+                        <a href="{% url 'configuration:settings' %}" class="btn btn-crm btn-crm-primary mt-3">Configure Bridge</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="col-lg-6">
+            <div class="crm-card bg-dark text-white border-0 shadow-lg">
+                <h5 class="fw-bold mb-4 text-white">What happens during sync?</h5>
+                <ul class="list-unstyled">
+                    <li class="mb-3 d-flex align-items-top">
+                        <i class="fa-solid fa-cloud-arrow-down text-primary mt-1 me-3"></i>
+                        <span>Connects to ClickFunnels v2 API using your secure token.</span>
+                    </li>
+                    <li class="mb-3 d-flex align-items-top">
+                        <i class="fa-solid fa-magnifying-glass text-primary mt-1 me-3"></i>
+                        <span>Identifies products/courses in the active workspace.</span>
+                    </li>
+                    <li class="mb-3 d-flex align-items-top">
+                        <i class="fa-solid fa-database text-primary mt-1 me-3"></i>
+                        <span>Synchronizes local names, descriptions, and metadata.</span>
+                    </li>
+                    <li class="mb-3 d-flex align-items-top">
+                        <i class="fa-solid fa-clock-rotate-left text-primary mt-1 me-3"></i>
+                        <span>Updates the 'Last Updated' timestamp for all processed records.</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

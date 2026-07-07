@@ -1,0 +1,44 @@
+<div id="sidebar-wrapper" class="d-flex flex-column shadow">
+    <div class="sidebar-heading">
+        <i class="fa-solid fa-bridge text-primary me-2"></i>
+        <span>ValuedCRM</span>
+    </div>
+    
+    <div class="list-group list-group-flush flex-grow-1 px-2">
+        <div class="text-uppercase text-muted small fw-bold px-3 mb-2 mt-4" style="font-size: 0.65rem; letter-spacing: 0.1em;">Main Menu</div>
+        
+        <a href="{% url 'dashboard:index' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.app_name == 'dashboard' %}active{% endif %}">
+            <i class="fa-solid fa-gauge-high"></i>Dashboard
+        </a>
+        
+        <a href="{% url 'contacts:list' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.app_name == 'contacts' %}active{% endif %}">
+            <i class="fa-solid fa-users"></i>Contacts
+        </a>
+        
+        <a href="{% url 'courses:list' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.app_name == 'courses' %}active{% endif %}">
+            <i class="fa-solid fa-graduation-cap"></i>Courses
+        </a>
+        
+        <a href="{% url 'enrollments:list' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.app_name == 'enrollments' %}active{% endif %}">
+            <i class="fa-solid fa-clipboard-list"></i>Enrollments
+        </a>
+
+        <div class="text-uppercase text-muted small fw-bold px-3 mb-2 mt-4" style="font-size: 0.65rem; letter-spacing: 0.1em;">Configuration</div>
+        
+        <a href="{% url 'configuration:settings' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.app_name == 'configuration' %}active{% endif %}">
+            <i class="fa-solid fa-sliders"></i>API Settings
+        </a>
+    </div>
+
+    <div class="px-3 pb-4">
+        <div class="crm-card bg-white bg-opacity-5 border-0 p-3 mb-3">
+            <div class="small text-muted mb-2">Advanced</div>
+            <a href="/admin/" class="btn btn-sm btn-outline-secondary w-100 text-start border-0 px-2 opacity-75" target="_blank">
+                <i class="fa-solid fa-user-shield me-2"></i>Django Admin
+            </a>
+        </div>
+        <div class="text-muted small text-center opacity-50" style="font-size: 0.7rem;">
+            v1.0.0-MVP
+        </div>
+    </div>
+</div>
