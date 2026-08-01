@@ -1,0 +1,40 @@
+{% extends "public_base.html" %}
+
+{% block title %}Order Status | ValuedCRM{% endblock %}
+
+{% block content %}
+<div class="crm-card text-center py-5">
+    {% if error %}
+        <i class="fa-solid fa-triangle-exclamation text-danger mb-3" style="font-size: 3rem;"></i>
+        <h4 class="fw-bold">We couldn't find this order</h4>
+        <p class="text-muted">{{ error }}</p>
+    {% else %}
+        {% if display_status == "payment_confirmed" %}
+            <i class="fa-solid fa-circle-check text-success mb-3" style="font-size: 3rem;"></i>
+            <h4 class="fw-bold">Payment Confirmed</h4>
+            <p class="text-muted">Your payment has been verified. Thank you!</p>
+        {% elif display_status == "link_ready" %}
+            <i class="fa-solid fa-link text-primary mb-3" style="font-size: 3rem;"></i>
+            <h4 class="fw-bold">Payment Link Ready</h4>
+            <p class="text-muted">A payment link has been generated for this order.</p>
+        {% elif display_status == "verification_pending" %}
+            <i class="fa-solid fa-hourglass-half text-warning mb-3" style="font-size: 3rem;"></i>
+            <h4 class="fw-bold">Verification Pending</h4>
+            <p class="text-muted">We're still verifying your payment. This page will update once it's confirmed — no action is needed from you right now.</p>
+        {% elif display_status == "failed" %}
+            <i class="fa-solid fa-circle-xmark text-danger mb-3" style="font-size: 3rem;"></i>
+            <h4 class="fw-bold">Payment Failed</h4>
+            <p class="text-muted">This payment could not be completed. Please contact support if you believe this is an error.</p>
+        {% elif display_status == "awaiting_payment" %}
+            <i class="fa-solid fa-clock text-muted mb-3" style="font-size: 3rem;"></i>
+            <h4 class="fw-bold">Awaiting Payment</h4>
+            <p class="text-muted">Your order has been created and is awaiting payment.</p>
+        {% else %}
+            <i class="fa-solid fa-circle-info text-muted mb-3" style="font-size: 3rem;"></i>
+            <h4 class="fw-bold">Status Unavailable</h4>
+            <p class="text-muted">We couldn't determine the status of this order. Please contact support.</p>
+        {% endif %}
+        <div class="text-muted small mt-3">Order reference: {{ order.reference }}</div>
+    {% endif %}
+</div>
+{% endblock %}

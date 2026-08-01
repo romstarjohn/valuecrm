@@ -1,0 +1,54 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} confirmation-page{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+&rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+&rsaquo; {{ description }}
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>{{ description }}</h1>
+<p>Confirm the following action. This cannot be undone from this page.</p>
+
+<h2>{% translate "Targets" %}</h2>
+<ul>
+{% for obj in objects %}
+    <li>
+        {{ obj }}
+        {% if obj.total_paid_amount and obj.total_paid_amount > 0 %}
+            <br><strong style="color:#a94442;">
+                Warning: this order has verified payments (total paid: {{ obj.total_paid_amount }}).
+                This action does not refund money or revoke existing payment history.
+            </strong>
+        {% endif %}
+    </li>
+{% endfor %}
+</ul>
+
+<form method="post">{% csrf_token %}
+<div>
+{% for obj in objects %}
+<input type="hidden" name="{{ action_checkbox_name }}" value="{{ obj.pk }}">
+{% endfor %}
+<input type="hidden" name="action" value="{{ action_name }}">
+<input type="hidden" name="confirm_apply" value="1">
+
+<fieldset class="module aligned">
+    <div class="form-row">
+        <label for="id_reason" class="required">{% translate "Reason" %}</label>
+        <textarea id="id_reason" name="reason" rows="3" cols="60" required>{{ reason }}</textarea>
+        <p class="help">Mandatory — recorded on the immutable administrative audit trail.</p>
+    </div>
+</fieldset>
+
+<input type="submit" value="{% translate 'Yes, confirm' %}" class="default">
+<a role="button" href="{% url opts|admin_urlname:'changelist' %}" class="button cancel-link">{% translate "No, take me back" %}</a>
+</div>
+</form>
+{% endblock %}

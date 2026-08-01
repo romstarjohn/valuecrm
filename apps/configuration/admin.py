@@ -5,16 +5,27 @@ from .services import ConfigurationService
 from integrations.clickfunnels.client import ClickFunnelsClient
 
 class ClickFunnelsConfigForm(forms.ModelForm):
-    # Masked fields: never sent back to browser with actual data
+    """
+    api_access_token is declared here but listed in Meta.exclude, not
+    Meta.fields — see apps/payments/admin.py::TaraConfigForm (Phase 2 security
+    fix), reused here verbatim: a custom ModelForm's Meta.fields is silently
+    overridden by Django Admin's own fieldset-computed field list, but
+    Meta.exclude is explicitly merged in by ModelAdmin.get_form() when the
+    ModelAdmin itself defines no `exclude`. Do not switch this back to
+    Meta.fields — a blank submission (the normal case, since this field never
+    pre-populates) would silently overwrite the existing encrypted token with
+    an empty string via Django's construct_instance().
+    """
+    # Masked field: never sent back to browser with actual data
     api_access_token = forms.CharField(
-        widget=forms.PasswordInput(render_value=False), 
+        widget=forms.PasswordInput(render_value=False),
         required=False,
         help_text="Leave blank to keep current token."
     )
 
     class Meta:
         model = ClickFunnelsConfig
-        fields = ["name", "is_active", "api_user_agent", "api_access_token"]
+        exclude = ["api_access_token"]
 
     def save(self, commit=True):
         instance = super().save(commit=False)

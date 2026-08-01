@@ -8,3 +8,4 @@ pytest>=8.3
 pytest-django>=4.9
 pytest-mock>=3.14
 django-extensions>=3.2
+django-ratelimit>=4.1

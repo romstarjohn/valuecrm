@@ -15,6 +15,14 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",") if os.getenv("ALLOWED_
 # ValuedCRM Security
 FIELD_ENCRYPTION_KEY = os.getenv("FIELD_ENCRYPTION_KEY")
 
+# Canonical public HTTPS base URL for this application (no trailing slash),
+# e.g. "https://checkout.example.com". Required by apps.payments checkout
+# (Phase 5) to construct Tara's application-owned webHookUrl/returnUrl safely
+# — never derived from the request's Host header. Empty by default; checkout
+# fails closed (raises CheckoutConfigurationError) if this isn't set, rather
+# than guessing a host.
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -28,6 +36,8 @@ INSTALLED_APPS = [
     "apps.courses",
     "apps.enrollments",
     "apps.dashboard",
+    "apps.payments",
+    "apps.provisioning",
 ]
 
 MIDDLEWARE = [
@@ -89,6 +99,27 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 LOGIN_URL = "/admin/login/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Phase 7 (docs/TARA_INTEGRATION_PROJECT.md): production delivery config for
+# payment-confirmation email, driven entirely from the environment — no
+# hard-coded SMTP credentials. Defaults to the console backend (safe/no-op in
+# local dev) rather than guessing a real SMTP host. Test runs never use these:
+# pytest-django forces EMAIL_BACKEND to locmem for every test regardless of
+# this setting, so no automated test ever sends real email.
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+EMAIL_HOST = os.getenv("EMAIL_HOST", "")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True") == "True"
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@valuedcrm.example")
+
+# Phase 5: checkout is this app's first guest-facing (non-staff) surface —
+# harden session/CSRF cookies for production the same way ALLOWED_HOSTS/DEBUG
+# already gate other production-only behavior. No effect in local DEBUG runs
+# (plain HTTP) so existing dev workflows are unaffected.
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 
 # Logging configuration with file support
 LOG_DIR = BASE_DIR / "logs"

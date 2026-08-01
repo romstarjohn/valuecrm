@@ -1,0 +1,14 @@
+{% if customer_name %}Hello {{ customer_name }},{% else %}Hello,{% endif %}
+
+We've received your payment. Here are the details:
+
+Amount received: {{ amount_received }} {{ currency }}
+Order reference: {{ order_reference }}
+Plan / course: {{ plan_or_course_name }}
+Installment: {{ installment_number }} of {{ installment_count }}
+{% if remaining_balance_positive %}Remaining balance: {{ remaining_balance }} {{ currency }}{% else %}This order is now fully paid.{% endif %}
+{% if next_installment_due_date %}Next installment due: {{ next_installment_due_date }}{% endif %}
+
+Course access status: {{ course_access_status }}
+
+Thank you.

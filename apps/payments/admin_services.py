@@ -1,0 +1,570 @@
+"""
+Administrative/manual operations (Phase 8, docs/TARA_INTEGRATION_PROJECT.md) —
+deliberately separate from services.py's system-driven payment lifecycle
+(PaymentCreditService, WebhookProcessingService, CheckoutService, etc.). Every
+method here is triggered only by an authenticated administrator through a
+permission-gated, reason-required admin action (see apps/payments/admin.py
+and apps/payments/admin_actions.py), never by a system/webhook path.
+
+Common shape: reload-and-lock the target by primary key inside a short
+transaction, validate the requested change against the SAME state-transition
+services the rest of the app already uses (OrderService/InstallmentService/
+PaymentAttemptService/PaymentCreditService), and write an AdminAuditLog row
+in that same transaction — success and rejection alike, where practical.
+Never rewrites a provider fact, a SUCCEEDED PaymentAttempt, a PAID
+Installment, or PaymentConfirmation delivery truth.
+
+IMPORTANT: a rejection is recorded as an audit row and THEN raised as
+AdminActionError — but the audit write and the raise must not be inside the
+same `transaction.atomic()` block. Raising out of an atomic block rolls back
+everything written inside it, including the audit row the whole point was to
+keep. Every method below therefore records the rejection audit row, lets the
+`with transaction.atomic():` block exit normally (so it commits), and only
+raises AFTER that block has exited.
+"""
+from typing import Optional
+
+from django.db import transaction
+from django.utils import timezone
+
+from shared.logging_utils import get_logger, log_service_start, log_service_success, log_service_failure
+from .models import (
+    AdminAuditLog,
+    Installment,
+    Order,
+    PaymentAttempt,
+    PaymentConfirmation,
+)
+from .services import (
+    InstallmentService,
+    InvalidStateTransitionError,
+    OrderService,
+    PaymentAttemptService,
+    PaymentConfirmationService,
+    PaymentCreditService,
+    PaymentIdConflictError,
+    TaraConfigService,
+)
+from integrations.payments.tara.exceptions import (
+    TaraClientError,
+    TaraConfigurationError,
+    TaraConnectionError,
+    TaraCredentialError,
+    TaraMalformedResponseError,
+    TaraServerError,
+    TaraTimeoutError,
+)
+from integrations.payments.tara.schemas import TaraTransactionStatus
+
+logger = get_logger(__name__)
+
+
+class AdminActionError(Exception):
+    """Raised when a requested administrative action is rejected (invalid state, not found, etc.)."""
+
+
+class AdminAuditService:
+    """
+    Writes AdminAuditLog rows. Always call this from inside the same
+    transaction as the state change it documents (or, for a rejected/no-op
+    attempt, as the last write in that transaction before it commits) — never
+    from a background job or after the fact.
+    """
+
+    def record(
+        self, *, administrator, action_type: str, target_type: str, target_reference: str,
+        reason: str, outcome_category: str,
+        order: Optional[Order] = None, installment: Optional[Installment] = None,
+        payment_attempt: Optional[PaymentAttempt] = None,
+        previous_state: str = "", resulting_state: str = "",
+        request=None,
+    ) -> AdminAuditLog:
+        metadata = {}
+        if request is not None:
+            remote_addr = request.META.get("REMOTE_ADDR")
+            if remote_addr:
+                metadata["remote_addr"] = remote_addr
+
+        administrator_id = getattr(administrator, "pk", None)
+        entry = AdminAuditLog.objects.create(
+            administrator_id=administrator_id,
+            administrator_username=getattr(administrator, "username", "") or "",
+            action_type=action_type,
+            target_type=target_type,
+            target_reference=target_reference,
+            order=order,
+            installment=installment,
+            payment_attempt=payment_attempt,
+            previous_state=previous_state,
+            resulting_state=resulting_state,
+            reason=reason,
+            outcome_category=outcome_category,
+            request_metadata=metadata,
+        )
+        log_service_success(
+            logger, "AdminAuditService", "record",
+            action_type=action_type, outcome_category=outcome_category,
+        )
+        return entry
+
+
+def _safe_reference(obj) -> str:
+    reference = getattr(obj, "reference", None)
+    if reference:
+        return str(reference)
+    return f"{obj.__class__.__name__}#{obj.pk}"
+
+
+_ORDER_ELIGIBLE_INSTALLMENT_STATUSES = {
+    Installment.Status.SCHEDULED, Installment.Status.DUE,
+    Installment.Status.PENDING, Installment.Status.FAILED,
+}
+_NON_TERMINAL_ATTEMPT_STATUSES = {
+    PaymentAttempt.Status.CREATED, PaymentAttempt.Status.LINK_CREATED,
+    PaymentAttempt.Status.PENDING, PaymentAttempt.Status.UNKNOWN,
+}
+
+
+class OrderAdministrationService:
+    """Centralized administrative operations on Order/Installment (Phase 8)."""
+
+    def cancel_order(self, order_id: int, reason: str, administrator, request=None) -> Order:
+        """
+        Row-locks the Order and its Installments/PaymentAttempts. Idempotent
+        when already CANCELLED. Never alters a PAID installment or a
+        SUCCEEDED attempt — only SCHEDULED/DUE/PENDING/FAILED installments
+        (and their non-terminal attempts) are closed out. Non-terminal
+        attempts are moved to EXPIRED — PaymentAttempt has no CANCELLED status
+        of its own (see PaymentAttempt.Status); EXPIRED is the closest
+        existing terminal state for "this attempt will not be pursued
+        further," avoiding a schema change to the Phase 3 state machine for
+        this phase. Issues no refund and calls neither Tara nor ClickFunnels.
+        """
+        log_service_start(logger, "OrderAdministrationService", "cancel_order", order_id=order_id)
+        error_message = None
+        with transaction.atomic():
+            order = Order.objects.select_for_update().get(pk=order_id)
+            previous_status = order.status
+
+            if order.status == Order.Status.CANCELLED:
+                AdminAuditService().record(
+                    administrator=administrator, action_type=AdminAuditLog.ActionType.CANCEL_ORDER,
+                    target_type=AdminAuditLog.TargetType.ORDER, target_reference=_safe_reference(order),
+                    order=order, previous_state=previous_status, resulting_state=order.status,
+                    reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.NO_OP_ALREADY_IN_STATE,
+                    request=request,
+                )
+                return order
+
+            try:
+                order = OrderService().transition(order, Order.Status.CANCELLED)
+            except InvalidStateTransitionError:
+                AdminAuditService().record(
+                    administrator=administrator, action_type=AdminAuditLog.ActionType.CANCEL_ORDER,
+                    target_type=AdminAuditLog.TargetType.ORDER, target_reference=_safe_reference(order),
+                    order=order, previous_state=previous_status, resulting_state=previous_status,
+                    reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
+                    request=request,
+                )
+                error_message = f"Order cannot be cancelled from status {previous_status}."
+            else:
+                installment_service = InstallmentService()
+                attempt_service = PaymentAttemptService()
+                for installment in order.installments.select_for_update():
+                    if installment.status not in _ORDER_ELIGIBLE_INSTALLMENT_STATUSES:
+                        continue  # PAID/WAIVED/CANCELLED — never touched
+                    for attempt in installment.payment_attempts.select_for_update():
+                        if attempt.status in _NON_TERMINAL_ATTEMPT_STATUSES:
+                            attempt_service.transition(attempt, PaymentAttempt.Status.EXPIRED)
+                    installment_service.transition(installment, Installment.Status.CANCELLED)
+
+                AdminAuditService().record(
+                    administrator=administrator, action_type=AdminAuditLog.ActionType.CANCEL_ORDER,
+                    target_type=AdminAuditLog.TargetType.ORDER, target_reference=_safe_reference(order),
+                    order=order, previous_state=previous_status, resulting_state=order.status,
+                    reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.SUCCESS,
+                    request=request,
+                )
+                log_service_success(logger, "OrderAdministrationService", "cancel_order", order_id=order.id)
+
+        if error_message is not None:
+            raise AdminActionError(error_message)
+        return order
+
+    def cancel_installment(self, installment_id: int, reason: str, administrator, request=None) -> Installment:
+        """Cancels one installment only — never a PAID one, never one with a SUCCEEDED attempt."""
+        log_service_start(logger, "OrderAdministrationService", "cancel_installment", installment_id=installment_id)
+        error_message = None
+        with transaction.atomic():
+            installment = Installment.objects.select_for_update().get(pk=installment_id)
+            order = Order.objects.select_for_update().get(pk=installment.order_id)
+            previous_status = installment.status
+
+            if installment.status == Installment.Status.CANCELLED:
+                AdminAuditService().record(
+                    administrator=administrator, action_type=AdminAuditLog.ActionType.CANCEL_INSTALLMENT,
+                    target_type=AdminAuditLog.TargetType.INSTALLMENT, target_reference=_safe_reference(installment),
+                    order=order, installment=installment, previous_state=previous_status, resulting_state=installment.status,
+                    reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.NO_OP_ALREADY_IN_STATE,
+                    request=request,
+                )
+                return installment
+
+            has_succeeded_attempt = installment.payment_attempts.filter(status=PaymentAttempt.Status.SUCCEEDED).exists()
+            if installment.status == Installment.Status.PAID or has_succeeded_attempt:
+                AdminAuditService().record(
+                    administrator=administrator, action_type=AdminAuditLog.ActionType.CANCEL_INSTALLMENT,
+                    target_type=AdminAuditLog.TargetType.INSTALLMENT, target_reference=_safe_reference(installment),
+                    order=order, installment=installment, previous_state=previous_status, resulting_state=previous_status,
+                    reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
+                    request=request,
+                )
+                error_message = "A paid installment (or one with a succeeded payment attempt) cannot be cancelled."
+            else:
+                attempt_service = PaymentAttemptService()
+                for attempt in installment.payment_attempts.select_for_update():
+                    if attempt.status in _NON_TERMINAL_ATTEMPT_STATUSES:
+                        attempt_service.transition(attempt, PaymentAttempt.Status.EXPIRED)
+
+                try:
+                    installment = InstallmentService().transition(installment, Installment.Status.CANCELLED)
+                except InvalidStateTransitionError as e:
+                    AdminAuditService().record(
+                        administrator=administrator, action_type=AdminAuditLog.ActionType.CANCEL_INSTALLMENT,
+                        target_type=AdminAuditLog.TargetType.INSTALLMENT, target_reference=_safe_reference(installment),
+                        order=order, installment=installment, previous_state=previous_status, resulting_state=previous_status,
+                        reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
+                        request=request,
+                    )
+                    error_message = str(e)
+                else:
+                    AdminAuditService().record(
+                        administrator=administrator, action_type=AdminAuditLog.ActionType.CANCEL_INSTALLMENT,
+                        target_type=AdminAuditLog.TargetType.INSTALLMENT, target_reference=_safe_reference(installment),
+                        order=order, installment=installment, previous_state=previous_status, resulting_state=installment.status,
+                        reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.SUCCESS,
+                        request=request,
+                    )
+                    log_service_success(logger, "OrderAdministrationService", "cancel_installment", installment_id=installment.id)
+
+        if error_message is not None:
+            raise AdminActionError(error_message)
+        return installment
+
+    def waive_installment(self, installment_id: int, reason: str, administrator, request=None) -> Installment:
+        """
+        Internal business decision, not a provider payment (Phase 8). Only
+        unpaid installments with no SUCCEEDED attempt may be waived;
+        paid_amount is never set (stays None/zero — WAIVED is not "paid").
+        Creates no PaymentConfirmation and no Tara payment history. Recomputes
+        Order completion/eligibility with the existing rules and, if that
+        newly makes a FULL_PAYMENT order eligible, creates exactly one
+        durable provisioning request via the existing (idempotent) Phase 7
+        service — never a PaymentConfirmation.
+        """
+        log_service_start(logger, "OrderAdministrationService", "waive_installment", installment_id=installment_id)
+        error_message = None
+        with transaction.atomic():
+            installment = Installment.objects.select_for_update().get(pk=installment_id)
+            order = Order.objects.select_for_update().get(pk=installment.order_id)
+            previous_status = installment.status
+
+            if installment.status == Installment.Status.WAIVED:
+                AdminAuditService().record(
+                    administrator=administrator, action_type=AdminAuditLog.ActionType.WAIVE_INSTALLMENT,
+                    target_type=AdminAuditLog.TargetType.INSTALLMENT, target_reference=_safe_reference(installment),
+                    order=order, installment=installment, previous_state=previous_status, resulting_state=installment.status,
+                    reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.NO_OP_ALREADY_IN_STATE,
+                    request=request,
+                )
+                return installment
+
+            has_succeeded_attempt = installment.payment_attempts.filter(status=PaymentAttempt.Status.SUCCEEDED).exists()
+            if installment.status == Installment.Status.PAID or has_succeeded_attempt:
+                AdminAuditService().record(
+                    administrator=administrator, action_type=AdminAuditLog.ActionType.WAIVE_INSTALLMENT,
+                    target_type=AdminAuditLog.TargetType.INSTALLMENT, target_reference=_safe_reference(installment),
+                    order=order, installment=installment, previous_state=previous_status, resulting_state=previous_status,
+                    reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
+                    request=request,
+                )
+                error_message = "A paid installment (or one with a succeeded payment attempt) cannot be waived."
+            else:
+                attempt_service = PaymentAttemptService()
+                for attempt in installment.payment_attempts.select_for_update():
+                    if attempt.status in _NON_TERMINAL_ATTEMPT_STATUSES:
+                        attempt_service.transition(attempt, PaymentAttempt.Status.EXPIRED)
+
+                try:
+                    installment = InstallmentService().transition(installment, Installment.Status.WAIVED)
+                except InvalidStateTransitionError as e:
+                    AdminAuditService().record(
+                        administrator=administrator, action_type=AdminAuditLog.ActionType.WAIVE_INSTALLMENT,
+                        target_type=AdminAuditLog.TargetType.INSTALLMENT, target_reference=_safe_reference(installment),
+                        order=order, installment=installment, previous_state=previous_status, resulting_state=previous_status,
+                        reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
+                        request=request,
+                    )
+                    error_message = str(e)
+                else:
+                    # Reuse the exact Phase 6 completion-recompute rules — never duplicate them.
+                    PaymentCreditService()._update_order_status(order)
+                    order.refresh_from_db()
+
+                    if order.is_access_eligible:
+                        from apps.provisioning.services import ProvisioningService
+
+                        ProvisioningService().create_request_from_order(order)
+
+                    AdminAuditService().record(
+                        administrator=administrator, action_type=AdminAuditLog.ActionType.WAIVE_INSTALLMENT,
+                        target_type=AdminAuditLog.TargetType.INSTALLMENT, target_reference=_safe_reference(installment),
+                        order=order, installment=installment, previous_state=previous_status, resulting_state=installment.status,
+                        reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.SUCCESS,
+                        request=request,
+                    )
+                    log_service_success(logger, "OrderAdministrationService", "waive_installment", installment_id=installment.id)
+
+        if error_message is not None:
+            raise AdminActionError(error_message)
+        return installment
+
+    def apply_manual_disposition(self, order_id: int, disposition: str, reason: str, administrator, request=None) -> Order:
+        """
+        Sets Order.manual_disposition only — never touches PaymentAttempt/
+        Installment/PaymentConfirmation state, never a provider fact.
+        """
+        log_service_start(logger, "OrderAdministrationService", "apply_manual_disposition", order_id=order_id)
+        valid_values = {choice for choice, _ in Order.ManualDisposition.choices}
+        error_message = None
+        with transaction.atomic():
+            order = Order.objects.select_for_update().get(pk=order_id)
+            previous_disposition = order.manual_disposition
+
+            if disposition not in valid_values:
+                AdminAuditService().record(
+                    administrator=administrator, action_type=AdminAuditLog.ActionType.APPLY_MANUAL_DISPOSITION,
+                    target_type=AdminAuditLog.TargetType.ORDER, target_reference=_safe_reference(order),
+                    order=order, previous_state=previous_disposition, resulting_state=previous_disposition,
+                    reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
+                    request=request,
+                )
+                error_message = f"'{disposition}' is not a recognized disposition."
+            elif previous_disposition == disposition:
+                AdminAuditService().record(
+                    administrator=administrator, action_type=AdminAuditLog.ActionType.APPLY_MANUAL_DISPOSITION,
+                    target_type=AdminAuditLog.TargetType.ORDER, target_reference=_safe_reference(order),
+                    order=order, previous_state=previous_disposition, resulting_state=disposition,
+                    reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.NO_OP_ALREADY_IN_STATE,
+                    request=request,
+                )
+            else:
+                order.manual_disposition = disposition
+                order.save(update_fields=["manual_disposition", "updated_at"])
+
+                AdminAuditService().record(
+                    administrator=administrator, action_type=AdminAuditLog.ActionType.APPLY_MANUAL_DISPOSITION,
+                    target_type=AdminAuditLog.TargetType.ORDER, target_reference=_safe_reference(order),
+                    order=order, previous_state=previous_disposition, resulting_state=disposition,
+                    reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.SUCCESS,
+                    request=request,
+                )
+                log_service_success(logger, "OrderAdministrationService", "apply_manual_disposition", order_id=order.id)
+
+        if error_message is not None:
+            raise AdminActionError(error_message)
+        return order
+
+
+class PaymentAttemptAdministrationService:
+    """Administrative operations on PaymentAttempt (Phase 8)."""
+
+    def check_tara_status(self, attempt_id: int, reason: str, administrator, request=None) -> PaymentAttempt:
+        """
+        Synchronous, admin-triggered server-to-server status check — mirrors
+        WebhookProcessingService._verify_and_apply's Tara call/classification
+        (same client, same exception taxonomy, same centralized services for
+        applying a result), but the Tara call itself is a direct, on-demand
+        admin operation, not a durable/queued one — consistent with how the
+        webhook path itself already calls Tara synchronously within its own
+        request/response cycle. Only PENDING/UNKNOWN attempts are eligible.
+        Never creates a new PaymentAttempt or payment link. Never marks paid
+        from administrator input — only Tara's own response can do that,
+        via the same PaymentCreditService the webhook path uses.
+        """
+        log_service_start(logger, "PaymentAttemptAdministrationService", "check_tara_status", attempt_id=attempt_id)
+
+        attempt = PaymentAttempt.objects.select_related("installment__order").get(pk=attempt_id)
+        if attempt.status not in (PaymentAttempt.Status.PENDING, PaymentAttempt.Status.UNKNOWN):
+            AdminAuditService().record(
+                administrator=administrator, action_type=AdminAuditLog.ActionType.CHECK_TARA_STATUS,
+                target_type=AdminAuditLog.TargetType.PAYMENT_ATTEMPT, target_reference=_safe_reference(attempt),
+                order=attempt.installment.order, installment=attempt.installment, payment_attempt=attempt,
+                previous_state=attempt.status, resulting_state=attempt.status,
+                reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
+                request=request,
+            )
+            raise AdminActionError("Only PENDING or UNKNOWN payment attempts can be checked.")
+
+        previous_status = attempt.status
+
+        try:
+            client = TaraConfigService().get_client()
+        except (TaraConfigurationError, TaraCredentialError) as e:
+            log_service_failure(logger, "PaymentAttemptAdministrationService", "check_tara_status", e, attempt_id=attempt_id)
+            AdminAuditService().record(
+                administrator=administrator, action_type=AdminAuditLog.ActionType.CHECK_TARA_STATUS,
+                target_type=AdminAuditLog.TargetType.PAYMENT_ATTEMPT, target_reference=_safe_reference(attempt),
+                order=attempt.installment.order, installment=attempt.installment, payment_attempt=attempt,
+                previous_state=previous_status, resulting_state=previous_status,
+                reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.FAILED,
+                request=request,
+            )
+            raise AdminActionError("Tara is not configured; status could not be checked.") from e
+
+        try:
+            status_response = client.check_transaction_status(attempt.tara_product_id)
+        except (TaraTimeoutError, TaraConnectionError, TaraServerError, TaraClientError, TaraMalformedResponseError, Exception) as e:
+            # Broad `Exception` deliberately included, not just the documented
+            # Tara exception taxonomy — any unexpected error from the client
+            # call must still leave the attempt non-final and must never leak
+            # str(e) (which could contain a raw provider response body) to the
+            # admin UI or the audit log. Only a safe, fixed message is used.
+            log_service_failure(logger, "PaymentAttemptAdministrationService", "check_tara_status", e, attempt_id=attempt_id)
+            AdminAuditService().record(
+                administrator=administrator, action_type=AdminAuditLog.ActionType.CHECK_TARA_STATUS,
+                target_type=AdminAuditLog.TargetType.PAYMENT_ATTEMPT, target_reference=_safe_reference(attempt),
+                order=attempt.installment.order, installment=attempt.installment, payment_attempt=attempt,
+                previous_state=previous_status, resulting_state=previous_status,
+                reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.PROVIDER_NON_FINAL,
+                request=request,
+            )
+            return attempt  # non-final — never raised as an error to keep the attempt inspectable, not a hard failure
+
+        if status_response.product_id != attempt.tara_product_id:
+            AdminAuditService().record(
+                administrator=administrator, action_type=AdminAuditLog.ActionType.CHECK_TARA_STATUS,
+                target_type=AdminAuditLog.TargetType.PAYMENT_ATTEMPT, target_reference=_safe_reference(attempt),
+                order=attempt.installment.order, installment=attempt.installment, payment_attempt=attempt,
+                previous_state=previous_status, resulting_state=previous_status,
+                reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.PROVIDER_NON_FINAL,
+                request=request,
+            )
+            return attempt
+
+        normalized = status_response.normalized_status
+
+        def write_audit(applied_attempt: PaymentAttempt, outcome: str) -> None:
+            # Invoked from inside PaymentCreditService's own transaction (via
+            # on_applied below) so the state change and this audit record
+            # commit or roll back together, per the Phase 8 requirement.
+            AdminAuditService().record(
+                administrator=administrator, action_type=AdminAuditLog.ActionType.CHECK_TARA_STATUS,
+                target_type=AdminAuditLog.TargetType.PAYMENT_ATTEMPT, target_reference=_safe_reference(applied_attempt),
+                order=applied_attempt.installment.order, installment=applied_attempt.installment, payment_attempt=applied_attempt,
+                previous_state=previous_status, resulting_state=applied_attempt.status,
+                reason=reason, outcome_category=outcome,
+                request=request,
+            )
+
+        if normalized == TaraTransactionStatus.SUCCESS:
+            try:
+                attempt = PaymentCreditService().apply_verified_success(
+                    attempt.id,
+                    on_applied=lambda a, newly_applied: write_audit(a, AdminAuditLog.OutcomeCategory.SUCCESS),
+                )
+            except PaymentIdConflictError as e:
+                log_service_failure(logger, "PaymentAttemptAdministrationService", "check_tara_status", e, attempt_id=attempt_id)
+                attempt.refresh_from_db()
+                write_audit(attempt, AdminAuditLog.OutcomeCategory.FAILED)
+        elif normalized == TaraTransactionStatus.FAILURE:
+            attempt = PaymentCreditService().apply_verified_failure(
+                attempt.id, on_applied=lambda a: write_audit(a, AdminAuditLog.OutcomeCategory.SUCCESS),
+            )
+        else:
+            attempt.refresh_from_db()
+            write_audit(attempt, AdminAuditLog.OutcomeCategory.PROVIDER_NON_FINAL)
+
+        log_service_success(
+            logger, "PaymentAttemptAdministrationService", "check_tara_status",
+            attempt_id=attempt.id, normalized_result=normalized.value,
+        )
+        return attempt
+
+
+class PaymentConfirmationAdministrationService:
+    """Administrative operations on PaymentConfirmation (Phase 8)."""
+
+    def retry_confirmation(self, confirmation_id: int, reason: str, administrator, request=None) -> PaymentConfirmation:
+        """
+        Returns a FAILED/MANUAL_REVIEW confirmation to PENDING so the existing
+        worker (PaymentConfirmationDeliveryService, run via
+        process_payment_confirmations) can claim and send it — never sends
+        email from this admin transaction. SENT confirmations can never be
+        retried. attempt_count is reset to 0 (a fresh start is what makes the
+        retry actually claimable/retryable again) — the count and category
+        being reset are preserved for audit purposes in this action's own
+        AdminAuditLog entry's previous_state.
+        """
+        log_service_start(logger, "PaymentConfirmationAdministrationService", "retry_confirmation", confirmation_id=confirmation_id)
+        error_message = None
+        with transaction.atomic():
+            confirmation = PaymentConfirmation.objects.select_for_update().get(pk=confirmation_id)
+            previous_status = confirmation.status
+            previous_state_label = f"{previous_status} (attempts={confirmation.attempt_count}, category={confirmation.last_failure_category or 'n/a'})"
+
+            if confirmation.status == PaymentConfirmation.Status.SENT:
+                AdminAuditService().record(
+                    administrator=administrator, action_type=AdminAuditLog.ActionType.RETRY_CONFIRMATION,
+                    target_type=AdminAuditLog.TargetType.PAYMENT_CONFIRMATION, target_reference=_safe_reference(confirmation),
+                    order=confirmation.order, installment=confirmation.installment, payment_attempt=confirmation.payment_attempt,
+                    previous_state=previous_state_label, resulting_state=previous_status,
+                    reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
+                    request=request,
+                )
+                error_message = "A SENT confirmation cannot be retried."
+            elif confirmation.status not in (PaymentConfirmation.Status.FAILED, PaymentConfirmation.Status.MANUAL_REVIEW):
+                AdminAuditService().record(
+                    administrator=administrator, action_type=AdminAuditLog.ActionType.RETRY_CONFIRMATION,
+                    target_type=AdminAuditLog.TargetType.PAYMENT_CONFIRMATION, target_reference=_safe_reference(confirmation),
+                    order=confirmation.order, installment=confirmation.installment, payment_attempt=confirmation.payment_attempt,
+                    previous_state=previous_state_label, resulting_state=previous_status,
+                    reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
+                    request=request,
+                )
+                error_message = "Only FAILED or MANUAL_REVIEW confirmations can be retried."
+            else:
+                recipient = confirmation.contact.email
+                if not recipient:
+                    AdminAuditService().record(
+                        administrator=administrator, action_type=AdminAuditLog.ActionType.RETRY_CONFIRMATION,
+                        target_type=AdminAuditLog.TargetType.PAYMENT_CONFIRMATION, target_reference=_safe_reference(confirmation),
+                        order=confirmation.order, installment=confirmation.installment, payment_attempt=confirmation.payment_attempt,
+                        previous_state=previous_state_label, resulting_state=previous_status,
+                        reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
+                        request=request,
+                    )
+                    error_message = "Contact has no email address on file; cannot retry."
+                else:
+                    confirmation.recipient_snapshot = recipient
+                    confirmation.status = PaymentConfirmation.Status.PENDING
+                    confirmation.attempt_count = 0
+                    confirmation.next_attempt_at = None
+                    confirmation.last_failure_category = ""
+                    confirmation.save(update_fields=[
+                        "recipient_snapshot", "status", "attempt_count", "next_attempt_at", "last_failure_category", "updated_at",
+                    ])
+
+                    AdminAuditService().record(
+                        administrator=administrator, action_type=AdminAuditLog.ActionType.RETRY_CONFIRMATION,
+                        target_type=AdminAuditLog.TargetType.PAYMENT_CONFIRMATION, target_reference=_safe_reference(confirmation),
+                        order=confirmation.order, installment=confirmation.installment, payment_attempt=confirmation.payment_attempt,
+                        previous_state=previous_state_label, resulting_state=confirmation.status,
+                        reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.SUCCESS,
+                        request=request,
+                    )
+                    log_service_success(logger, "PaymentConfirmationAdministrationService", "retry_confirmation", confirmation_id=confirmation.id)
+
+        if error_message is not None:
+            raise AdminActionError(error_message)
+        return confirmation
