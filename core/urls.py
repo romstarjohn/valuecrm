@@ -35,6 +35,7 @@ urlpatterns = [
     path("courses/", include("apps.courses.urls")),
     path("enrollments/", include("apps.enrollments.urls")),
     path("settings/", include("apps.configuration.urls")),
+    path("operations/", include("apps.operations.urls")),
     # Public guest checkout (Phase 5) — the only non-staff-facing pages in
     # this app; deliberately not under the staff portal's sidebar/topbar.
     path("checkout/", include("apps.payments.urls")),

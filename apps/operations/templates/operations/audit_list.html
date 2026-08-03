@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Administrative Audit | ValuedCRM{% endblock %}
+{% block content %}
+{% include "includes/page_header.html" with title="Administrative Audit" subtitle="Immutable record of every sensitive administrative action." %}
+
+<div class="container-fluid px-4 fade-in">
+    <div class="table-container mb-4 shadow-sm border-0">
+        <div class="table-toolbar flex-wrap gap-3">
+            <form method="get" class="d-flex flex-wrap align-items-center gap-2 flex-grow-1">
+                <select name="action_type" class="form-select form-select-sm w-auto">
+                    <option value="">All Actions</option>
+                    {% for value, label in action_options %}
+                        <option value="{{ value }}" {% if action_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <select name="outcome" class="form-select form-select-sm w-auto">
+                    <option value="">All Outcomes</option>
+                    {% for value, label in outcome_options %}
+                        <option value="{{ value }}" {% if outcome_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <input type="date" name="date_from" class="form-control form-control-sm w-auto" value="{{ date_from }}">
+                <input type="date" name="date_to" class="form-control form-control-sm w-auto" value="{{ date_to }}">
+                <button type="submit" class="btn btn-crm btn-crm-primary btn-sm">Apply</button>
+                <a href="{% url 'operations:audit_list' %}" class="btn btn-crm-outline btn-sm">Reset</a>
+            </form>
+        </div>
+
+        {% if page_obj %}
+            {% include "components/table_start.html" with headers=headers %}
+                {% for event in page_obj %}
+                <tr>
+                    <td class="small text-muted">{{ event.created_at|date:"M d, H:i" }}</td>
+                    <td class="small">{{ event.administrator_username|default:"--" }}</td>
+                    <td class="small fw-bold">{{ event.action_type }}</td>
+                    <td class="small"><code>{{ event.target_reference }}</code></td>
+                    <td class="small text-muted">{{ event.previous_state }} → {{ event.resulting_state }}</td>
+                    <td>{% include "components/status_badge.html" with status=event.outcome_category %}</td>
+                    <td class="small text-muted">{{ event.reason }}</td>
+                </tr>
+                {% endfor %}
+            {% include "components/table_end.html" %}
+        {% else %}
+            {% include "components/table_empty_state.html" with title="No audit events found" description="Adjust your filters." %}
+        {% endif %}
+    </div>
+    {% if page_obj %}{% include "components/pagination.html" with page_obj=page_obj %}{% endif %}
+</div>
+{% endblock %}

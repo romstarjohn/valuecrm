@@ -1,10 +1,13 @@
+from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .models import ClickFunnelsConfig
-from .forms import ClickFunnelsSettingsForm, TeamSelectionForm, WorkspaceSelectionForm
+from .forms import ClickFunnelsSettingsForm, TaraConfigSettingsForm, TeamSelectionForm, WorkspaceSelectionForm
 from .services import ConfigurationService
 from integrations.clickfunnels.client import ClickFunnelsClient
+from apps.payments.models import TaraConfig
+from apps.payments.services import TaraConfigService
 
 @login_required
 def settings_view(request):
@@ -112,6 +115,47 @@ def settings_view(request):
         "workspace_form": workspace_form,
     }
     return render(request, "configuration/settings.html", context)
+
+@login_required
+def tara_settings_view(request):
+    """
+    Separate sibling page to settings_view above — same @login_required
+    authorization rule (no repository evidence for a stricter/Tara-specific
+    permission), same "reload the current config server-side, bind a
+    ModelForm to it, pop the write-only secrets, hand them to the *Service.
+    update_credentials() helper, save" shape as settings_view's "save_token"
+    branch. Deliberately has no verify/team/workspace steps and no
+    connection-test action — TaraConfigService has no such method (Phase 2:
+    no safe, documented, read-only Tara endpoint exists to check credentials
+    against) and none is added here.
+    """
+    service = TaraConfigService()
+    config = service.get_active_config() or TaraConfig.objects.first()
+    form = TaraConfigSettingsForm(instance=config)
+
+    if request.method == "POST":
+        form = TaraConfigSettingsForm(request.POST, instance=config)
+        if form.is_valid():
+            api_key = form.cleaned_data.pop("api_key", None)
+            webhook_secret = form.cleaned_data.pop("webhook_secret", None)
+            instance = form.save(commit=False)
+            service.update_credentials(instance, api_key, webhook_secret)
+            instance.save()
+            messages.success(request, "Tara settings saved.")
+            return redirect("configuration:tara_settings")
+        messages.error(request, "Please correct the errors below.")
+
+    webhook_url = f"{settings.PUBLIC_BASE_URL}/api/tara/webhook/" if settings.PUBLIC_BASE_URL else ""
+
+    context = {
+        "config": config,
+        "form": form,
+        "webhook_url": webhook_url,
+        "api_key_configured": bool(config.api_key) if config else False,
+        "webhook_secret_configured": bool(config.webhook_secret) if config else False,
+    }
+    return render(request, "configuration/tara_settings.html", context)
+
 
 @login_required
 def verify_connection(request):

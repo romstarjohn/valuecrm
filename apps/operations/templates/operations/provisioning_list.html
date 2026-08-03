@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Provisioning / Enrollment | ValuedCRM{% endblock %}
+{% block content %}
+{% include "includes/page_header.html" with title="Provisioning / Enrollment" subtitle="Course-access work — ClickFunnels calls happen out of transaction, via the existing worker." %}
+
+<div class="container-fluid px-4 fade-in">
+    <div class="table-container mb-4 shadow-sm border-0">
+        <div class="table-toolbar flex-wrap gap-3">
+            <form method="get" class="d-flex flex-wrap align-items-center gap-2 flex-grow-1">
+                <select name="status" class="form-select form-select-sm w-auto">
+                    <option value="">All Statuses</option>
+                    {% for value, label in status_options %}
+                        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-crm btn-crm-primary btn-sm">Apply</button>
+                <a href="{% url 'operations:provisioning_list' %}" class="btn btn-crm-outline btn-sm">Reset</a>
+            </form>
+        </div>
+
+        {% if page_obj %}
+            {% include "components/table_start.html" with headers=headers has_actions=True %}
+                {% for req in page_obj %}
+                <tr>
+                    <td class="small">{{ req.contact.email }}</td>
+                    <td class="small">
+                        {% if req.order %}
+                            <a href="{% url 'operations:order_detail' req.order.reference %}" class="text-decoration-none fw-bold">{{ req.order.reference }}</a>
+                        {% else %}
+                            <span class="text-muted">legacy</span>
+                        {% endif %}
+                    </td>
+                    <td class="small">{{ req.course.name|default:"--" }}</td>
+                    <td>{% include "components/status_badge.html" with status=req.status %}</td>
+                    <td class="small text-muted">{{ req.attempt_count }}</td>
+                    <td class="small text-muted">{{ req.failure_category|default:"--" }}</td>
+                    <td class="small text-muted">{{ req.updated_at|date:"M d, H:i" }}</td>
+                    <td class="text-end">
+                        {% if can_retry_provisioning %}
+                            {% if req.status == "FAILED" or req.status == "MANUAL_REVIEW" %}
+                            {% include "components/action_menu.html" %}
+                                {% block menu_items %}
+                                    <li><a class="dropdown-item" href="{% url 'operations:provisioning_retry' req.pk %}"><i class="fa-solid fa-rotate-right me-2 small"></i>Retry Enrollment</a></li>
+                                {% endblock %}
+                            {% endif %}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            {% include "components/table_end.html" %}
+        {% else %}
+            {% include "components/table_empty_state.html" with title="No provisioning requests found" description="Adjust your filters." %}
+        {% endif %}
+    </div>
+    {% if page_obj %}{% include "components/pagination.html" with page_obj=page_obj %}{% endif %}
+</div>
+{% endblock %}

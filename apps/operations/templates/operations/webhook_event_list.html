@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Tara Webhook Events | ValuedCRM{% endblock %}
+{% block content %}
+{% include "includes/page_header.html" with title="Tara Webhook Events" subtitle="Untrusted-by-design deliveries, used only as a trigger — server-to-server verified before any credit." %}
+
+<div class="container-fluid px-4 fade-in">
+    <div class="table-container mb-4 shadow-sm border-0">
+        <div class="table-toolbar flex-wrap gap-3">
+            <form method="get" class="d-flex flex-wrap align-items-center gap-2 flex-grow-1">
+                <select name="processing_status" class="form-select form-select-sm w-auto">
+                    <option value="">All Processing States</option>
+                    {% for value, label in processing_status_options %}
+                        <option value="{{ value }}" {% if processing_status_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <select name="verification_result" class="form-select form-select-sm w-auto">
+                    <option value="">All Verification Results</option>
+                    {% for value, label in verification_result_options %}
+                        <option value="{{ value }}" {% if verification_result_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <input type="date" name="date_from" class="form-control form-control-sm w-auto" value="{{ date_from }}">
+                <input type="date" name="date_to" class="form-control form-control-sm w-auto" value="{{ date_to }}">
+                <button type="submit" class="btn btn-crm btn-crm-primary btn-sm">Apply</button>
+                <a href="{% url 'operations:webhook_event_list' %}" class="btn btn-crm-outline btn-sm">Reset</a>
+            </form>
+        </div>
+
+        {% if page_obj %}
+            {% include "components/table_start.html" with headers=headers %}
+                {% for event in page_obj %}
+                <tr>
+                    <td><code class="small">{{ event.reference }}</code></td>
+                    <td class="small text-muted">{{ event.processing_status }}</td>
+                    <td>{% include "components/status_badge.html" with status=event.verification_result %}</td>
+                    <td>{% include "components/status_badge.html" with status=event.processing_status %}</td>
+                    <td class="small text-muted">{{ event.failure_category|default:"--" }}</td>
+                    <td class="small text-muted">{{ event.received_at|date:"M d, H:i" }}</td>
+                </tr>
+                {% endfor %}
+            {% include "components/table_end.html" %}
+        {% else %}
+            {% include "components/table_empty_state.html" with title="No webhook events found" description="Adjust your filters." %}
+        {% endif %}
+    </div>
+    {% if page_obj %}{% include "components/pagination.html" with page_obj=page_obj %}{% endif %}
+</div>
+{% endblock %}

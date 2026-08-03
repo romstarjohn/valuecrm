@@ -23,10 +23,18 @@
             <i class="fa-solid fa-clipboard-list"></i>Enrollments
         </a>
 
+        <a href="{% url 'operations:hub' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.app_name == 'operations' %}active{% endif %}">
+            <i class="fa-solid fa-list-check"></i>Payment Operations
+        </a>
+
         <div class="text-uppercase text-muted small fw-bold px-3 mb-2 mt-4" style="font-size: 0.65rem; letter-spacing: 0.1em;">Configuration</div>
-        
-        <a href="{% url 'configuration:settings' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.app_name == 'configuration' %}active{% endif %}">
+
+        <a href="{% url 'configuration:settings' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
             <i class="fa-solid fa-sliders"></i>API Settings
+        </a>
+
+        <a href="{% url 'configuration:tara_settings' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.url_name == 'tara_settings' %}active{% endif %}">
+            <i class="fa-solid fa-money-bill-transfer"></i>Tara Settings
         </a>
     </div>
 

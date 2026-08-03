@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Payment Confirmations | ValuedCRM{% endblock %}
+{% block content %}
+{% include "includes/page_header.html" with title="Payment Confirmations" subtitle="Delivery status for customer payment-received notifications." %}
+
+<div class="container-fluid px-4 fade-in">
+    <div class="table-container mb-4 shadow-sm border-0">
+        <div class="table-toolbar flex-wrap gap-3">
+            <form method="get" class="d-flex flex-wrap align-items-center gap-2 flex-grow-1">
+                <select name="status" class="form-select form-select-sm w-auto">
+                    <option value="">All Statuses</option>
+                    {% for value, label in status_options %}
+                        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <select name="channel" class="form-select form-select-sm w-auto">
+                    <option value="">All Channels</option>
+                    {% for value, label in channel_options %}
+                        <option value="{{ value }}" {% if channel_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-crm btn-crm-primary btn-sm">Apply</button>
+                <a href="{% url 'operations:confirmation_list' %}" class="btn btn-crm-outline btn-sm">Reset</a>
+            </form>
+        </div>
+
+        {% if page_obj %}
+            {% include "components/table_start.html" with headers=headers has_actions=True %}
+                {% for confirmation in page_obj %}
+                <tr>
+                    <td>
+                        <a href="{% url 'operations:order_detail' confirmation.order.reference %}" class="text-decoration-none small fw-bold">{{ confirmation.order.reference }}</a>
+                        <div class="text-muted small">{{ confirmation.order.customer.email }}</div>
+                    </td>
+                    <td class="small">#{{ confirmation.installment.sequence }}</td>
+                    <td class="small">{{ confirmation.channel }}</td>
+                    <td>{% include "components/status_badge.html" with status=confirmation.status %}</td>
+                    <td class="small text-muted">{{ confirmation.attempt_count }}</td>
+                    <td class="small text-muted">{{ confirmation.next_attempt_at|date:"M d, H:i"|default:"--" }}</td>
+                    <td class="text-end">
+                        {% if can_retry_confirmation %}
+                            {% if confirmation.status == "FAILED" or confirmation.status == "MANUAL_REVIEW" %}
+                            {% include "components/action_menu.html" %}
+                                {% block menu_items %}
+                                    <li><a class="dropdown-item" href="{% url 'operations:confirmation_retry' confirmation.pk %}"><i class="fa-solid fa-rotate-right me-2 small"></i>Retry Confirmation</a></li>
+                                {% endblock %}
+                            {% endif %}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            {% include "components/table_end.html" %}
+        {% else %}
+            {% include "components/table_empty_state.html" with title="No confirmations found" description="Adjust your filters." %}
+        {% endif %}
+    </div>
+    {% if page_obj %}{% include "components/pagination.html" with page_obj=page_obj %}{% endif %}
+</div>
+{% endblock %}

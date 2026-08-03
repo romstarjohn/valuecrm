@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Orders | ValuedCRM{% endblock %}
+
+{% block content %}
+{% include "includes/page_header.html" with title="Orders" subtitle="Search, filter, and open any customer order." %}
+
+<div class="container-fluid px-4 fade-in">
+    <div class="table-container mb-4 shadow-sm border-0">
+        <div class="table-toolbar flex-wrap gap-3">
+            <form method="get" class="d-flex flex-wrap align-items-center gap-2 flex-grow-1">
+                {% include "components/search_bar.html" with placeholder="Search reference, customer, plan, course..." %}
+
+                <select name="status" class="form-select form-select-sm w-auto">
+                    <option value="">All Statuses</option>
+                    {% for value, label in status_options %}
+                        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+
+                <select name="plan" class="form-select form-select-sm w-auto">
+                    <option value="">All Plans</option>
+                    {% for plan_id, plan_name in plan_options %}
+                        <option value="{{ plan_id }}" {% if plan_filter == plan_id|stringformat:"s" %}selected{% endif %}>{{ plan_name }}</option>
+                    {% endfor %}
+                </select>
+
+                <select name="access" class="form-select form-select-sm w-auto">
+                    <option value="">Any Access State</option>
+                    <option value="eligible" {% if access_filter == "eligible" %}selected{% endif %}>Access Eligible</option>
+                    <option value="not_eligible" {% if access_filter == "not_eligible" %}selected{% endif %}>Not Yet Eligible</option>
+                </select>
+
+                <select name="disposition" class="form-select form-select-sm w-auto">
+                    <option value="">Any Disposition</option>
+                    {% for value, label in disposition_options %}
+                        <option value="{{ value }}" {% if disposition_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+
+                <input type="date" name="date_from" class="form-control form-control-sm w-auto" value="{{ date_from }}" placeholder="From">
+                <input type="date" name="date_to" class="form-control form-control-sm w-auto" value="{{ date_to }}" placeholder="To">
+
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="needs_review" value="1" id="needsReview" {% if needs_review == "1" %}checked{% endif %}>
+                    <label class="form-check-label small" for="needsReview">Needs Review</label>
+                </div>
+
+                <button type="submit" class="btn btn-crm btn-crm-primary btn-sm">Apply</button>
+                <a href="{% url 'operations:order_list' %}" class="btn btn-crm-outline btn-sm">Reset</a>
+            </form>
+        </div>
+
+        {% if page_obj %}
+            {% include "components/table_start.html" with headers=headers %}
+                {% for order in page_obj %}
+                <tr onclick="window.location='{% url 'operations:order_detail' order.reference %}'" style="cursor: pointer;">
+                    <td>
+                        <a href="{% url 'operations:order_detail' order.reference %}" class="text-decoration-none fw-bold text-dark small">{{ order.reference }}</a>
+                    </td>
+                    <td>
+                        <div class="fw-bold text-dark small">{{ order.customer.first_name }} {{ order.customer.last_name }}</div>
+                        <div class="text-muted small">{{ order.customer.email }}</div>
+                    </td>
+                    <td>
+                        <div class="small fw-medium">{{ order.plan_name }}</div>
+                        <div class="text-muted small">{{ order.course_name }}</div>
+                    </td>
+                    <td>
+                        <div class="small">Expected: <strong>{{ order.total_expected_amount }} {{ order.currency }}</strong></div>
+                        <div class="small text-success">Paid: {{ order.display_total_paid }}</div>
+                        <div class="small text-muted">Remaining: {{ order.display_remaining_balance }}</div>
+                    </td>
+                    <td>
+                        <span class="small fw-medium">{{ order.display_paid_count }}/{{ order.installment_count }}</span>
+                        {% if order.display_access_eligible %}
+                            <span class="badge-status badge-success ms-1">ELIGIBLE</span>
+                        {% endif %}
+                    </td>
+                    <td>{% include "components/status_badge.html" with status=order.status %}</td>
+                    <td class="text-muted small">{{ order.created_at|date:"M d, Y" }}</td>
+                </tr>
+                {% endfor %}
+            {% include "components/table_end.html" %}
+        {% else %}
+            {% include "components/table_empty_state.html" with title="No orders found" description="Adjust your filters — no orders match the current criteria." %}
+        {% endif %}
+    </div>
+
+    {% if page_obj %}
+        {% include "components/pagination.html" with page_obj=page_obj %}
+    {% endif %}
+</div>
+{% endblock %}

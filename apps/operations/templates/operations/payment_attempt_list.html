@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Payment Attempts | ValuedCRM{% endblock %}
+{% block content %}
+{% include "includes/page_header.html" with title="Tara Payment Attempts" subtitle="Internal status kept clearly separate from raw Tara provider facts." %}
+
+<div class="container-fluid px-4 fade-in">
+    <div class="table-container mb-4 shadow-sm border-0">
+        <div class="table-toolbar flex-wrap gap-3">
+            <form method="get" class="d-flex flex-wrap align-items-center gap-2 flex-grow-1">
+                <select name="status" class="form-select form-select-sm w-auto">
+                    <option value="">All Internal Statuses</option>
+                    {% for value, label in status_options %}
+                        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <input type="text" name="provider_status" class="form-control form-control-sm w-auto" placeholder="Provider status contains..." value="{{ provider_status_filter }}">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="pending_unknown" value="1" id="pendingUnknown" {% if pending_unknown_only == "1" %}checked{% endif %}>
+                    <label class="form-check-label small" for="pendingUnknown">PENDING/UNKNOWN only</label>
+                </div>
+                <input type="date" name="date_from" class="form-control form-control-sm w-auto" value="{{ date_from }}">
+                <input type="date" name="date_to" class="form-control form-control-sm w-auto" value="{{ date_to }}">
+                <button type="submit" class="btn btn-crm btn-crm-primary btn-sm">Apply</button>
+                <a href="{% url 'operations:payment_attempt_list' %}" class="btn btn-crm-outline btn-sm">Reset</a>
+            </form>
+        </div>
+
+        {% if page_obj %}
+            {% include "components/table_start.html" with headers=headers has_actions=True %}
+                {% for attempt in page_obj %}
+                <tr>
+                    <td>{% include "components/status_badge.html" with status=attempt.status %}</td>
+                    <td class="small text-muted">{{ attempt.raw_provider_status|default:"--" }}</td>
+                    <td><code class="small">{{ attempt.tara_product_id }}</code></td>
+                    <td><code class="small">{{ attempt.tara_payment_id|default:"--" }}</code></td>
+                    <td class="small">{{ attempt.expected_amount }} {{ attempt.currency }}</td>
+                    <td>
+                        <a href="{% url 'operations:order_detail' attempt.installment.order.reference %}" class="text-decoration-none small fw-bold">{{ attempt.installment.order.reference }}</a>
+                        <div class="text-muted small">installment #{{ attempt.installment.sequence }}</div>
+                    </td>
+                    <td class="small text-muted">{{ attempt.updated_at|date:"M d, H:i" }}</td>
+                    <td class="text-end">
+                        {% if can_check_tara_status %}
+                            {% if attempt.status == "PENDING" or attempt.status == "UNKNOWN" %}
+                            {% include "components/action_menu.html" %}
+                                {% block menu_items %}
+                                    <li><a class="dropdown-item" href="{% url 'operations:payment_attempt_check_status' attempt.pk %}"><i class="fa-solid fa-satellite-dish me-2 small"></i>Check Tara Status</a></li>
+                                {% endblock %}
+                            {% endif %}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            {% include "components/table_end.html" %}
+        {% else %}
+            {% include "components/table_empty_state.html" with title="No payment attempts found" description="Adjust your filters." %}
+        {% endif %}
+    </div>
+    {% if page_obj %}{% include "components/pagination.html" with page_obj=page_obj %}{% endif %}
+</div>
+{% endblock %}
