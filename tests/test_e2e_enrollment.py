@@ -31,31 +31,29 @@ def test_e2e_successful_enrollment(e2e_setup, staff_client):
     email = "new_student@example.com"
     
     # 1. Mock Contact Search (Not found)
-    # Correct URL pattern: /workspaces/{id}/contacts
     responses.add(
         responses.GET,
-        f"https://hammer.myclickfunnels.com/api/v2/workspaces/198218/contacts?email={email}",
+        "https://hammer.myclickfunnels.com/api/v2/workspaces/198218/contacts",
         json=[],
         status=200
     )
-    
+
     # 2. Mock Contact Creation
     responses.add(
         responses.POST,
         "https://hammer.myclickfunnels.com/api/v2/workspaces/198218/contacts",
-        json={"id": 33, "email": email},
+        json={"id": 33, "email_address": email},
         status=201
     )
-    
-    # 3. Mock Enrollment
+
+    # 3. Mock Enrollment — real endpoint is /courses/{course_id}/enrollments
     responses.add(
         responses.POST,
-        "https://hammer.myclickfunnels.com/api/v2/workspaces/198218/course_enrollments",
+        "https://hammer.myclickfunnels.com/api/v2/courses/123/enrollments",
         json={
-            "id": 1, 
-            "contact_id": 33, 
+            "id": 1,
+            "contact_id": 33,
             "course_id": 123,
-            "status": "active"
         },
         status=201
     )
@@ -83,32 +81,31 @@ def test_e2e_bulk_partial_failure(e2e_setup, staff_client):
     # Mocking for student 1 (Success)
     responses.add(
         responses.GET,
-        f"https://hammer.myclickfunnels.com/api/v2/workspaces/198218/contacts?email={email1}",
-        json=[{"id": 101, "email": email1}],
+        "https://hammer.myclickfunnels.com/api/v2/workspaces/198218/contacts",
+        json=[{"id": 101, "email_address": email1}],
         status=200
     )
     responses.add(
         responses.POST,
-        "https://hammer.myclickfunnels.com/api/v2/workspaces/198218/course_enrollments",
+        "https://hammer.myclickfunnels.com/api/v2/courses/123/enrollments",
         json={
             "id": 201,
             "contact_id": 101,
             "course_id": 123,
-            "status": "active"
         },
         status=201
     )
-    
+
     # Mocking for student 2 (Failure)
     responses.add(
         responses.GET,
-        f"https://hammer.myclickfunnels.com/api/v2/workspaces/198218/contacts?email={email2}",
-        json=[{"id": 102, "email": email2}],
+        "https://hammer.myclickfunnels.com/api/v2/workspaces/198218/contacts",
+        json=[{"id": 102, "email_address": email2}],
         status=200
     )
     responses.add(
         responses.POST,
-        "https://hammer.myclickfunnels.com/api/v2/workspaces/198218/course_enrollments",
+        "https://hammer.myclickfunnels.com/api/v2/courses/123/enrollments",
         json={"message": "Already enrolled"},
         status=422
     )

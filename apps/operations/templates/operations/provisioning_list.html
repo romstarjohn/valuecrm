@@ -24,13 +24,9 @@
                 <tr>
                     <td class="small">{{ req.contact.email }}</td>
                     <td class="small">
-                        {% if req.order %}
-                            <a href="{% url 'operations:order_detail' req.order.reference %}" class="text-decoration-none fw-bold">{{ req.order.reference }}</a>
-                        {% else %}
-                            <span class="text-muted">legacy</span>
-                        {% endif %}
+                        <a href="{% url 'operations:order_detail' req.order.reference %}" class="text-decoration-none fw-bold">{{ req.order.reference }}</a>
                     </td>
-                    <td class="small">{{ req.course.name|default:"--" }}</td>
+                    <td class="small">{{ req.course.name }}</td>
                     <td>{% include "components/status_badge.html" with status=req.status %}</td>
                     <td class="small text-muted">{{ req.attempt_count }}</td>
                     <td class="small text-muted">{{ req.failure_category|default:"--" }}</td>

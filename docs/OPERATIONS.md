@@ -81,7 +81,6 @@ Tara delivers to `{PUBLIC_BASE_URL}/api/tara/webhook/`. Every delivery is treate
 ### Scheduled commands (cron/systemd timer/platform scheduler — none is built into this app)
 - **Hourly**: `python manage.py run_hourly_reconciliation` — verifies stale PaymentAttempts, pulls the transaction list for reporting, drives confirmation/provisioning workers, repairs missing follow-up work. Concurrency-safe (Postgres advisory lock); exits non-zero only on a total run failure.
 - **Frequent (e.g. every 5 min), optional if not relying solely on the hourly run**: `python manage.py process_payment_confirmations` and `python manage.py process_pending_provisioning`.
-- **Daily, legacy**: `python manage.py reconcile_tara_payments` — only rechecks stale local `NEEDS_REVIEW` legacy `Payment` rows; makes no Tara call (see its help text for why transaction-list-based auto-matching was retired in Phase 9).
 
 Example crontab:
 ```

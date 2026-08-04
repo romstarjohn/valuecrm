@@ -90,7 +90,7 @@ def hub(request):
         status__in=[PaymentConfirmation.Status.PENDING, PaymentConfirmation.Status.FAILED],
     ).count()
     enrollments_awaiting_processing = ProvisioningRequest.objects.filter(
-        status__in=[ProvisioningRequest.Status.PENDING, ProvisioningRequest.Status.FAILED, ProvisioningRequest.Status.SCHEDULED],
+        status__in=[ProvisioningRequest.Status.PENDING, ProvisioningRequest.Status.FAILED],
     ).count()
     manual_review_items = (
         PaymentAttempt.objects.filter(status=PaymentAttempt.Status.UNKNOWN).count()
@@ -530,7 +530,7 @@ def provisioning_list(request):
 
     status_filter = request.GET.get("status", "")
 
-    requests_qs = ProvisioningRequest.objects.select_related("contact", "order", "course", "product")
+    requests_qs = ProvisioningRequest.objects.select_related("contact", "order", "course")
 
     if status_filter in dict(ProvisioningRequest.Status.choices):
         requests_qs = requests_qs.filter(status=status_filter)

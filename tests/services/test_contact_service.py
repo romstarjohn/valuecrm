@@ -18,9 +18,9 @@ def test_get_or_create_remote_contact_new_local(mocker):
     mock_client = MagicMock()
     # Mock remote contact exists with integer ID
     mock_client.get_contact_by_email.return_value = ContactDTO(
-        id=33, 
-        email="remote@example.com", 
-        first_name="Remote", 
+        id=33,
+        email_address="remote@example.com",
+        first_name="Remote",
         last_name="User"
     )
     
@@ -41,8 +41,8 @@ def test_get_or_create_remote_contact_missing_remote(mocker):
     mock_client.get_contact_by_email.return_value = None
     # Mock creation with integer ID
     mock_client.create_contact.return_value = ContactDTO(
-        id=44, 
-        email="new@example.com"
+        id=44,
+        email_address="new@example.com"
     )
     
     service = ContactService(client=mock_client)

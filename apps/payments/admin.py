@@ -18,16 +18,14 @@ from .models import (
     AdminAuditLog,
     Installment,
     Order,
-    Payment,
     PaymentAttempt,
     PaymentConfirmation,
     PaymentPlan,
-    PaymentTimelineEvent,
     ReconciliationRun,
     TaraConfig,
     TaraWebhookEvent,
 )
-from .services import PaymentMatchingService, TaraConfigService
+from .services import TaraConfigService
 
 
 class TaraConfigForm(forms.ModelForm):
@@ -138,102 +136,6 @@ class TaraConfigAdmin(admin.ModelAdmin):
     def webhook_secret_configured(self, obj):
         """Presence-only indicator — never the decrypted value or any fragment of it."""
         return bool(obj.webhook_secret)
-
-
-class PaymentTimelineEventInline(admin.TabularInline):
-    """Read-only chronological timeline — see this Payment's full match/provisioning history."""
-    model = PaymentTimelineEvent
-    extra = 0
-    fields = ("created_at", "event_type", "detail")
-    readonly_fields = ("created_at", "event_type", "detail")
-    can_delete = False
-    ordering = ("created_at",)
-
-    def has_add_permission(self, request, obj=None):
-        return False
-
-
-class ProvisioningRequestInline(admin.TabularInline):
-    """Read-only: shows the provisioning side of this payment's timeline, spanning both lifecycles on one page."""
-    model = ProvisioningRequest
-    fk_name = "payment"
-    extra = 0
-    fields = ("product", "contact", "status", "policy_snapshot", "attempt_count", "last_error", "updated_at")
-    readonly_fields = ("product", "contact", "status", "policy_snapshot", "attempt_count", "last_error", "updated_at")
-    can_delete = False
-
-    def has_add_permission(self, request, obj=None):
-        return False
-
-
-@admin.register(Payment)
-class PaymentAdmin(admin.ModelAdmin):
-    list_display = (
-        "provider_transaction_id", "product_ref", "status", "match_confidence",
-        "matched_contact", "matched_product", "created_at",
-    )
-    list_filter = ("status", "match_confidence", "provider")
-    search_fields = ("provider_transaction_id", "product_ref", "extracted_email", "extracted_phone")
-    raw_id_fields = ("matched_contact", "matched_product")
-    readonly_fields = (
-        "provider", "provider_transaction_id", "raw_payload", "product_ref",
-        "extracted_phone", "extracted_email", "amount", "currency",
-        "status", "match_confidence", "verified_at", "created_at", "updated_at",
-    )
-    inlines = [PaymentTimelineEventInline, ProvisioningRequestInline]
-    actions = ["retry_matching_action", "dismiss_action"]
-
-    @admin.action(description="Retry Matching")
-    def retry_matching_action(self, request, queryset):
-        from apps.provisioning.services import ProvisioningService
-
-        matching_service = PaymentMatchingService()
-        provisioning_service = ProvisioningService()
-        processed = 0
-        for payment in queryset:
-            matching_service.match_and_process(payment)
-            if payment.status == Payment.Status.MATCHED:
-                provisioning_service.create_request_from_payment(payment)
-            processed += 1
-        self.message_user(request, f"Re-ran matching for {processed} payment(s).")
-
-    @admin.action(description="Dismiss (mark Ignored)")
-    def dismiss_action(self, request, queryset):
-        matching_service = PaymentMatchingService()
-        count = 0
-        for payment in queryset.filter(status=Payment.Status.NEEDS_REVIEW):
-            matching_service.dismiss(payment, notes=f"Dismissed by {request.user} via admin action.")
-            count += 1
-        self.message_user(request, f"Marked {count} payment(s) as ignored.")
-
-    def save_model(self, request, obj, form, change):
-        """
-        Editing matched_contact directly on a NEEDS_REVIEW payment is the
-        "Link to Contact" operator action. If a product is already matched too,
-        this manual link is treated as an operator-confirmed HIGH-confidence
-        identity match and immediately proceeds to provisioning, same as an
-        automatic match would.
-        """
-        manually_linked = (
-            change and "matched_contact" in form.changed_data and obj.matched_contact_id
-            and obj.status == Payment.Status.NEEDS_REVIEW
-        )
-        super().save_model(request, obj, form, change)
-
-        if manually_linked and obj.matched_product_id:
-            obj.match_confidence = Payment.Confidence.HIGH
-            obj.status = Payment.Status.MATCHED
-            obj.review_notes = (obj.review_notes + f"\nManually linked to contact by {request.user} on {timezone.now()}").strip()
-            obj.save()
-            PaymentTimelineEvent.objects.create(
-                payment=obj,
-                event_type=PaymentTimelineEvent.EventType.CUSTOMER_MATCHED,
-                detail={"manual": True, "linked_by": str(request.user)},
-            )
-            from apps.provisioning.services import ProvisioningService
-
-            ProvisioningService().create_request_from_payment(obj)
-            self.message_user(request, f"Payment manually linked to {obj.matched_contact} and marked MATCHED.")
 
 
 @admin.register(ReconciliationRun)

@@ -1,7 +1,6 @@
 """
-Phase 7 (docs/TARA_INTEGRATION_PROJECT.md): the new Order/course origin of
-ProvisioningRequest, coexisting with the legacy Payment/Product origin
-covered by tests/services/test_provisioning_service.py.
+Phase 7 (docs/TARA_INTEGRATION_PROJECT.md): the Order/course origin of
+ProvisioningRequest — the only origin ProvisioningService supports.
 """
 from decimal import Decimal
 from unittest.mock import MagicMock
@@ -61,8 +60,6 @@ def test_create_request_from_order_creates_pending_request_not_executed():
     assert request.order_id == order.id
     assert request.course_id == order.course_id
     assert request.contact_id == order.customer_id
-    assert request.payment_id is None
-    assert request.product_id is None
 
 
 def test_create_request_from_order_is_idempotent_per_contact_course():
@@ -155,18 +152,6 @@ def test_execute_completes_new_flow_request(mocker):
 
     assert result.status == ProvisioningRequest.Status.COMPLETED
     assert result.attempts.filter(status=ProvisioningAttempt.Status.SUCCESS, course=order.course).count() == 1
-
-
-def test_execute_new_flow_does_not_touch_legacy_payment_timeline(mocker):
-    """new-flow requests have no legacy Payment — _record_success/_record_failure must not blow up."""
-    order = make_eligible_order(email="order-flow-no-timeline-crash@example.com")
-    request = ProvisioningService().create_request_from_order(order)
-    mock_service, config = enrollment_service_bundle()
-    mocker.patch("apps.provisioning.services.ProvisioningService._build_enrollment_service", return_value=(mock_service, config))
-
-    result = ProvisioningService().execute(request)  # must not raise IntegrityError from PaymentTimelineEvent(payment=None)
-
-    assert result.status == ProvisioningRequest.Status.COMPLETED
 
 
 # --- retry classification ---
@@ -290,3 +275,30 @@ def test_repeat_execute_never_recalls_clickfunnels_for_already_succeeded_course(
 
     mock_service.enroll_contact.assert_not_called()
     assert result.status == ProvisioningRequest.Status.COMPLETED
+
+
+# --- approve / cancel ---
+
+def test_approve_transitions_awaiting_approval_to_pending():
+    from django.contrib.auth.models import User
+
+    order = make_eligible_order(email="order-flow-approve@example.com")
+    request = ProvisioningService().create_request_from_order(order)
+    request.status = ProvisioningRequest.Status.AWAITING_APPROVAL
+    request.save(update_fields=["status"])
+    user = User.objects.create_user(username="ops", password="x")
+
+    updated = ProvisioningService().approve(request, user)
+
+    assert updated.status == ProvisioningRequest.Status.PENDING
+    assert updated.approved_by == user
+    assert updated.approved_at is not None
+
+
+def test_cancel_sets_cancelled_status():
+    order = make_eligible_order(email="order-flow-cancel@example.com")
+    request = ProvisioningService().create_request_from_order(order)
+
+    updated = ProvisioningService().cancel(request)
+
+    assert updated.status == ProvisioningRequest.Status.CANCELLED

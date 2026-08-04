@@ -333,37 +333,6 @@ def test_no_secrets_in_logs(active_config, attempt, mocker, caplog):
         assert "secret" not in message
 
 
-# --- Legacy boundary (Phase 3/6 decision) ---
-#
-# apps/payments/models.py::Payment's docstring documents the decision: the new
-# exact-PaymentAttempt path is used exclusively for anything that correlates;
-# PaymentMatchingService/legacy Payment/ProvisioningService are never invoked
-# from this webhook route at all, correlated or not — see that docstring and
-# apps/payments/api.py::tara_webhook's docstring for the full rationale.
-
-def test_exact_attempt_match_does_not_create_legacy_payment(active_config, attempt, mocker):
-    from apps.payments.models import Payment
-
-    mock_client = Mock()
-    mock_client.check_transaction_status.return_value = status_response(attempt.tara_product_id, "SUCCESS")
-    mocker.patch("apps.payments.services.TaraConfigService.get_client", return_value=mock_client)
-
-    WebhookProcessingService().process_webhook(body(productId=attempt.tara_product_id))
-
-    assert Payment.objects.count() == 0
-
-
-def test_exact_attempt_match_does_not_call_payment_matching_service(active_config, attempt, mocker):
-    mock_client = Mock()
-    mock_client.check_transaction_status.return_value = status_response(attempt.tara_product_id, "SUCCESS")
-    mocker.patch("apps.payments.services.TaraConfigService.get_client", return_value=mock_client)
-    mock_matching = mocker.patch("apps.payments.services.PaymentMatchingService")
-
-    WebhookProcessingService().process_webhook(body(productId=attempt.tara_product_id))
-
-    mock_matching.assert_not_called()
-
-
 def test_uncorrelated_event_cannot_provision_access(active_config, mocker):
     mock_provisioning = mocker.patch("apps.provisioning.services.ProvisioningService")
 

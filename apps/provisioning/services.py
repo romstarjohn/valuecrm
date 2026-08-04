@@ -9,16 +9,15 @@ from shared.constants import (
     PROVISIONING_INLINE_RETRY_BACKOFF_SECONDS,
     PROVISIONING_MAX_REQUEST_ATTEMPTS,
 )
-from shared.logging_utils import get_logger, log_service_start, log_service_success, log_service_failure
+from shared.logging_utils import get_logger, log_service_start, log_service_success
 from apps.configuration.services import ConfigurationService
 from apps.contacts.services import ContactService
 from apps.enrollments.services import EnrollmentService
 from apps.enrollments.models import EnrollmentAttempt
-from apps.payments.models import Payment, PaymentTimelineEvent
 from integrations.clickfunnels.client import ClickFunnelsClient
 from integrations.clickfunnels.exceptions import ClickFunnelsAPIError, ClickFunnelsAuthError, ClickFunnelsRateLimitError
 
-from .models import Product, ProvisioningAttempt, ProvisioningRequest
+from .models import ProvisioningAttempt, ProvisioningRequest
 
 logger = get_logger(__name__)
 
@@ -39,81 +38,12 @@ class ProvisioningError(Exception):
     pass
 
 
-_POLICY_TO_INITIAL_STATUS = {
-    Product.ProvisioningPolicy.AUTOMATIC: ProvisioningRequest.Status.PENDING,
-    Product.ProvisioningPolicy.MANUAL: ProvisioningRequest.Status.PENDING,
-    Product.ProvisioningPolicy.SCHEDULED: ProvisioningRequest.Status.SCHEDULED,
-    Product.ProvisioningPolicy.APPROVAL_REQUIRED: ProvisioningRequest.Status.AWAITING_APPROVAL,
-}
-
-
 class ProvisioningService:
     """
     Provisioning lifecycle only — separate from Payment's lifecycle by design.
-    Never touches Tara; the only input is an already-MATCHED, HIGH-confidence
-    Payment. See apps.payments for how a Payment gets there.
+    Requests originate from an access-eligible Order (see
+    create_request_from_order below); execution never touches Tara.
     """
-
-    def create_request_from_payment(self, payment: Payment) -> Optional[ProvisioningRequest]:
-        """
-        Guarded entrypoint: refuses to run unless payment.status == MATCHED and
-        payment.match_confidence == HIGH. Product.provisioning_policy == AUTOMATIC
-        does NOT bypass this gate — a low-confidence match on an AUTOMATIC product
-        still stops here, never silently auto-provisions on amount alone.
-
-        Idempotent: if a (non-cancelled) ProvisioningRequest already exists for
-        this payment, returns it instead of creating a second one — safe to call
-        repeatedly, e.g. from a rematch after a configuration fix.
-        """
-        log_service_start(logger, "ProvisioningService", "create_request_from_payment", payment_id=payment.id)
-
-        if payment.status != Payment.Status.MATCHED or payment.match_confidence != Payment.Confidence.HIGH:
-            log_service_failure(
-                logger, "ProvisioningService", "create_request_from_payment",
-                ValueError("Payment is not a high-confidence match"), payment_id=payment.id,
-            )
-            return None
-
-        existing = (
-            ProvisioningRequest.objects.filter(payment=payment)
-            .exclude(status=ProvisioningRequest.Status.CANCELLED)
-            .first()
-        )
-        if existing:
-            log_service_success(
-                logger, "ProvisioningService", "create_request_from_payment",
-                payment_id=payment.id, provisioning_request_id=existing.id,
-            )
-            return existing
-
-        product = payment.matched_product
-        contact = payment.matched_contact
-        policy = product.provisioning_policy
-
-        request = ProvisioningRequest.objects.create(
-            payment=payment,
-            product=product,
-            contact=contact,
-            policy_snapshot=policy,
-            status=_POLICY_TO_INITIAL_STATUS[policy],
-        )
-        PaymentTimelineEvent.objects.create(
-            payment=payment,
-            event_type=PaymentTimelineEvent.EventType.PROVISIONING_REQUESTED,
-            detail={"provisioning_request_id": request.id, "policy": policy},
-        )
-        log_service_success(
-            logger, "ProvisioningService", "create_request_from_payment",
-            payment_id=payment.id, provisioning_request_id=request.id, product_id=product.id,
-        )
-
-        if policy == Product.ProvisioningPolicy.AUTOMATIC:
-            # execute() claims the request via a fresh select_for_update()
-            # fetch (see _claim) and returns that (different) instance —
-            # must use the return value, not the stale pre-execute() object.
-            request = self.execute(request)
-
-        return request
 
     def create_request_from_order(self, order) -> Optional[ProvisioningRequest]:
         """
@@ -159,7 +89,9 @@ class ProvisioningService:
                     order=order,
                     course=order.course,
                     contact=order.customer,
-                    policy_snapshot=Product.ProvisioningPolicy.AUTOMATIC,
+                    # Only value this flow ever writes — enrollment always runs
+                    # automatically once an Order becomes access-eligible.
+                    policy_snapshot=ProvisioningRequest.PolicySnapshot.AUTOMATIC,
                     status=ProvisioningRequest.Status.PENDING,
                 )
         except IntegrityError:
@@ -197,12 +129,10 @@ class ProvisioningService:
 
     def execute(self, request: ProvisioningRequest) -> ProvisioningRequest:
         """
-        Calls the existing EnrollmentService once per course — the Product's
-        courses (legacy origin) or the Order's single frozen course (new
-        origin, Phase 7) — skipping any course that already has a SUCCESS
-        ProvisioningAttempt (so a retry after a partial failure never
-        double-enrolls). All-succeed -> COMPLETED. Any failure -> FAILED
-        (retryable — an explicit Admin action, the nightly SCHEDULED batch, or
+        Calls the existing EnrollmentService for the Order's single frozen
+        course, skipping if it already has a SUCCESS ProvisioningAttempt (so
+        a retry after a partial failure never double-enrolls). Succeeds ->
+        COMPLETED. Fails -> FAILED (retryable — an explicit Admin action or
         process_pending_provisioning may retry it) unless the failure is one
         of the non-retryable categories (_NON_RETRYABLE_CATEGORIES), in which
         case -> MANUAL_REVIEW immediately, since automatic/human retry without
@@ -224,8 +154,6 @@ class ProvisioningService:
         request = claimed
         log_service_start(logger, "ProvisioningService", "execute", provisioning_request_id=request.id)
 
-        is_new_flow = request.order_id is not None
-
         if not request.contact.email:
             self._finish_non_retryable(
                 request, "Contact has no email address on file.",
@@ -233,7 +161,7 @@ class ProvisioningService:
             )
             return request
 
-        if is_new_flow and not request.order.course_cf_id:
+        if not request.order.course_cf_id:
             self._finish_non_retryable(
                 request, "Order has no course_cf_id snapshot.",
                 ProvisioningRequest.FailureCategory.MISSING_COURSE_SNAPSHOT,
@@ -253,7 +181,7 @@ class ProvisioningService:
             request.attempts.filter(status=ProvisioningAttempt.Status.SUCCESS).values_list("course_id", flat=True)
         )
 
-        courses = list(request.product.courses.all()) if request.product_id else [request.course]
+        courses = [request.course]
 
         all_succeeded = True
         any_non_retryable = False
@@ -262,7 +190,7 @@ class ProvisioningService:
             if course.id in already_succeeded_course_ids:
                 continue
 
-            cf_course_id = course.cf_course_id if request.product_id else request.order.course_cf_id
+            cf_course_id = request.order.course_cf_id
             attempt_status, enrollment_attempt_id, error, category = self._enroll_with_retry(
                 enrollment_service, config, request.contact, course, cf_course_id,
             )
@@ -284,18 +212,15 @@ class ProvisioningService:
             request.last_error = ""
             request.failure_category = ""
             request.save(update_fields=["status", "last_error", "failure_category", "updated_at"])
-            self._record_success(request)
         elif any_non_retryable:
             request.status = ProvisioningRequest.Status.MANUAL_REVIEW
             request.last_error = last_error
             request.save(update_fields=["status", "last_error", "failure_category", "updated_at"])
-            self._record_failure(request, last_error)
         else:
             request.status = ProvisioningRequest.Status.FAILED
             request.last_error = last_error
             request.failure_category = ProvisioningRequest.FailureCategory.TRANSIENT_PROVIDER_ERROR
             request.save(update_fields=["status", "last_error", "failure_category", "updated_at"])
-            self._record_failure(request, last_error)
 
         log_service_success(
             logger, "ProvisioningService", "execute", provisioning_request_id=request.id,
@@ -304,20 +229,17 @@ class ProvisioningService:
 
     _CLAIMABLE_STATUSES = (
         ProvisioningRequest.Status.PENDING,
-        ProvisioningRequest.Status.SCHEDULED,
         ProvisioningRequest.Status.FAILED,
     )
 
     def _claim(self, request_id: int) -> Optional[ProvisioningRequest]:
         """
-        Atomically claims a PENDING, SCHEDULED, or FAILED request for
-        processing — the concurrency-safe "lock/atomically claim" step
-        required by Phase 7 for the new flow, applied uniformly to the legacy
-        flow too (it shares this same execute() method; SCHEDULED is how the
-        nightly batch command reaches it). Returns None if the request was
-        already claimed/completed/cancelled/under manual review, or if
-        bounded attempts have been exhausted (in which case it's moved to
-        MANUAL_REVIEW here so it stops being retried automatically).
+        Atomically claims a PENDING or FAILED request for processing — the
+        concurrency-safe "lock/atomically claim" step required by Phase 7.
+        Returns None if the request was already claimed/completed/cancelled/
+        under manual review, or if bounded attempts have been exhausted (in
+        which case it's moved to MANUAL_REVIEW here so it stops being
+        retried automatically).
         """
         with transaction.atomic():
             try:
@@ -342,7 +264,6 @@ class ProvisioningService:
         request.last_error = error
         request.failure_category = category
         request.save(update_fields=["status", "last_error", "failure_category", "updated_at"])
-        self._record_failure(request, error)
 
     def _build_enrollment_service(self) -> Optional[Tuple[EnrollmentService, object]]:
         config_service = ConfigurationService()
@@ -413,24 +334,6 @@ class ProvisioningService:
                 )
             time.sleep(PROVISIONING_INLINE_RETRY_BACKOFF_SECONDS[attempts])
             attempts += 1
-
-    def _record_success(self, request: ProvisioningRequest):
-        if request.payment_id is None:
-            return  # new flow (Phase 7) has no legacy Payment to attach a timeline event to
-        PaymentTimelineEvent.objects.create(
-            payment=request.payment,
-            event_type=PaymentTimelineEvent.EventType.PROVISIONING_COMPLETED,
-            detail={"provisioning_request_id": request.id},
-        )
-
-    def _record_failure(self, request: ProvisioningRequest, error: str):
-        if request.payment_id is None:
-            return  # new flow (Phase 7) has no legacy Payment to attach a timeline event to
-        PaymentTimelineEvent.objects.create(
-            payment=request.payment,
-            event_type=PaymentTimelineEvent.EventType.PROVISIONING_FAILED,
-            detail={"provisioning_request_id": request.id, "error": error},
-        )
 
     def retry_request(self, request_id: int, reason: str, administrator, request_context=None) -> ProvisioningRequest:
         """

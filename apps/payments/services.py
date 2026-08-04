@@ -25,8 +25,6 @@ from shared.constants import (
 from shared.logging_utils import get_logger, log_service_start, log_service_success, log_service_failure
 from shared.security import encrypt_value
 from apps.contacts.models import Contact
-from apps.provisioning.models import ProductMapping
-from integrations.payments.base import NormalizedPaymentDTO
 from integrations.payments.tara.client import TaraClient
 from integrations.payments.tara.exceptions import (
     TaraClientError,
@@ -44,11 +42,9 @@ from integrations.payments.tara.schemas import TaraTransactionStatus, TaraWebhoo
 from .models import (
     Installment,
     Order,
-    Payment,
     PaymentAttempt,
     PaymentConfirmation,
     PaymentPlan,
-    PaymentTimelineEvent,
     TaraConfig,
     TaraWebhookEvent,
 )
@@ -153,150 +149,6 @@ class TaraConfigService:
             return TaraClient.from_configuration(config)
         except (ValueError, InvalidToken) as e:
             raise TaraCredentialError("Could not decrypt the stored Tara credentials.") from e
-
-
-class PaymentMatchingService:
-    """
-    Tara-only matching strategy (see PROJECT plan / docs/OPERATIONS.md):
-      1. product_ref -> ProductMapping -> Product   (mandatory gate for auto-provisioning)
-      2. provider_transaction_id                     (idempotency/dedup only, handled in record_payment)
-      3. phone -> Contact                             (HIGH confidence)
-      4. email -> Contact                             (HIGH confidence, only if phone didn't match)
-      5. amount vs Product.expected_amount            (weak signal only, never sufficient alone)
-      6. otherwise -> NEEDS_REVIEW
-
-    Hard rule: a Payment only ever reaches Status.MATCHED when both a Product and
-    a Contact were resolved at Confidence.HIGH. Nothing here escalates confidence
-    based on amount alone, regardless of a Product's provisioning_policy.
-    """
-
-    def record_payment(self, dto: NormalizedPaymentDTO) -> Tuple[Payment, bool]:
-        """Idempotent on (provider, provider_transaction_id) — safe to call repeatedly for the same webhook/reconciliation delivery."""
-        payment, created = Payment.objects.get_or_create(
-            provider=dto.provider,
-            provider_transaction_id=dto.provider_transaction_id,
-            defaults={
-                "raw_payload": dto.raw_payload,
-                "product_ref": dto.product_ref,
-                "extracted_phone": dto.customer_phone,
-                "extracted_email": dto.customer_email,
-                "amount": dto.amount,
-                "currency": dto.currency,
-                "status": Payment.Status.RECEIVED,
-            },
-        )
-        if created:
-            log_service_success(
-                logger, "PaymentMatchingService", "record_payment",
-                payment_id=payment.id, provider_transaction_id=dto.provider_transaction_id,
-            )
-            self._record_event(payment, PaymentTimelineEvent.EventType.RECEIVED, {"provider": dto.provider})
-        return payment, created
-
-    def mark_verified(self, payment: Payment) -> Payment:
-        payment.status = Payment.Status.VERIFIED
-        payment.verified_at = timezone.now()
-        payment.save(update_fields=["status", "verified_at", "updated_at"])
-        self._record_event(payment, PaymentTimelineEvent.EventType.VERIFIED, {})
-        return payment
-
-    def match_and_process(self, payment: Payment) -> Payment:
-        """
-        Runs (or re-runs) the matching strategy against the payment's current
-        state. Safe to call more than once — it never re-creates the Payment row,
-        and re-matching after a config fix (e.g. a new ProductMapping) goes
-        through the exact same HIGH-confidence gate as a first-pass match.
-        """
-        log_service_start(logger, "PaymentMatchingService", "match_and_process", payment_id=payment.id)
-        is_rematch = payment.status == Payment.Status.NEEDS_REVIEW
-        if is_rematch:
-            self._record_event(payment, PaymentTimelineEvent.EventType.REMATCHED, {})
-
-        product = self._match_product(payment)
-        contact, confidence = self._match_customer(payment)
-
-        if not contact and product and product.expected_amount is not None and payment.amount is not None:
-            # Weak signal only — can raise confidence to MEDIUM/LOW for triage,
-            # never to HIGH, and therefore never triggers auto-provisioning alone.
-            confidence = (
-                Payment.Confidence.MEDIUM
-                if abs(product.expected_amount - payment.amount) < Decimal("0.01")
-                else Payment.Confidence.LOW
-            )
-
-        payment.matched_product = product
-        payment.matched_contact = contact
-        payment.match_confidence = confidence
-
-        if product and contact and confidence == Payment.Confidence.HIGH:
-            payment.status = Payment.Status.MATCHED
-            self._record_event(payment, PaymentTimelineEvent.EventType.MATCHED, {
-                "product_id": product.id, "contact_id": contact.id,
-            })
-        else:
-            payment.status = Payment.Status.NEEDS_REVIEW
-            self._record_event(payment, PaymentTimelineEvent.EventType.NEEDS_REVIEW, {
-                "product_matched": bool(product),
-                "customer_matched": bool(contact),
-                "confidence": confidence,
-            })
-
-        payment.save()
-        log_service_success(
-            logger, "PaymentMatchingService", "match_and_process",
-            payment_id=payment.id,
-        )
-        return payment
-
-    def dismiss(self, payment: Payment, notes: str = "") -> Payment:
-        """Operator-driven terminal state for a NEEDS_REVIEW payment that will never be resolved (e.g. refund/test)."""
-        payment.status = Payment.Status.IGNORED
-        if notes:
-            payment.review_notes = (payment.review_notes + "\n" + notes).strip()
-        payment.save(update_fields=["status", "review_notes", "updated_at"])
-        self._record_event(payment, PaymentTimelineEvent.EventType.IGNORED, {"notes": notes})
-        return payment
-
-    def _match_product(self, payment: Payment):
-        if not payment.product_ref:
-            return None
-        mapping = (
-            ProductMapping.objects.filter(
-                provider=payment.provider, external_ref=payment.product_ref, product__is_active=True
-            )
-            .select_related("product")
-            .first()
-        )
-        if not mapping:
-            return None
-        self._record_event(payment, PaymentTimelineEvent.EventType.PRODUCT_MATCHED, {"product_id": mapping.product_id})
-        return mapping.product
-
-    def _match_customer(self, payment: Payment):
-        if payment.extracted_phone:
-            normalized = normalize_phone(payment.extracted_phone)
-            if normalized:
-                candidates = list(Contact.objects.filter(phone=normalized)[:2])
-                if len(candidates) == 1:
-                    self._record_event(
-                        payment, PaymentTimelineEvent.EventType.CUSTOMER_MATCHED,
-                        {"contact_id": candidates[0].id, "matched_via": "phone"},
-                    )
-                    return candidates[0], Payment.Confidence.HIGH
-
-        if payment.extracted_email:
-            candidates = list(Contact.objects.filter(email=payment.extracted_email)[:2])
-            if len(candidates) == 1:
-                self._record_event(
-                    payment, PaymentTimelineEvent.EventType.CUSTOMER_MATCHED,
-                    {"contact_id": candidates[0].id, "matched_via": "email"},
-                )
-                return candidates[0], Payment.Confidence.HIGH
-
-        return None, Payment.Confidence.NONE
-
-    def _record_event(self, payment: Payment, event_type: str, detail: dict):
-        PaymentTimelineEvent.objects.create(payment=payment, event_type=event_type, detail=detail)
 
 
 _ORDER_TRANSITIONS = {

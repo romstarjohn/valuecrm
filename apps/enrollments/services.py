@@ -51,7 +51,6 @@ class EnrollmentService:
             # 3. Enroll contact in ClickFunnels
             enrollment_dto = self.client.enroll_contact_in_course(
                 subdomain=workspace_subdomain,
-                workspace_id=workspace_id,
                 contact_id=int(contact.cf_contact_id),
                 course_id=int(cf_course_id)
             )

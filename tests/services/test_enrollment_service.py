@@ -20,10 +20,9 @@ def test_enroll_contact_success(course, contact):
     mock_client = MagicMock()
     # Mock integer ID
     mock_client.enroll_contact_in_course.return_value = EnrollmentDTO(
-        id=1, 
-        contact_id=123, 
-        course_id=123, 
-        status="active"
+        id=1,
+        contact_id=123,
+        course_id=123,
     )
     
     mock_contact_service = MagicMock()
@@ -38,7 +37,6 @@ def test_enroll_contact_success(course, contact):
     assert EnrollmentAttempt.objects.count() == 1
     mock_client.enroll_contact_in_course.assert_called_once_with(
         subdomain="hammer",
-        workspace_id=198218,
         contact_id=123,
         course_id=123
     )
@@ -82,7 +80,7 @@ def test_bulk_enroll_partial_success(course, contact):
     mock_client = MagicMock()
     # First succeeds, second fails
     mock_client.enroll_contact_in_course.side_effect = [
-        EnrollmentDTO(id=1, contact_id=123, course_id=123, status="ok"),
+        EnrollmentDTO(id=1, contact_id=123, course_id=123),
         Exception("Failed")
     ]
     
@@ -110,7 +108,7 @@ def test_enrollment_payload_not_logged(course, contact, caplog):
     
     mock_client = MagicMock()
     mock_client.enroll_contact_in_course.return_value = EnrollmentDTO(
-        id=1, contact_id=123, course_id=123, status="ok"
+        id=1, contact_id=123, course_id=123
     )
     
     mock_contact_service = MagicMock()

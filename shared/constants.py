@@ -1,10 +1,6 @@
 MAX_BULK_ENROLLMENT_SIZE = 50
 DEFAULT_TIMEOUT = 30
 
-# apps.payments: how many days a NEEDS_REVIEW payment is automatically re-checked
-# by reconcile_tara_payments before it's left to manual-only retry.
-PAYMENT_NEEDS_REVIEW_RETRY_WINDOW_DAYS = 14
-
 # apps.provisioning: bounded in-process retry for transient ClickFunnels errors
 # (429/5xx) during ProvisioningService.execute() — never used for 401/other 4xx.
 PROVISIONING_MAX_INLINE_RETRIES = 2

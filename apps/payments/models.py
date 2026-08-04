@@ -74,131 +74,11 @@ class TaraConfig(TimeStampedModel):
             super().save(*args, **kwargs)
 
 
-class Payment(TimeStampedModel):
-    """
-    Payment lifecycle only — did a payment arrive, is it verified, what does it
-    match to. Deliberately never touches ClickFunnels; see apps.provisioning for
-    what happens once a payment is MATCHED.
-
-    Relationship to PaymentAttempt (Phase 3) — deliberately kept as a SEPARATE,
-    coexisting model, not evolved/merged, based on repository evidence:
-
-    Payment's whole design assumes an UNSOLICITED inbound Tara notification
-    whose product_ref must be reverse-matched against a pre-declared
-    ProductMapping catalog (see PaymentMatchingService._match_product below).
-    But docs/Tara_API_Reference_Technique.docx (Phase 0 discovery) documents
-    that Tara's productId is MERCHANT-GENERATED per payment attempt, not a
-    stable catalog code Tara assigns — i.e. the premise "an unrecognized
-    productId arrives and we must guess what it was for" doesn't hold for any
-    payment that originated from our own PaymentPlan/Order/Installment/
-    PaymentAttempt checkout flow, where we already know exactly which
-    Installment a given tara_product_id belongs to via a direct, exact lookup
-    (PaymentAttempt.tara_product_id is unique) — no heuristic matching needed
-    or wanted.
-
-    Phase 6 resolution (docs/TARA_INTEGRATION_PROJECT.md): the new webhook
-    route (apps/payments/api.py::tara_webhook ->
-    services.py::WebhookProcessingService) uses the exact PaymentAttempt path
-    EXCLUSIVELY and never invokes Payment/PaymentMatchingService/
-    ProvisioningService at all — not for a correlated event, not for an
-    uncorrelated one. An event that can't be matched to a PaymentAttempt by
-    exact tara_product_id is recorded as TaraWebhookEvent.ProcessingStatus.
-    UNCORRELATED and nothing more; it is never fed into the legacy
-    heuristic-matching flow, so that flow can never grant access from an
-    unverified webhook. Payment/PaymentMatchingService/ProductMapping remain
-    in the codebase, unmodified, as a dormant path — apps/payments/management/
-    commands/reconcile_tara_payments.py is their only remaining caller, and it
-    already requires its own (currently Phase-5-disabled,
-    TaraUnsupportedOperationError-raising) list_paid_transactions() call, not
-    this webhook route. If a future phase wants to re-activate that legacy
-    path for genuinely out-of-band notifications, it must add the same
-    server-to-server status verification this webhook route already requires
-    — never grant access from webhook fields alone there either.
-    """
-
-    class Status(models.TextChoices):
-        RECEIVED = "RECEIVED", "Received"
-        VERIFIED = "VERIFIED", "Verified"
-        MATCHED = "MATCHED", "Matched"
-        NEEDS_REVIEW = "NEEDS_REVIEW", "Needs Review"
-        DUPLICATE = "DUPLICATE", "Duplicate"
-        IGNORED = "IGNORED", "Ignored"
-
-    class Confidence(models.TextChoices):
-        HIGH = "HIGH", "High"
-        MEDIUM = "MEDIUM", "Medium"
-        LOW = "LOW", "Low"
-        NONE = "NONE", "None"
-
-    provider = models.CharField(max_length=50, default="tara")
-    provider_transaction_id = models.CharField(max_length=255, unique=True, db_index=True)
-    raw_payload = models.JSONField(default=dict, blank=True)
-
-    product_ref = models.CharField(max_length=255, blank=True, db_index=True)
-    extracted_phone = models.CharField(max_length=50, blank=True)
-    extracted_email = models.EmailField(blank=True)
-    amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    currency = models.CharField(max_length=10, blank=True)
-
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.RECEIVED, db_index=True)
-    match_confidence = models.CharField(max_length=10, choices=Confidence.choices, default=Confidence.NONE)
-
-    matched_contact = models.ForeignKey(
-        "contacts.Contact", null=True, blank=True, on_delete=models.SET_NULL, related_name="tara_payments"
-    )
-    matched_product = models.ForeignKey(
-        "provisioning.Product", null=True, blank=True, on_delete=models.SET_NULL, related_name="payments"
-    )
-
-    verified_at = models.DateTimeField(null=True, blank=True)
-    review_notes = models.TextField(blank=True, help_text="Operator notes explaining a manual match/dismissal decision.")
-
-    class Meta:
-        ordering = ["-created_at"]
-        indexes = [models.Index(fields=["status", "created_at"])]
-
-    def __str__(self):
-        return f"{self.provider_transaction_id} ({self.status})"
-
-
-class PaymentTimelineEvent(TimeStampedModel):
-    """
-    Chronological event log spanning both the payment lifecycle (this app) and the
-    provisioning lifecycle (apps.provisioning), so a Payment's full history is
-    visible from one place without merging the two lifecycles' tables.
-    """
-
-    class EventType(models.TextChoices):
-        RECEIVED = "RECEIVED", "Received"
-        VERIFIED = "VERIFIED", "Verified"
-        PRODUCT_MATCHED = "PRODUCT_MATCHED", "Product Matched"
-        CUSTOMER_MATCHED = "CUSTOMER_MATCHED", "Customer Matched"
-        MATCHED = "MATCHED", "Matched"
-        NEEDS_REVIEW = "NEEDS_REVIEW", "Needs Review"
-        REMATCHED = "REMATCHED", "Rematched"
-        IGNORED = "IGNORED", "Ignored"
-        PROVISIONING_REQUESTED = "PROVISIONING_REQUESTED", "Provisioning Requested"
-        PROVISIONING_COMPLETED = "PROVISIONING_COMPLETED", "Provisioning Completed"
-        PROVISIONING_FAILED = "PROVISIONING_FAILED", "Provisioning Failed"
-
-    payment = models.ForeignKey(Payment, related_name="timeline_events", on_delete=models.CASCADE)
-    event_type = models.CharField(max_length=50, choices=EventType.choices)
-    detail = models.JSONField(default=dict, blank=True)
-
-    class Meta:
-        ordering = ["created_at"]
-
-    def __str__(self):
-        return f"{self.payment_id} - {self.event_type}"
-
-
 class ReconciliationRun(TimeStampedModel):
     """
-    Bookkeeping for both the legacy daily reconcile_tara_payments command
-    (transactions_seen/new_payments/errors — untouched) and the Phase 9
-    hourly reconciliation run (run_hourly_reconciliation,
-    apps/payments/reconciliation_services.py::ReconciliationService — every
-    other field below). Only safe counters are stored — no raw provider
+    Bookkeeping for the Phase 9 hourly reconciliation run
+    (run_hourly_reconciliation, apps/payments/reconciliation_services.py::
+    ReconciliationService). Only safe counters are stored — no raw provider
     responses, secrets, payment URLs, or customer PII.
     """
 
@@ -211,9 +91,6 @@ class ReconciliationRun(TimeStampedModel):
 
     started_at = models.DateTimeField()
     completed_at = models.DateTimeField(null=True, blank=True)
-    transactions_seen = models.IntegerField(default=0)
-    new_payments = models.IntegerField(default=0)
-    errors = models.IntegerField(default=0)
 
     run_status = models.CharField(max_length=30, choices=RunStatus.choices, default=RunStatus.RUNNING, db_index=True)
 
@@ -245,11 +122,10 @@ class ReconciliationRun(TimeStampedModel):
 class PaymentPlan(TimeStampedModel):
     """
     Administrator-configured commercial terms linked to exactly one existing
-    course. Deliberately independent of apps.provisioning.Product/ProductMapping
-    (the Tara webhook-matching catalog) — see docs/TARA_INTEGRATION_PROJECT.md
-    Phase 1. Orders (Phase 3) must copy every pricing-relevant field below into
-    an immutable snapshot at creation time; editing a plan after that point must
-    never retroactively change an existing order's terms.
+    course — see docs/TARA_INTEGRATION_PROJECT.md Phase 1. Orders (Phase 3)
+    must copy every pricing-relevant field below into an immutable snapshot at
+    creation time; editing a plan after that point must never retroactively
+    change an existing order's terms.
     """
 
     class Currency(models.TextChoices):

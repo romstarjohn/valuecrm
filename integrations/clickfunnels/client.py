@@ -133,7 +133,9 @@ class ClickFunnelsClient:
 
     def get_contact_by_email(self, subdomain: str, workspace_id: int, email: str) -> Optional[ContactDTO]:
         url = f"{self._workspace_base_url(subdomain)}/workspaces/{workspace_id}/contacts"
-        params = {"email": email}
+        # ClickFunnels filters on "filter[email_address]" — an unrecognized
+        # "email" param is silently ignored and returns the unfiltered list.
+        params = {"filter[email_address]": email}
         data = self._request("GET", url, params=params)
         # Verified: returns list
         if not isinstance(data, list):
@@ -143,15 +145,19 @@ class ClickFunnelsClient:
 
     def create_contact(self, subdomain: str, workspace_id: int, payload: Dict[str, Any]) -> ContactDTO:
         url = f"{self._workspace_base_url(subdomain)}/workspaces/{workspace_id}/contacts"
-        data = self._request("POST", url, json=payload)
+        # ClickFunnels requires the attributes nested under "contact", with
+        # "email_address" (not "email") as the field name.
+        contact_attrs = dict(payload)
+        if "email" in contact_attrs:
+            contact_attrs["email_address"] = contact_attrs.pop("email")
+        data = self._request("POST", url, json={"contact": contact_attrs})
         return ContactDTO.model_validate(data)
 
-    def enroll_contact_in_course(self, subdomain: str, workspace_id: int, contact_id: int, course_id: int) -> EnrollmentDTO:
-        # Enrollment endpoint shape needs verification, using best known v2 pattern
-        url = f"{self._workspace_base_url(subdomain)}/workspaces/{workspace_id}/course_enrollments"
-        payload = {
-            "contact_id": contact_id,
-            "course_id": course_id
-        }
+    def enroll_contact_in_course(self, subdomain: str, contact_id: int, course_id: int) -> EnrollmentDTO:
+        # POST /courses/{course_id}/enrollments — not under /workspaces/{id}/,
+        # and the body key is "courses_enrollment" (verified against
+        # https://developers.myclickfunnels.com/reference/createcoursesenrollments).
+        url = f"{self._workspace_base_url(subdomain)}/courses/{course_id}/enrollments"
+        payload = {"courses_enrollment": {"contact_id": contact_id}}
         data = self._request("POST", url, json=payload)
         return EnrollmentDTO.model_validate(data)

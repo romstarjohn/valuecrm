@@ -7,15 +7,15 @@ class BaseCFDTO(BaseModel):
 
 class TeamDTO(BaseCFDTO):
     id: int | str
-    public_id: str
+    public_id: Optional[str] = None
     name: str
 
 class WorkspaceDTO(BaseCFDTO):
     id: int | str
-    public_id: str
+    public_id: Optional[str] = None
     team_id: int | str
     name: str
-    subdomain: Optional[str] = None
+    subdomain: str
 
 class CourseDTO(BaseCFDTO):
     id: int | str
@@ -38,7 +38,9 @@ class CourseDTO(BaseCFDTO):
 
 class ContactDTO(BaseCFDTO):
     id: int | str
-    email: str
+    # ClickFunnels' real field is "email_address", not "email", and it's
+    # nullable — anonymous/phone-only contacts have no email on file.
+    email_address: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
 
@@ -46,4 +48,5 @@ class EnrollmentDTO(BaseCFDTO):
     id: int | str
     contact_id: int | str
     course_id: int | str
-    status: str
+    # No "status" field exists in ClickFunnels' create-enrollment response —
+    # success is indicated purely by the 201 HTTP status.
