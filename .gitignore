@@ -5,6 +5,10 @@ __pycache__/
 *.so
 .Python
 env/
+.env/
+venv/
+.venv/
+.venv*/
 build/
 develop-eggs/
 dist/
@@ -37,10 +41,13 @@ nosetests.xml
 coverage.xml
 *.cover
 .hypothesis/
-.pytest_cache/
 
 # IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
+
+# OS / Office temp files
+.DS_Store
+~$*
