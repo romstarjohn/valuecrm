@@ -5,8 +5,8 @@ from shared.constants import DEFAULT_TIMEOUT
 from shared.logging_utils import get_logger, log_service_start, log_service_success, log_service_failure
 from shared.security import decrypt_value
 from .exceptions import (
-    ClickFunnelsAPIError, 
-    ClickFunnelsAuthError, 
+    ClickFunnelsAPIError,
+    ClickFunnelsAuthError,
     ClickFunnelsRateLimitError
 )
 from .schemas import WorkspaceDTO, TeamDTO, CourseDTO, ContactDTO, EnrollmentDTO
@@ -25,7 +25,7 @@ class ClickFunnelsClient:
         self.session = requests.Session()
         self.api_access_token = api_access_token
         self.api_user_agent = api_user_agent
-        
+
         self.session.headers.update({
             "Authorization": f"Bearer {self.api_access_token}",
             "User-Agent": self.api_user_agent,
@@ -45,13 +45,13 @@ class ClickFunnelsClient:
 
     def _request(self, method: str, url: str, **kwargs) -> Any:
         method = method.upper()
-        
+
         # Security: ensure secrets aren't in kwargs passed to logger
         log_service_start(
-            logger, "ClickFunnelsClient", "_request", 
+            logger, "ClickFunnelsClient", "_request",
             endpoint=url, method=method
         )
-        
+
         start_time = time.time()
         try:
             response = self.session.request(
@@ -61,7 +61,7 @@ class ClickFunnelsClient:
                 **kwargs
             )
             duration_ms = int((time.time() - start_time) * 1000)
-            
+
             log_context = {
                 "endpoint": url,
                 "status_code": response.status_code,
@@ -73,9 +73,9 @@ class ClickFunnelsClient:
                 raise ClickFunnelsAuthError("The API access token is invalid or unauthorized.", status_code=401)
             elif response.status_code == 429:
                 raise ClickFunnelsRateLimitError("Rate limit exceeded", status_code=429)
-            
+
             response.raise_for_status()
-            
+
             # Response could be list or dict
             data = response.json()
             log_service_success(logger, "ClickFunnelsClient", "_request", **log_context)
@@ -91,7 +91,7 @@ class ClickFunnelsClient:
                 "method": method
             }
             log_service_failure(logger, "ClickFunnelsClient", "_request", e, **log_context)
-            
+
             if status_code:
                 raise ClickFunnelsAPIError(str(e), status_code=status_code, response_body=e.response.text)
             raise ClickFunnelsAPIError(str(e))
@@ -100,7 +100,7 @@ class ClickFunnelsClient:
 
     def validate_credentials(self) -> Dict[str, Any]:
         """Validates token by fetching basic account/user info."""
-        url = f"{self.ACCOUNT_BASE_URL}/accounts"
+        url = f"{self.ACCOUNT_BASE_URL}/teams"
         return self._request("GET", url)
 
     def list_teams(self) -> List[TeamDTO]:
@@ -138,7 +138,7 @@ class ClickFunnelsClient:
         # Verified: returns list
         if not isinstance(data, list):
             data = data.get("contacts", [])
-        
+
         return ContactDTO.model_validate(data[0]) if data else None
 
     def create_contact(self, subdomain: str, workspace_id: int, payload: Dict[str, Any]) -> ContactDTO:
