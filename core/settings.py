@@ -12,6 +12,12 @@ DEBUG = os.getenv("DEBUG", "True") == "True"
 
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",") if os.getenv("ALLOWED_HOSTS") else []
 
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+
 # ValuedCRM Security
 FIELD_ENCRYPTION_KEY = os.getenv("FIELD_ENCRYPTION_KEY")
 
@@ -120,8 +126,17 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@valuedcrm.example
 # harden session/CSRF cookies for production the same way ALLOWED_HOSTS/DEBUG
 # already gate other production-only behavior. No effect in local DEBUG runs
 # (plain HTTP) so existing dev workflows are unaffected.
+
+# Apache terminates HTTPS and forwards requests to Gunicorn over HTTP.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
+
+SECURE_CONTENT_TYPE_NOSNIFF = not DEBUG
+X_FRAME_OPTIONS = "DENY"
+SECURE_REFERRER_POLICY = "same-origin"
+
 
 # Logging configuration with file support
 LOG_DIR = BASE_DIR / "logs"
