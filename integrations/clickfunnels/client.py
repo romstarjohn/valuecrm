@@ -161,3 +161,15 @@ class ClickFunnelsClient:
         payload = {"courses_enrollment": {"contact_id": contact_id}}
         data = self._request("POST", url, json=payload)
         return EnrollmentDTO.model_validate(data)
+
+    def update_enrollment_suspension(
+        self, subdomain: str, enrollment_id: int, suspended: bool, suspension_reason: str = "",
+    ) -> EnrollmentDTO:
+        # PUT /courses/enrollments/{id} — deliberately NOT
+        # /courses/{course_id}/enrollments/{id}; the update endpoint takes
+        # only the enrollment's own numeric id, no course_id in the path
+        # (verified against https://developers.myclickfunnels.com/reference/updatecoursesenrollments).
+        url = f"{self._workspace_base_url(subdomain)}/courses/enrollments/{enrollment_id}"
+        payload = {"courses_enrollment": {"suspended": suspended, "suspension_reason": suspension_reason}}
+        data = self._request("PUT", url, json=payload)
+        return EnrollmentDTO.model_validate(data)

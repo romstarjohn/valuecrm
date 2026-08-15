@@ -3,7 +3,7 @@
 {% block title %}Order {{ order.reference }} | ValuedCRM{% endblock %}
 
 {% block content %}
-{% include "includes/page_header.html" with title="Order Detail" subtitle=order.reference %}
+{% include "components/page_header.html" with title="Order Detail" subtitle=order.reference %}
 
 <div class="container-fluid px-4 fade-in pb-5">
     <div class="row g-4">
@@ -49,13 +49,21 @@
                     <div class="col-6"><label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Order Status</label>{% include "components/status_badge.html" with status=order.status %}</div>
                     <div class="col-6"><label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Manual Disposition</label>{% include "components/status_badge.html" with status=order.manual_disposition %}</div>
                 </div>
-                {% if can_cancel_order or can_apply_disposition %}
+                {% if can_cancel_order or can_apply_disposition or can_freeze_enrollment or can_resume_enrollment %}
                 <div class="mt-4 d-flex gap-2">
                     {% if can_cancel_order and order.status != "CANCELLED" %}
                         <a href="{% url 'operations:order_cancel' order.reference %}" class="btn btn-crm-outline btn-sm text-danger">Cancel Order</a>
                     {% endif %}
                     {% if can_apply_disposition %}
                         <a href="{% url 'operations:order_disposition' order.reference %}?value=NEEDS_REVIEW" class="btn btn-crm-outline btn-sm">Flag for Review</a>
+                    {% endif %}
+                    {% if can_freeze_enrollment %}
+                        {% if order.status == "ACTIVE" or order.status == "PAST_DUE" %}
+                            <a href="{% url 'operations:order_freeze_enrollment' order.reference %}" class="btn btn-crm-outline btn-sm text-warning">Freeze Enrollment</a>
+                        {% endif %}
+                    {% endif %}
+                    {% if can_resume_enrollment and order.status == "SUSPENDED" %}
+                        <a href="{% url 'operations:order_resume_enrollment' order.reference %}" class="btn btn-crm-outline btn-sm text-success">Resume Enrollment</a>
                     {% endif %}
                 </div>
                 {% endif %}
@@ -173,7 +181,10 @@
                             {% for req in provisioning_requests %}
                             <tr>
                                 <td class="ps-4 small">{{ req.course.name }}</td>
-                                <td>{% include "components/status_badge.html" with status=req.status %}</td>
+                                <td>
+                                    {% include "components/status_badge.html" with status=req.status %}
+                                    {% if req.cf_suspended %}<span class="badge-status badge-warning">SUSPENDED</span>{% endif %}
+                                </td>
                                 <td class="small text-muted">{{ req.attempt_count }}</td>
                                 <td class="small text-muted">{{ req.failure_category|default:"--" }}</td>
                                 <td class="text-end">

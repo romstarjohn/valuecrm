@@ -1,6 +1,6 @@
 <div class="dropdown">
-    <button class="btn btn-action" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-        <i class="fa-solid fa-ellipsis-vertical"></i>
+    <button class="btn btn-action" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{ label|default:'Actions' }}">
+        <i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i>
     </button>
     <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
         {% block menu_items %}{% endblock %}

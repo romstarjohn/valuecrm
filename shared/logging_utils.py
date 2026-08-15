@@ -35,6 +35,7 @@ def _sanitize_data(data):
         "payment_id", "order_id", "installment_id", "attempt_id",
         "provisioning_request_id", "confirmation_id", "created",
         "note_not_claimed",
+        "cf_enrollment_id", "suspended",
     }
     return {k: v for k, v in data.items() if k in safe_keys}
 

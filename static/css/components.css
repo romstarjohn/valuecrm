@@ -1,0 +1,445 @@
+/* components.css - reusable UI components layered on top of Bootstrap defaults */
+
+/* Cards */
+.crm-card {
+    background: var(--color-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    padding: var(--space-6);
+    margin-bottom: var(--space-6);
+    transition: box-shadow var(--transition-base);
+}
+
+.crm-card:hover {
+    box-shadow: var(--shadow-lg);
+}
+
+/* Native <details>/<summary> disclosure, styled as a crm-card (e.g. "Raw
+   API Response"). No JS required — expand/collapse is a browser built-in. */
+.crm-card > summary {
+    cursor: pointer;
+    list-style: none;
+}
+
+.crm-card > summary::-webkit-details-marker {
+    display: none;
+}
+
+.crm-card > summary::before {
+    content: "\25B8";
+    display: inline-block;
+    width: 1em;
+    margin-right: var(--space-2);
+    color: var(--color-text-muted);
+    transition: transform var(--transition-fast);
+}
+
+.crm-card[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+/* Tables */
+.table-container {
+    background: var(--color-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+}
+
+.table thead th {
+    background-color: var(--table-header-bg);
+    border-bottom: 2px solid var(--border-color);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    font-weight: var(--font-weight-bold);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: var(--space-3) var(--space-5);
+    white-space: nowrap;
+}
+
+.table tbody td {
+    padding: var(--space-3) var(--space-5);
+    border-bottom: 1px solid var(--border-color);
+    color: #334155;
+    font-size: var(--text-base);
+    vertical-align: middle;
+}
+
+.table-hover tbody tr:hover {
+    background-color: var(--content-bg);
+}
+
+.table-check {
+    width: 44px;
+}
+
+/* Sortable column headers */
+.table thead th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.table thead th.sortable a {
+    color: inherit;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.table thead th.sortable i {
+    font-size: 0.65rem;
+    opacity: 0.4;
+    transition: opacity var(--transition-fast);
+}
+
+.table thead th.sortable:hover i,
+.table thead th.sortable.sort-active i {
+    opacity: 1;
+}
+
+.table thead th.sortable.sort-active {
+    color: var(--color-text-primary);
+}
+
+/* Row-as-link: whole row is clickable via a real, keyboard-focusable anchor
+   placed in the identifying cell and stretched over the row with ::after. */
+.table tbody tr.row-linked {
+    position: relative;
+}
+
+.row-link-cell a.row-link-stretched {
+    color: inherit;
+    text-decoration: none;
+}
+
+.row-link-cell a.row-link-stretched::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+}
+
+.table tbody tr.row-linked:hover {
+    background-color: var(--content-bg);
+}
+
+/* Buttons */
+.btn-crm {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-2) var(--space-5);
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--text-base);
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    line-height: var(--line-height-normal);
+    transition: background-color var(--transition-base), color var(--transition-base), border-color var(--transition-base), transform var(--transition-base);
+}
+
+.btn-crm-sm {
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--text-sm);
+}
+
+.btn-crm-primary {
+    background-color: var(--primary-blue);
+    color: var(--color-text-inverse);
+    border-color: var(--primary-blue);
+}
+
+.btn-crm-primary:hover,
+.btn-crm-primary:focus-visible {
+    background-color: var(--primary-blue-hover);
+    border-color: var(--primary-blue-hover);
+    color: var(--color-text-inverse);
+    transform: translateY(-1px);
+}
+
+.btn-crm-outline {
+    background: transparent;
+    border-color: var(--border-color);
+    color: var(--color-text-muted);
+}
+
+.btn-crm-outline:hover,
+.btn-crm-outline:focus-visible {
+    background-color: var(--table-header-bg);
+    color: var(--color-text-primary);
+    border-color: var(--color-border-strong);
+}
+
+/* Outline variant for use on dark/colored surfaces (e.g. the dark KPI/summary cards) */
+.btn-crm-outline-inverse {
+    background: transparent;
+    border-color: rgba(255, 255, 255, 0.25);
+    color: var(--color-text-inverse);
+}
+
+.btn-crm-outline-inverse:hover,
+.btn-crm-outline-inverse:focus-visible {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.4);
+    color: var(--color-text-inverse);
+}
+
+.btn-crm-danger {
+    background-color: var(--color-danger-solid);
+    color: var(--color-text-inverse);
+    border-color: var(--color-danger-solid);
+}
+
+.btn-crm-danger:hover,
+.btn-crm-danger:focus-visible {
+    background-color: var(--color-danger-solid-hover);
+    border-color: var(--color-danger-solid-hover);
+    color: var(--color-text-inverse);
+}
+
+/* Icon-only action button (row action menus, toolbar icon buttons) */
+.btn-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--color-text-muted);
+    transition: background-color var(--transition-base), color var(--transition-base);
+}
+
+.btn-action:hover,
+.btn-action:focus-visible {
+    background-color: var(--table-header-bg);
+    color: var(--color-text-primary);
+}
+
+/* Status Badges */
+.badge-status {
+    display: inline-block;
+    padding: 0.4em 0.85em;
+    border-radius: var(--radius-pill);
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    white-space: nowrap;
+}
+
+.badge-success { background-color: var(--color-success-bg); color: var(--color-success-text); }
+.badge-danger  { background-color: var(--color-danger-bg);  color: var(--color-danger-text); }
+.badge-warning { background-color: var(--color-warning-bg); color: var(--color-warning-text); }
+.badge-info    { background-color: var(--color-info-bg);    color: var(--color-info-text); }
+
+/* Stat Icons */
+.stat-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--text-xl);
+}
+
+/* Forms */
+.form-label {
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-secondary);
+    margin-bottom: var(--space-2);
+}
+
+.form-control, .form-select {
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    padding: var(--space-3) var(--space-4);
+    transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--primary-blue);
+    box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.12);
+}
+
+.form-error {
+    color: var(--color-danger-text);
+    font-size: var(--text-xs);
+    margin-top: var(--space-1);
+}
+
+/* Table toolbar (search + filters + actions above a table) */
+.table-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    background: var(--color-surface);
+    border: 1px solid var(--border-color);
+    border-bottom: none;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding: var(--space-4) var(--space-5);
+}
+
+.table-toolbar + .table-container {
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+/* Search input */
+.search-input-group {
+    position: relative;
+    min-width: 220px;
+    flex: 1 1 240px;
+    max-width: 360px;
+}
+
+.search-input-group i {
+    position: absolute;
+    left: var(--space-3);
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    pointer-events: none;
+}
+
+.search-input-group .form-control {
+    padding-left: var(--space-8);
+}
+
+/* Pagination */
+.pagination-crm .page-link {
+    border: none;
+    border-radius: var(--radius-md);
+    margin: 0 2px;
+    color: var(--color-text-secondary);
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+}
+
+.pagination-crm .page-link:hover,
+.pagination-crm .page-link:focus-visible {
+    background-color: var(--table-header-bg);
+    color: var(--color-text-primary);
+}
+
+.pagination-crm .page-item.active .page-link {
+    background-color: var(--primary-blue);
+    color: var(--color-text-inverse);
+}
+
+.pagination-crm .page-item.disabled .page-link {
+    color: var(--color-text-muted);
+    opacity: 0.5;
+}
+
+/* Empty states (both standalone and table-embedded) */
+.empty-state,
+.table-empty-state {
+    text-align: center;
+    padding: var(--space-12) var(--space-6);
+}
+
+.empty-state-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto var(--space-4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-pill);
+    background: var(--table-header-bg);
+    color: var(--color-text-muted);
+    font-size: var(--text-2xl);
+}
+
+/* Action menu — small vanilla-JS dropdown (static/js/action-menu.js).
+   Deliberately independent of Bootstrap's dropdown JS (which can fail to
+   load from the CDN — data-bs-toggle then does nothing) and of Bootstrap's
+   absolute positioning (which gets clipped by .table-container's
+   overflow:hidden). Positioned with position:fixed, computed in JS. */
+.action-menu {
+    position: relative;
+    display: inline-block;
+}
+
+.action-menu-list {
+    position: fixed;
+    z-index: var(--z-toast);
+    min-width: 12rem;
+    margin: 0;
+    padding: var(--space-2) 0;
+    list-style: none;
+    background: var(--color-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    display: none;
+}
+
+.action-menu-list.is-open {
+    display: block;
+}
+
+.action-menu-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: var(--space-2) var(--space-4);
+    color: var(--color-text-primary);
+    font-size: var(--text-base);
+    text-decoration: none;
+    background: transparent;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+}
+
+.action-menu-item:hover,
+.action-menu-item:focus-visible {
+    background-color: var(--table-header-bg);
+    color: var(--color-text-primary);
+    text-decoration: none;
+}
+
+.action-menu-divider {
+    height: 0;
+    margin: var(--space-2) 0;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Bulk selection action bar */
+.bulk-actions-bar {
+    position: fixed;
+    left: 50%;
+    bottom: var(--space-6);
+    transform: translate(-50%, 120%);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    background: var(--sidebar-bg);
+    color: var(--color-text-inverse);
+    padding: var(--space-3) var(--space-5);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    z-index: var(--z-toast);
+    opacity: 0;
+    transition: transform var(--transition-base), opacity var(--transition-base);
+    pointer-events: none;
+}
+
+.bulk-actions-bar.show {
+    transform: translate(-50%, 0);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.bulk-actions-bar .selected-count {
+    background-color: var(--primary-blue);
+}

@@ -1,41 +1,41 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Enrollment History | ValuedCRM{% endblock %}
 
 {% block content %}
-{% include "includes/page_header.html" with title="Enrollment History" subtitle="Audit log of all student enrollment transactions and their statuses." action_label="New Enrollment" action_url="/enrollments/new/" action_icon="fa-solid fa-plus" %}
+{% include "components/page_header.html" with title="Enrollment History" subtitle="Audit log of all student enrollment transactions and their statuses." action_label="New Enrollment" action_url="/enrollments/new/" action_icon="fa-solid fa-plus" %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="table-container mb-4 shadow-sm border-0">
-        <!-- Toolbar -->
-        {% include "components/table_toolbar.html" with has_search=True search_placeholder="Search email or course..." has_filters=True %}
-            {% block table_filters %}
-                <div class="dropdown">
-                    <button class="btn btn-crm-outline btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        <i class="fa-solid fa-filter me-1 small"></i> Status: {{ status_filter|default:"All" }}
-                    </button>
-                    <ul class="dropdown-menu shadow border-0">
-                        <li><a class="dropdown-item" href="?{% if query %}q={{ query }}&{% endif %}{% if course_filter %}course_id={{ course_filter }}&{% endif %}">All Statuses</a></li>
-                        {% for val, label in status_options %}
-                        <li><a class="dropdown-item" href="?status={{ val }}{% if query %}&q={{ query }}{% endif %}{% if course_filter %}&course_id={{ course_filter }}{% endif %}">{{ label }}</a></li>
-                        {% endfor %}
-                    </ul>
+        <!-- Toolbar: search submits via a real GET form; filters/sort are preserved as hidden fields -->
+        <div class="table-toolbar">
+            <form method="get" class="d-flex align-items-center flex-grow-1 gap-3 flex-wrap">
+                {% include "components/search_bar.html" with placeholder="Search email or course..." %}
+                <div class="d-flex gap-2 flex-wrap">
+                    {% include "components/filter_dropdown.html" with label=status_label options=status_filter_options %}
+                    {% include "components/filter_dropdown.html" with label=course_label options=course_filter_options %}
                 </div>
-            {% endblock %}
-            {% block table_actions %}
-                <a href="{% url 'enrollments:bulk' %}" class="btn btn-crm btn-outline-primary btn-sm rounded-pill px-3">
-                    <i class="fa-solid fa-layer-group me-2"></i>Bulk Enroll
-                </a>
-            {% endblock %}
-        
+                {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+                {% if course_filter %}<input type="hidden" name="course_id" value="{{ course_filter }}">{% endif %}
+                {% if sort_key %}
+                    <input type="hidden" name="sort" value="{{ sort_key }}">
+                    <input type="hidden" name="dir" value="{{ sort_dir }}">
+                {% endif %}
+            </form>
+            <a href="{% url 'enrollments:bulk' %}" class="btn-crm btn-crm-outline btn-crm-sm">
+                <i class="fa-solid fa-layer-group me-2" aria-hidden="true"></i>Bulk Enroll
+            </a>
+        </div>
+
         <!-- Data Table -->
         {% if page_obj %}
-            {% include "components/table_start.html" with selectable=False headers=headers has_actions=True %}
+            {% include "components/table_start.html" with selectable=False headers=headers has_actions=True sort_key=sort_key sort_dir=sort_dir sort_qs=sort_qs %}
                 {% for attempt in page_obj %}
                 <tr>
                     <td class="fw-medium">
                         <div class="d-flex align-items-center">
-                            <div class="bg-primary bg-opacity-10 text-primary rounded-circle me-3 d-flex align-items-center justify-content-center fw-bold" style="width: 32px; height: 32px; font-size: 0.75rem;">
+                            <div class="avatar-circle avatar-circle-primary me-3">
                                 {{ attempt.contact.first_name|slice:":1"|upper }}{{ attempt.contact.last_name|slice:":1"|upper }}
                             </div>
                             <div>
@@ -56,11 +56,30 @@
                     <td><code class="small text-muted">{{ attempt.cf_enrollment_id|default:"--" }}</code></td>
                     <td class="text-muted small">{{ attempt.created_at|date:"M d, Y H:i" }}</td>
                     <td class="text-end">
-                        {% include "components/action_menu.html" %}
-                            {% block menu_items %}
-                                <li><a class="dropdown-item" href="{% url 'enrollments:detail' attempt.id %}"><i class="fa-solid fa-list-check me-2 small"></i>View Audit</a></li>
-                                <li><a class="dropdown-item text-primary" href="{% url 'enrollments:new' %}?email={{ attempt.contact.email }}&course_id={{ attempt.course.cf_course_id }}"><i class="fa-solid fa-rotate me-2 small"></i>Retry</a></li>
-                            {% endblock %}
+                        <div class="action-menu">
+                            <button type="button" class="btn-action action-menu-toggle" aria-haspopup="true" aria-expanded="false" aria-label="Actions for {{ attempt.contact.email }} enrollment">
+                                <i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i>
+                            </button>
+                            <ul class="action-menu-list" role="menu">
+                                <li role="none"><a class="action-menu-item" role="menuitem" href="{% url 'enrollments:detail' attempt.id %}"><i class="fa-solid fa-list-check me-2 small" aria-hidden="true"></i>View Audit</a></li>
+                                <li role="none"><a class="action-menu-item text-primary" role="menuitem" href="{% url 'enrollments:new' %}?email={{ attempt.contact.email }}&course_id={{ attempt.course.cf_course_id }}"><i class="fa-solid fa-rotate me-2 small" aria-hidden="true"></i>Retry</a></li>
+                                {% if attempt.status == "SUCCESS" and attempt.cf_enrollment_id %}
+                                    <li role="none"><hr class="action-menu-divider"></li>
+                                    {% if attempt.cf_suspended %}
+                                        {% if can_resume_enrollment %}
+                                            <li role="none"><a class="action-menu-item text-success" role="menuitem" href="{% url 'enrollments:resume' attempt.id %}"><i class="fa-solid fa-play me-2 small" aria-hidden="true"></i>Resume Enrollment</a></li>
+                                        {% endif %}
+                                    {% else %}
+                                        {% if can_freeze_enrollment %}
+                                            <li role="none"><a class="action-menu-item text-warning" role="menuitem" href="{% url 'enrollments:freeze' attempt.id %}"><i class="fa-solid fa-pause me-2 small" aria-hidden="true"></i>Freeze Enrollment</a></li>
+                                        {% endif %}
+                                    {% endif %}
+                                {% endif %}
+                                {% if can_view_order and attempt.order_reference %}
+                                    <li role="none"><a class="action-menu-item" role="menuitem" href="{% url 'operations:order_detail' attempt.order_reference %}"><i class="fa-solid fa-arrow-up-right-from-square me-2 small" aria-hidden="true"></i>View Order</a></li>
+                                {% endif %}
+                            </ul>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
@@ -71,7 +90,11 @@
     </div>
 
     {% if page_obj %}
-        {% include "components/pagination.html" with page_obj=page_obj %}
+        {% include "components/pagination.html" with page_obj=page_obj querystring=querystring %}
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/action-menu.js' %}"></script>
 {% endblock %}

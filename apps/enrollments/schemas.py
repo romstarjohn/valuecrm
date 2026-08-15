@@ -26,3 +26,7 @@ class BulkEnrollmentResponseSchema(Schema):
     success_count: int
     failure_count: int
     results: List[EnrollmentResultDTO]
+
+class SuspensionResultDTO(Schema):
+    cf_enrollment_id: str
+    suspended: bool

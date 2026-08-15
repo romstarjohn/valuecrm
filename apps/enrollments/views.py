@@ -3,13 +3,72 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Q
+from django.urls import reverse
 from .models import EnrollmentAttempt
 from .forms import EnrollmentForm, BulkEnrollmentForm
 from .services import EnrollmentService
 from apps.contacts.services import ContactService
 from apps.configuration.services import ConfigurationService
 from apps.courses.models import Course
+from apps.operations.actions import render_confirmation_or_process
+from apps.payments.admin_services import EnrollmentAdministrationService
+from apps.provisioning.models import ProvisioningRequest
 from integrations.clickfunnels.client import ClickFunnelsClient
+
+
+ENROLLMENT_SORT_FIELDS = {
+    "student": ["contact__email"],
+    "course": ["course__name"],
+    "status": ["status"],
+    "date": ["created_at"],
+}
+
+def _querystring(request, *, exclude=()):
+    """Current GET params, minus `exclude`, for building links that keep
+    every other active filter/sort param (pagination, sort-column links)."""
+    params = request.GET.copy()
+    for key in exclude:
+        params.pop(key, None)
+    return params.urlencode()
+
+def _filter_options(request, *, param, options, all_label):
+    """(label, url, active) rows for a single-select querystring filter,
+    preserving every other active filter/sort param and resetting to page 1."""
+    current = request.GET.get(param, "")
+    base_params = request.GET.copy()
+    base_params.pop("page", None)
+
+    all_params = base_params.copy()
+    all_params.pop(param, None)
+    rows = [{"label": all_label, "url": "?" + all_params.urlencode(), "active": not current}]
+
+    for value, label in options:
+        opt_params = base_params.copy()
+        opt_params[param] = value
+        rows.append({"label": label, "url": "?" + opt_params.urlencode(), "active": current == value})
+    return rows
+
+def _attach_order_references(attempts):
+    """
+    Links each EnrollmentAttempt to its matching payments Order reference (if
+    any). Freeze/resume work directly on any EnrollmentAttempt regardless —
+    this is only used to offer an extra "View Order" link into the
+    operations hub for order-level actions (e.g. Cancel Order) that have no
+    equivalent here. Batched to avoid N+1s.
+    """
+    attempts = list(attempts)
+    rows = (
+        ProvisioningRequest.objects.filter(
+            contact_id__in=[a.contact_id for a in attempts],
+            course_id__in=[a.course_id for a in attempts],
+        )
+        .exclude(status=ProvisioningRequest.Status.CANCELLED)
+        .values_list("contact_id", "course_id", "order__reference")
+    )
+    order_refs = {(contact_id, course_id): reference for contact_id, course_id, reference in rows}
+    for attempt in attempts:
+        attempt.order_reference = order_refs.get((attempt.contact_id, attempt.course_id))
+    return attempts
 
 def _get_enrollment_service():
     config_service = ConfigurationService()
@@ -43,22 +102,36 @@ def enrollment_list(request):
     
     if course_filter:
         attempts = attempts.filter(course__cf_course_id=course_filter)
-        
+
+    sort_key = request.GET.get("sort", "")
+    sort_dir = request.GET.get("dir", "asc")
+    if sort_key in ENROLLMENT_SORT_FIELDS:
+        order_fields = ENROLLMENT_SORT_FIELDS[sort_key]
+        if sort_dir == "desc":
+            order_fields = [f"-{field}" for field in order_fields]
+        attempts = attempts.order_by(*order_fields)
+    else:
+        sort_key = ""
+        sort_dir = ""
+
     paginator = Paginator(attempts, 20)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
-    
+    page_obj.object_list = _attach_order_references(page_obj.object_list)
+
     status_options = EnrollmentAttempt.Status.choices
     course_options = Course.objects.all().order_by("name")
-    
+    course_choices = [(c.cf_course_id, c.name) for c in course_options]
+    course_label = next((name for cf_id, name in course_choices if cf_id == course_filter), course_filter) if course_filter else "All"
+
     headers = [
-        {"label": "Student", "sortable": True},
-        {"label": "Course", "sortable": True},
-        {"label": "Status", "sortable": True},
+        {"label": "Student", "sortable": True, "sort_key": "student"},
+        {"label": "Course", "sortable": True, "sort_key": "course"},
+        {"label": "Status", "sortable": True, "sort_key": "status"},
         {"label": "ClickFunnels ID", "sortable": False},
-        {"label": "Date", "sortable": True},
+        {"label": "Date", "sortable": True, "sort_key": "date"},
     ]
-    
+
     context = {
         "page_obj": page_obj,
         "query": query,
@@ -66,7 +139,18 @@ def enrollment_list(request):
         "course_filter": course_filter,
         "status_options": status_options,
         "course_options": course_options,
+        "status_filter_options": _filter_options(request, param="status", options=status_options, all_label="All Statuses"),
+        "course_filter_options": _filter_options(request, param="course_id", options=course_choices, all_label="All Courses"),
+        "status_label": f"Status: {status_filter or 'All'}",
+        "course_label": f"Course: {course_label}",
         "headers": headers,
+        "sort_key": sort_key,
+        "sort_dir": sort_dir,
+        "sort_qs": _querystring(request, exclude=("page", "sort", "dir")),
+        "querystring": _querystring(request, exclude=("page",)),
+        "can_view_order": request.user.has_perm("payments.view_order"),
+        "can_freeze_enrollment": request.user.has_perm("payments.freeze_enrollment"),
+        "can_resume_enrollment": request.user.has_perm("payments.resume_enrollment"),
     }
     return render(request, "enrollments/list.html", context)
 
@@ -168,8 +252,62 @@ def enrollment_detail(request, pk):
     Detailed audit view for an enrollment attempt.
     """
     attempt = get_object_or_404(EnrollmentAttempt.objects.select_related("contact", "course"), pk=pk)
-    
+    order_reference = (
+        ProvisioningRequest.objects.filter(contact_id=attempt.contact_id, course_id=attempt.course_id)
+        .exclude(status=ProvisioningRequest.Status.CANCELLED)
+        .values_list("order__reference", flat=True)
+        .first()
+    )
+
     context = {
         "attempt": attempt,
+        "order_reference": order_reference,
+        "can_view_order": request.user.has_perm("payments.view_order"),
+        "can_freeze_enrollment": request.user.has_perm("payments.freeze_enrollment"),
+        "can_resume_enrollment": request.user.has_perm("payments.resume_enrollment"),
     }
     return render(request, "enrollments/detail.html", context)
+
+
+@login_required
+def enrollment_freeze(request, pk):
+    attempt = get_object_or_404(EnrollmentAttempt.objects.select_related("contact", "course"), pk=pk)
+
+    def do_freeze(reason):
+        EnrollmentAdministrationService().freeze_enrollment_attempt(attempt.pk, reason, request.user, request)
+        return f"Enrollment frozen for {attempt.contact.email} in {attempt.course.name}."
+
+    context = {
+        "title": "Freeze Enrollment",
+        "description": "Suspends this student's ClickFunnels course access. They keep seeing the course but cannot complete lessons until resumed. Fully reversible.",
+        "target_label": f"{attempt.contact.email} — {attempt.course.name}",
+        "back_url": reverse("enrollments:detail", args=[attempt.pk]),
+    }
+    response = render_confirmation_or_process(
+        request, permission="payments.freeze_enrollment", context=context, service_call=do_freeze,
+    )
+    if response is not None:
+        return response
+    return redirect("enrollments:detail", pk=attempt.pk)
+
+
+@login_required
+def enrollment_resume(request, pk):
+    attempt = get_object_or_404(EnrollmentAttempt.objects.select_related("contact", "course"), pk=pk)
+
+    def do_resume(reason):
+        EnrollmentAdministrationService().resume_enrollment_attempt(attempt.pk, reason, request.user, request)
+        return f"Enrollment resumed for {attempt.contact.email} in {attempt.course.name}."
+
+    context = {
+        "title": "Resume Enrollment",
+        "description": "Restores this student's ClickFunnels course access after a freeze.",
+        "target_label": f"{attempt.contact.email} — {attempt.course.name}",
+        "back_url": reverse("enrollments:detail", args=[attempt.pk]),
+    }
+    response = render_confirmation_or_process(
+        request, permission="payments.resume_enrollment", context=context, service_call=do_resume,
+    )
+    if response is not None:
+        return response
+    return redirect("enrollments:detail", pk=attempt.pk)

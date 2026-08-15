@@ -3,7 +3,7 @@
 {% block title %}Tara Configuration | ValuedCRM{% endblock %}
 
 {% block content %}
-{% include "includes/page_header.html" with title="Tara Configuration" subtitle="Configure the secure bridge to Tara Money for payment collection." %}
+{% include "components/page_header.html" with title="Tara Configuration" subtitle="Configure the secure bridge to Tara Money for payment collection." %}
 
 <div class="container-fluid px-4 fade-in pb-5">
     <div class="row g-4">
@@ -22,19 +22,19 @@
 
                     <div class="row g-4">
                         <div class="col-md-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted">Friendly Name</label>
+                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ form.name.id_for_label }}">Friendly Name</label>
                             {{ form.name }}
                             {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors|join:", " }}</div>{% endif %}
                         </div>
 
                         <div class="col-md-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted">Business ID</label>
+                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ form.business_id.id_for_label }}">Business ID</label>
                             {{ form.business_id }}
                             {% if form.business_id.errors %}<div class="text-danger small mt-1">{{ form.business_id.errors|join:", " }}</div>{% endif %}
                         </div>
 
                         <div class="col-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted">API Key</label>
+                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ form.api_key.id_for_label }}">API Key</label>
                             {{ form.api_key }}
                             <div class="form-text small mt-2">
                                 <i class="fa-solid fa-shield-halved me-1 text-success"></i>
@@ -44,7 +44,7 @@
                         </div>
 
                         <div class="col-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted">Webhook Secret</label>
+                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ form.webhook_secret.id_for_label }}">Webhook Secret</label>
                             {{ form.webhook_secret }}
                             <div class="form-text small mt-2">
                                 <i class="fa-solid fa-shield-halved me-1 text-success"></i>
@@ -57,7 +57,7 @@
                             <div class="form-check form-switch p-3 bg-light rounded-3 border border-dashed">
                                 <div class="ms-1">
                                     {{ form.is_active }}
-                                    <label class="form-check-label fw-bold ms-2">Set as Active Configuration</label>
+                                    <label class="form-check-label fw-bold ms-2" for="{{ form.is_active.id_for_label }}">Set as Active Configuration</label>
                                 </div>
                             </div>
                         </div>

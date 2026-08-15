@@ -3,14 +3,14 @@
 {% block title %}{{ contact.email }} | ValuedCRM{% endblock %}
 
 {% block content %}
-{% include "includes/page_header.html" with title=contact.email subtitle="Comprehensive contact profile and enrollment history." action_label="Edit Profile" action_url="/contacts/"|add:contact.id|add:"/edit/" action_icon="fa-solid fa-user-edit" %}
+{% include "components/page_header.html" with title=contact.email subtitle="Comprehensive contact profile and enrollment history." action_label="Edit Profile" action_url="/contacts/"|add:contact.id|add:"/edit/" action_icon="fa-solid fa-user-edit" %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="row">
         <!-- Sidebar Profile -->
         <div class="col-lg-4">
             <div class="crm-card border-0 shadow-sm text-center">
-                <div class="bg-primary text-white rounded-circle mx-auto mb-4 d-flex align-items-center justify-content-center shadow-sm" style="width: 100px; height: 100px; font-size: 2.5rem;">
+                <div class="avatar-circle avatar-circle-xl avatar-circle-primary mx-auto mb-4 shadow-sm">
                     {{ contact.first_name|slice:":1"|upper }}{{ contact.last_name|slice:":1"|upper }}
                 </div>
                 <h4 class="fw-bold mb-1 text-dark">{{ contact.first_name }} {{ contact.last_name }}</h4>
@@ -18,9 +18,9 @@
                 <div class="mb-4">
                     {% include "components/status_badge.html" with status=contact.status %}
                 </div>
-                
+
                 <div class="text-start border-top pt-4">
-                    <h6 class="text-uppercase text-muted fw-bold small mb-3 letter-spacing-wider" style="letter-spacing: 0.05em;">Information</h6>
+                    <h6 class="text-uppercase text-muted fw-bold small mb-3 letter-spacing-wide">Information</h6>
                     <div class="mb-3 d-flex justify-content-between align-items-center">
                         <span class="text-muted small">Source</span>
                         <span class="badge bg-light text-dark fw-medium">{{ contact.source|default:"Direct" }}</span>
@@ -37,12 +37,12 @@
             </div>
 
             <div class="crm-card border-0 shadow-sm mt-4">
-                <h6 class="text-uppercase text-muted fw-bold small mb-3 letter-spacing-wider" style="letter-spacing: 0.05em;">Assigned Tags</h6>
+                <h6 class="text-uppercase text-muted fw-bold small mb-3 letter-spacing-wide">Assigned Tags</h6>
                 <div class="d-flex flex-wrap gap-2">
                     {% for tag in contact.tags %}
                         <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-10 rounded-pill px-3">{{ tag }}</span>
                     {% empty %}
-                        <p class="text-muted small italic mb-0">No tags assigned to this contact.</p>
+                        <p class="text-muted small fst-italic mb-0">No tags assigned to this contact.</p>
                     {% endfor %}
                 </div>
             </div>
@@ -50,33 +50,44 @@
 
         <!-- Main Content -->
         <div class="col-lg-8">
-            <div class="crm-card border-0 shadow-sm">
-                <div class="d-flex justify-content-between align-items-center mb-4">
+            <div class="crm-card p-0 overflow-hidden border-0 shadow-sm">
+                <div class="p-4 border-bottom bg-white d-flex justify-content-between align-items-center">
                     <h5 class="fw-bold mb-0">Enrollment History</h5>
-                    <a href="{% url 'enrollments:new' %}?email={{ contact.email }}" class="btn btn-sm btn-crm btn-crm-primary">
-                        <i class="fa-solid fa-plus me-1 small"></i> New Enrollment
+                    <a href="{% url 'enrollments:new' %}?email={{ contact.email }}" class="btn-crm btn-crm-primary btn-crm-sm">
+                        <i class="fa-solid fa-plus me-1 small" aria-hidden="true"></i> New Enrollment
                     </a>
                 </div>
 
                 {% if enrollments %}
                     <div class="table-responsive">
-                        <table class="table table-hover align-middle">
-                            <thead class="bg-light">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead>
                                 <tr>
-                                    <th>Course</th>
+                                    <th class="ps-4">Course</th>
                                     <th>Status</th>
                                     <th>Date</th>
-                                    <th class="text-end">Audit</th>
+                                    <th class="text-end pe-4">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for enr in enrollments %}
                                 <tr>
-                                    <td class="fw-bold text-dark">{{ enr.course.name }}</td>
+                                    <td class="ps-4 fw-bold text-dark">{{ enr.course.name }}</td>
                                     <td>{% include "components/status_badge.html" with status=enr.status %}</td>
                                     <td class="small text-muted">{{ enr.created_at|date:"M d, Y" }}</td>
-                                    <td class="text-end">
-                                        <a href="{% url 'enrollments:detail' enr.id %}" class="btn btn-sm btn-crm-outline">View</a>
+                                    <td class="text-end pe-4">
+                                        <a href="{% url 'enrollments:detail' enr.id %}" class="btn-crm btn-crm-outline btn-crm-sm">View</a>
+                                        {% if enr.status == "SUCCESS" and enr.cf_enrollment_id %}
+                                            {% if enr.cf_suspended %}
+                                                {% if can_resume_enrollment %}
+                                                    <a href="{% url 'enrollments:resume' enr.id %}" class="btn-crm btn-crm-outline btn-crm-sm text-success">Resume</a>
+                                                {% endif %}
+                                            {% else %}
+                                                {% if can_freeze_enrollment %}
+                                                    <a href="{% url 'enrollments:freeze' enr.id %}" class="btn-crm btn-crm-outline btn-crm-sm text-warning">Freeze</a>
+                                                {% endif %}
+                                            {% endif %}
+                                        {% endif %}
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -84,8 +95,8 @@
                         </table>
                     </div>
                 {% else %}
-                    <div class="text-center py-5">
-                        <i class="fa-solid fa-graduation-cap text-muted opacity-25 fs-1 mb-3"></i>
+                    <div class="text-center px-4 py-5">
+                        <i class="fa-solid fa-graduation-cap text-muted opacity-25 fs-1 mb-3" aria-hidden="true"></i>
                         <p class="text-muted small">This student has no recorded enrollment attempts.</p>
                     </div>
                 {% endif %}
@@ -96,7 +107,7 @@
                 <div class="col-md-6">
                     <div class="crm-card border-0 shadow-sm">
                         <h6 class="text-uppercase text-muted fw-bold small mb-3">Shipping</h6>
-                        <div class="bg-light p-3 rounded-3 font-monospace small" style="min-height: 100px;">
+                        <div class="bg-light p-3 rounded-3 font-monospace small data-block">
                             {{ contact.shipping_address|default:"{}" }}
                         </div>
                     </div>
@@ -104,7 +115,7 @@
                 <div class="col-md-6">
                     <div class="crm-card border-0 shadow-sm">
                         <h6 class="text-uppercase text-muted fw-bold small mb-3">Billing</h6>
-                        <div class="bg-light p-3 rounded-3 font-monospace small" style="min-height: 100px;">
+                        <div class="bg-light p-3 rounded-3 font-monospace small data-block">
                             {{ contact.billing_address|default:"{}" }}
                         </div>
                     </div>
@@ -115,11 +126,11 @@
                 <h6 class="text-uppercase text-muted fw-bold small mb-4">Metadata Tracking</h6>
                 <div class="row g-4">
                     <div class="col-md-6 border-end">
-                        <label class="text-muted x-small fw-bold text-uppercase d-block mb-2">Payment Placeholder</label>
+                        <label class="text-muted text-xs fw-bold text-uppercase d-block mb-2">Payment Placeholder</label>
                         <div class="fw-medium text-dark">{{ contact.payment_method_placeholder|default:"None Specified" }}</div>
                     </div>
                     <div class="col-md-6">
-                        <label class="text-muted x-small fw-bold text-uppercase d-block mb-2">Order Info Placeholder</label>
+                        <label class="text-muted text-xs fw-bold text-uppercase d-block mb-2">Order Info Placeholder</label>
                         <div class="fw-medium text-dark">{{ contact.order_information_placeholder|default:"None Specified" }}</div>
                     </div>
                 </div>
@@ -127,8 +138,4 @@
         </div>
     </div>
 </div>
-
-<style>
-    .x-small { font-size: 0.65rem; }
-</style>
 {% endblock %}

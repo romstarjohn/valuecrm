@@ -1,16 +1,27 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h2 class="h3 fw-bold mb-1">{{ title }}</h2>
-        {% if subtitle %}
-            <p class="text-muted mb-0 small">{{ subtitle }}</p>
-        {% endif %}
+<div class="page-header shadow-sm border-bottom">
+    <div class="container-fluid">
+        <div class="row align-items-center">
+            <div class="col-md-7">
+                <nav aria-label="Breadcrumb" class="mb-2">
+                    <ol class="breadcrumb mb-0 small">
+                        <li class="breadcrumb-item"><a href="{% url 'dashboard:index' %}" class="text-decoration-none">Home</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
+                    </ol>
+                </nav>
+                <h1 class="page-title h3 mb-1">{{ title }}</h1>
+                {% if subtitle %}
+                    <p class="text-muted small mb-0 fw-medium"><i class="fa-solid fa-circle-info me-1 opacity-50" aria-hidden="true"></i> {{ subtitle }}</p>
+                {% endif %}
+            </div>
+            <div class="col-md-5 text-md-end mt-3 mt-md-0">
+                {% if action_url %}
+                <a href="{{ action_url }}" class="btn-crm btn-crm-primary shadow-sm">
+                    {% if action_icon %}<i class="{{ action_icon }} me-2 small" aria-hidden="true"></i>{% endif %}
+                    {{ action_label }}
+                </a>
+                {% endif %}
+                {% block extra_header_actions %}{% endblock %}
+            </div>
+        </div>
     </div>
-    {% if action_url %}
-    <div>
-        <a href="{{ action_url }}" class="btn btn-primary">
-            {% if action_icon %}<i class="{{ action_icon }} me-2"></i>{% endif %}
-            {{ action_label }}
-        </a>
-    </div>
-    {% endif %}
 </div>

@@ -17,6 +17,7 @@ def ops_client(db):
         "view_paymentconfirmation", "view_reconciliationrun", "view_adminauditlog",
         "cancel_order", "apply_manual_disposition", "cancel_installment", "waive_installment",
         "check_tara_status", "retry_payment_confirmation",
+        "freeze_enrollment", "resume_enrollment",
     ]
     for codename in codenames:
         perm = Permission.objects.filter(codename=codename).first()

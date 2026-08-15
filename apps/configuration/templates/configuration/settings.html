@@ -3,7 +3,7 @@
 {% block title %}API Configuration | ValuedCRM{% endblock %}
 
 {% block content %}
-{% include "includes/page_header.html" with title="API Configuration" subtitle="Build your secure bridge to ClickFunnels 2.0." %}
+{% include "components/page_header.html" with title="API Configuration" subtitle="Build your secure bridge to ClickFunnels 2.0." %}
 
 <div class="container-fluid px-4 fade-in pb-5">
     <div class="row g-4">
@@ -25,12 +25,12 @@
                     
                     <div class="row g-4">
                         <div class="col-md-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted">Friendly Name</label>
+                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ token_form.name.id_for_label }}">Friendly Name</label>
                             {{ token_form.name }}
                         </div>
 
                         <div class="col-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted">API Access Token</label>
+                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ token_form.api_access_token.id_for_label }}">API Access Token</label>
                             {{ token_form.api_access_token }}
                             <div class="form-text small mt-2">
                                 <i class="fa-solid fa-shield-halved me-1 text-success"></i> 
@@ -39,7 +39,7 @@
                         </div>
 
                         <div class="col-md-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted">User Agent String</label>
+                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ token_form.api_user_agent.id_for_label }}">User Agent String</label>
                             {{ token_form.api_user_agent }}
                         </div>
 
@@ -47,7 +47,7 @@
                             <div class="form-check form-switch p-3 bg-light rounded-3 border border-dashed">
                                 <div class="ms-1">
                                     {{ token_form.is_active }}
-                                    <label class="form-check-label fw-bold ms-2">Set as Active Configuration</label>
+                                    <label class="form-check-label fw-bold ms-2" for="{{ token_form.is_active.id_for_label }}">Set as Active Configuration</label>
                                 </div>
                             </div>
                         </div>
@@ -71,7 +71,7 @@
                         {% csrf_token %}
                         <input type="hidden" name="action" value="select_team">
                         <div class="mb-4">
-                            <label class="form-label small text-uppercase fw-bold text-muted">Available Teams</label>
+                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ team_form.team_id.id_for_label }}">Available Teams</label>
                             {{ team_form.team_id }}
                         </div>
                         <button type="submit" class="btn btn-crm btn-crm-primary px-4">Confirm Team</button>
@@ -90,7 +90,7 @@
                         {% csrf_token %}
                         <input type="hidden" name="action" value="select_workspace">
                         <div class="mb-4">
-                            <label class="form-label small text-uppercase fw-bold text-muted">Team Workspaces</label>
+                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ workspace_form.workspace_id.id_for_label }}">Team Workspaces</label>
                             {{ workspace_form.workspace_id }}
                             <div class="form-text small mt-2">Selecting a workspace will automatically link the required API subdomain.</div>
                         </div>

@@ -25,6 +25,7 @@ from django.urls import reverse
 from django.utils.dateparse import parse_date
 
 from apps.payments.admin_services import (
+    EnrollmentAdministrationService,
     OrderAdministrationService,
     PaymentAttemptAdministrationService,
     PaymentConfirmationAdministrationService,
@@ -39,7 +40,7 @@ from apps.payments.models import (
     ReconciliationRun,
     TaraWebhookEvent,
 )
-from apps.provisioning.models import ProvisioningRequest
+from apps.provisioning.models import ProvisioningAttempt, ProvisioningRequest
 from apps.provisioning.services import ProvisioningService
 
 from .actions import render_confirmation_or_process
@@ -284,6 +285,21 @@ def order_detail(request, reference):
     provisioning_requests = order.provisioning_requests.all().order_by("-created_at")
     audit_events = order.admin_audit_logs.all().order_by("-created_at")
 
+    # Suspension state lives on EnrollmentAttempt (Phase 9), not
+    # ProvisioningRequest — annotate each row with its latest successful
+    # attempt's suspended flag so the template can show it without a
+    # per-row query. Iterating (rather than list()) keeps this a QuerySet
+    # with its results cached, so callers relying on .count()/further
+    # queryset behavior on provisioning_requests still work.
+    for pr in provisioning_requests:
+        latest_success = (
+            pr.attempts.filter(status=ProvisioningAttempt.Status.SUCCESS, enrollment_attempt__isnull=False)
+            .select_related("enrollment_attempt")
+            .order_by("-created_at")
+            .first()
+        )
+        pr.cf_suspended = bool(latest_success and latest_success.enrollment_attempt.cf_suspended)
+
     _attach_order_display_fields(order)
 
     context = {
@@ -295,6 +311,8 @@ def order_detail(request, reference):
         "audit_events": audit_events,
         "can_cancel_order": request.user.has_perm("payments.cancel_order"),
         "can_apply_disposition": request.user.has_perm("payments.apply_manual_disposition"),
+        "can_freeze_enrollment": request.user.has_perm("payments.freeze_enrollment"),
+        "can_resume_enrollment": request.user.has_perm("payments.resume_enrollment"),
         "can_cancel_installment": request.user.has_perm("payments.cancel_installment"),
         "can_waive_installment": request.user.has_perm("payments.waive_installment"),
         "can_check_tara_status": request.user.has_perm("payments.check_tara_status"),
@@ -677,6 +695,50 @@ def order_disposition(request, reference):
     }
     response = render_confirmation_or_process(
         request, permission="payments.apply_manual_disposition", context=context, service_call=do_apply,
+    )
+    if response is not None:
+        return response
+    return redirect("operations:order_detail", reference=order.reference)
+
+
+@login_required
+def order_freeze_enrollment(request, reference):
+    order = get_object_or_404(Order.objects.select_related("customer"), reference=reference)
+
+    def do_freeze(reason):
+        EnrollmentAdministrationService().freeze_order_enrollment(order.pk, reason, request.user, request)
+        return f"Enrollment frozen for order {order.reference}."
+
+    context = {
+        "title": "Freeze Enrollment",
+        "description": "Suspends this customer's ClickFunnels course access. They keep seeing the course but cannot complete lessons until resumed. Fully reversible.",
+        "target_label": f"{order.reference} — {order.customer.email}",
+        "back_url": reverse("operations:order_detail", args=[order.reference]),
+    }
+    response = render_confirmation_or_process(
+        request, permission="payments.freeze_enrollment", context=context, service_call=do_freeze,
+    )
+    if response is not None:
+        return response
+    return redirect("operations:order_detail", reference=order.reference)
+
+
+@login_required
+def order_resume_enrollment(request, reference):
+    order = get_object_or_404(Order.objects.select_related("customer"), reference=reference)
+
+    def do_resume(reason):
+        EnrollmentAdministrationService().resume_order_enrollment(order.pk, reason, request.user, request)
+        return f"Enrollment resumed for order {order.reference}."
+
+    context = {
+        "title": "Resume Enrollment",
+        "description": "Restores this customer's ClickFunnels course access after a freeze.",
+        "target_label": f"{order.reference} — {order.customer.email}",
+        "back_url": reverse("operations:order_detail", args=[order.reference]),
+    }
+    response = render_confirmation_or_process(
+        request, permission="payments.resume_enrollment", context=context, service_call=do_resume,
     )
     if response is not None:
         return response

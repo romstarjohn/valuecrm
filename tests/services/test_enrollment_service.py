@@ -15,6 +15,29 @@ def course(db):
 def contact(db):
     return Contact.objects.create(email="student@example.com", cf_contact_id="123")
 
+def test_set_enrollment_suspension_success():
+    mock_client = MagicMock()
+    mock_client.update_enrollment_suspension.return_value = EnrollmentDTO(
+        id=1, contact_id=123, course_id=123, suspended=True, suspension_reason="non-payment",
+    )
+    service = EnrollmentService(client=mock_client, contact_service=MagicMock())
+
+    result = service.set_enrollment_suspension("hammer", cf_enrollment_id="1", suspended=True, reason="non-payment")
+
+    assert result.cf_enrollment_id == "1"
+    assert result.suspended is True
+    mock_client.update_enrollment_suspension.assert_called_once_with(
+        subdomain="hammer", enrollment_id=1, suspended=True, suspension_reason="non-payment",
+    )
+
+def test_set_enrollment_suspension_propagates_provider_error():
+    mock_client = MagicMock()
+    mock_client.update_enrollment_suspension.side_effect = Exception("CF API Error")
+    service = EnrollmentService(client=mock_client, contact_service=MagicMock())
+
+    with pytest.raises(Exception, match="CF API Error"):
+        service.set_enrollment_suspension("hammer", cf_enrollment_id="1", suspended=False)
+
 @pytest.mark.django_db
 def test_enroll_contact_success(course, contact):
     mock_client = MagicMock()

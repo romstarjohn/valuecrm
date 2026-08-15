@@ -1,39 +1,37 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Course Catalog | ValuedCRM{% endblock %}
 
 {% block content %}
-{% include "includes/page_header.html" with title="Course Catalog" subtitle="View and manage synced ClickFunnels products available for enrollment." action_label="Sync Courses" action_url="/courses/sync/" action_icon="fa-solid fa-sync" %}
+{% include "components/page_header.html" with title="Course Catalog" subtitle="View and manage synced ClickFunnels products available for enrollment." action_label="Sync Courses" action_url="/courses/sync/" action_icon="fa-solid fa-sync" %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="table-container mb-4 shadow-sm border-0">
-        <!-- Toolbar -->
-        {% include "components/table_toolbar.html" with has_search=True search_placeholder="Search course name or ID..." has_filters=True %}
-            {% block table_filters %}
-                <div class="dropdown">
-                    <button class="btn btn-crm-outline btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        <i class="fa-solid fa-layer-group me-1 small"></i> Workspace: {{ workspace_filter|default:"All" }}
-                    </button>
-                    <ul class="dropdown-menu shadow border-0">
-                        <li><a class="dropdown-item" href="?{% if query %}q={{ query }}{% endif %}">All Workspaces</a></li>
-                        {% for opt in workspace_options %}
-                        <li><a class="dropdown-item" href="?workspace_id={{ opt }}{% if query %}&q={{ query }}{% endif %}">{{ opt }}</a></li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endblock %}
-        
+        <!-- Toolbar: search submits via a real GET form; filter/sort are preserved as hidden fields -->
+        <div class="table-toolbar">
+            <form method="get" class="d-flex align-items-center flex-grow-1 gap-3 flex-wrap">
+                {% include "components/search_bar.html" with placeholder="Search course name or ID..." %}
+                {% include "components/filter_dropdown.html" with label=workspace_label options=workspace_filter_options %}
+                {% if workspace_filter %}<input type="hidden" name="workspace_id" value="{{ workspace_filter }}">{% endif %}
+                {% if sort_key %}
+                    <input type="hidden" name="sort" value="{{ sort_key }}">
+                    <input type="hidden" name="dir" value="{{ sort_dir }}">
+                {% endif %}
+            </form>
+        </div>
+
         <!-- Data Table -->
         {% if page_obj %}
-            {% include "components/table_start.html" with selectable=False headers=headers has_actions=True %}
+            {% include "components/table_start.html" with selectable=False headers=headers has_actions=True sort_key=sort_key sort_dir=sort_dir sort_qs=sort_qs %}
                 {% for course in page_obj %}
                 <tr>
                     <td>
                         <div class="d-flex align-items-center">
-                            <div class="bg-success bg-opacity-10 text-success rounded-3 me-3 d-flex align-items-center justify-content-center fw-bold" style="width: 40px; height: 40px;">
-                                <i class="fa-solid fa-graduation-cap"></i>
+                            <div class="stat-icon bg-success bg-opacity-10 text-success me-3">
+                                <i class="fa-solid fa-graduation-cap" aria-hidden="true"></i>
                             </div>
-                            <div>
+                            <div class="min-w-0">
                                 <a href="{% url 'courses:detail' course.cf_course_id %}" class="text-decoration-none fw-bold text-dark h6 mb-0">
                                     {{ course.name }}
                                 </a>
@@ -41,7 +39,7 @@
                             </div>
                         </div>
                     </td>
-                    <td><span class="text-muted small fw-medium">{{ course.workspace_id }}</span></td>
+                    <td><span class="text-muted small fw-medium">{{ course.workspace_id|default:"--" }}</span></td>
                     <td>
                         <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-10 rounded-pill px-2">
                             {{ course.enrollment_count }} enrollments
@@ -49,11 +47,15 @@
                     </td>
                     <td class="text-muted small">{{ course.updated_at|date:"M d, Y" }}</td>
                     <td class="text-end">
-                        {% include "components/action_menu.html" %}
-                            {% block menu_items %}
-                                <li><a class="dropdown-item" href="{% url 'courses:detail' course.cf_course_id %}"><i class="fa-solid fa-eye me-2 small"></i>View Details</a></li>
-                                <li><a class="dropdown-item text-primary" href="{% url 'enrollments:new' %}?course_id={{ course.cf_course_id }}"><i class="fa-solid fa-user-plus me-2 small"></i>Enroll Member</a></li>
-                            {% endblock %}
+                        <div class="action-menu">
+                            <button type="button" class="btn-action action-menu-toggle" aria-haspopup="true" aria-expanded="false" aria-label="Actions for {{ course.name }}">
+                                <i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i>
+                            </button>
+                            <ul class="action-menu-list" role="menu">
+                                <li role="none"><a class="action-menu-item" role="menuitem" href="{% url 'courses:detail' course.cf_course_id %}"><i class="fa-solid fa-eye me-2 small" aria-hidden="true"></i>View Details</a></li>
+                                <li role="none"><a class="action-menu-item text-primary" role="menuitem" href="{% url 'enrollments:new' %}?course_id={{ course.cf_course_id }}"><i class="fa-solid fa-user-plus me-2 small" aria-hidden="true"></i>Enroll Member</a></li>
+                            </ul>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
@@ -64,7 +66,11 @@
     </div>
 
     {% if page_obj %}
-        {% include "components/pagination.html" with page_obj=page_obj %}
+        {% include "components/pagination.html" with page_obj=page_obj querystring=querystring %}
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/action-menu.js' %}"></script>
 {% endblock %}

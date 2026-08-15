@@ -32,12 +32,16 @@ def test_sanitize_data_whitelist():
         "contact_email": "hack@me.com",
         "secret_token": "shhh",
         "course_id": "c_456",
-        "duration_ms": 100
+        "duration_ms": 100,
+        "cf_enrollment_id": "enr_789",
+        "suspended": True,
     }
     sanitized = _sanitize_data(data)
     assert "workspace_id" in sanitized
     assert "course_id" in sanitized
     assert "duration_ms" in sanitized
+    assert "cf_enrollment_id" in sanitized
+    assert "suspended" in sanitized
     assert "contact_email" not in sanitized
     assert "secret_token" not in sanitized
 

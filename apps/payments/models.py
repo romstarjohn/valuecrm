@@ -285,6 +285,8 @@ class Order(TimeStampedModel):
         permissions = [
             ("cancel_order", "Can cancel an order (Phase 8 administrative action)"),
             ("apply_manual_disposition", "Can apply a manual business disposition to an order"),
+            ("freeze_enrollment", "Can freeze (suspend) a customer's ClickFunnels course enrollment"),
+            ("resume_enrollment", "Can resume a previously frozen ClickFunnels course enrollment"),
         ]
 
     def __str__(self):
@@ -690,6 +692,8 @@ class AdminAuditLog(TimeStampedModel):
         CANCEL_INSTALLMENT = "CANCEL_INSTALLMENT", "Cancel Installment"
         WAIVE_INSTALLMENT = "WAIVE_INSTALLMENT", "Waive Installment"
         APPLY_MANUAL_DISPOSITION = "APPLY_MANUAL_DISPOSITION", "Apply Manual Disposition"
+        FREEZE_ENROLLMENT = "FREEZE_ENROLLMENT", "Freeze Enrollment"
+        RESUME_ENROLLMENT = "RESUME_ENROLLMENT", "Resume Enrollment"
 
     class TargetType(models.TextChoices):
         ORDER = "ORDER", "Order"
@@ -697,6 +701,7 @@ class AdminAuditLog(TimeStampedModel):
         PAYMENT_ATTEMPT = "PAYMENT_ATTEMPT", "PaymentAttempt"
         PAYMENT_CONFIRMATION = "PAYMENT_CONFIRMATION", "PaymentConfirmation"
         PROVISIONING_REQUEST = "PROVISIONING_REQUEST", "ProvisioningRequest"
+        ENROLLMENT_ATTEMPT = "ENROLLMENT_ATTEMPT", "EnrollmentAttempt"
 
     class OutcomeCategory(models.TextChoices):
         SUCCESS = "SUCCESS", "Success"

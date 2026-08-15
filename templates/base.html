@@ -14,10 +14,14 @@
     <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <!-- Custom Design System -->
-    <link rel="stylesheet" href="{% static 'css/app.css' %}">
+    <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+    <link rel="stylesheet" href="{% static 'css/components.css' %}">
+    <link rel="stylesheet" href="{% static 'css/utilities.css' %}">
     {% block extra_css %}{% endblock %}
 </head>
 <body class="d-flex">
+    <a class="skip-link" href="#main-content">Skip to main content</a>
 
     <div id="wrapper" class="d-flex w-100">
         <!-- Sidebar Navigation -->
@@ -29,7 +33,7 @@
             {% include "includes/topbar.html" %}
 
             <!-- Dynamic Content -->
-            <main class="flex-grow-1">
+            <main id="main-content" class="flex-grow-1">
                 {% include "includes/messages.html" %}
                 {% block content %}{% endblock %}
             </main>

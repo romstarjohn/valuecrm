@@ -8,9 +8,10 @@ from django.urls import reverse
 
 from apps.contacts.models import Contact
 from apps.courses.models import Course
+from apps.enrollments.models import EnrollmentAttempt
 from apps.payments.models import AdminAuditLog, Installment, Order, PaymentAttempt, PaymentConfirmation, PaymentPlan
 from apps.payments.services import OrderService, PaymentAttemptService, PaymentCreditService
-from apps.provisioning.models import ProvisioningRequest
+from apps.provisioning.models import ProvisioningAttempt, ProvisioningRequest
 from integrations.payments.tara.schemas import TaraTransactionStatusResponse
 
 pytestmark = pytest.mark.django_db
@@ -325,3 +326,134 @@ def test_retry_provisioning_success_no_clickfunnels_call(ops_client, mocker):
     mock_execute.assert_not_called()
     log = AdminAuditLog.objects.get(action_type=AdminAuditLog.ActionType.RETRY_PROVISIONING)
     assert log.reason == "operator fixed it"
+
+
+# --- Freeze / resume enrollment ---
+
+def make_enrolled_order(email):
+    """An ACTIVE order (FIRST_INSTALLMENT policy, one of two installments
+    paid) with a real ProvisioningRequest and a SUCCESS enrollment attempt —
+    eligible for freeze without going through a real ClickFunnels call."""
+    course = Course.objects.create(cf_course_id=f"crs_{email}", name="Bootcamp", workspace_id="ws_1")
+    plan = PaymentPlan.objects.create(
+        code=f"plan_{email}", name="Bootcamp", course=course,
+        installment_count=2, installment_amount=Decimal("50000.00"), is_active=True,
+        access_policy=PaymentPlan.AccessPolicy.FIRST_INSTALLMENT,
+    )
+    contact = Contact.objects.create(email=email)
+    order, _ = OrderService().create_order(contact, plan.id, f"idem-{email}")
+    first_installment = order.installments.order_by("sequence").first()
+    attempt = PaymentAttemptService().create_attempt(first_installment)
+    attempt = PaymentAttemptService().transition(attempt, PaymentAttempt.Status.LINK_CREATED)
+    PaymentCreditService().apply_verified_success(attempt.id)
+    order.refresh_from_db()
+
+    provisioning_request = ProvisioningRequest.objects.get(contact_id=order.customer_id, course_id=order.course_id)
+    enrollment_attempt = EnrollmentAttempt.objects.create(
+        contact=order.customer, course=order.course,
+        status=EnrollmentAttempt.Status.SUCCESS, cf_enrollment_id=f"cf_enr_{email}",
+    )
+    ProvisioningAttempt.objects.create(
+        provisioning_request=provisioning_request, course=order.course,
+        enrollment_attempt=enrollment_attempt, status=ProvisioningAttempt.Status.SUCCESS,
+    )
+    return order
+
+
+def mock_enrollment_bundle(mocker):
+    mock_enrollment_service = Mock()
+    mock_config = Mock(workspace_subdomain="hammer")
+    mocker.patch(
+        "apps.payments.admin_services.EnrollmentAdministrationService._build_enrollment_service",
+        return_value=(mock_enrollment_service, mock_config),
+    )
+    return mock_enrollment_service
+
+
+def test_freeze_enrollment_requires_permission():
+    order = make_enrolled_order("action-freeze-noperm@example.com")
+    user = User.objects.create_user(username="freezenoperm", password="x", is_staff=True)
+    client = Client()
+    client.login(username="freezenoperm", password="x")
+    url = reverse("operations:order_freeze_enrollment", args=[order.reference])
+
+    get_response = client.get(url)
+    assert get_response.status_code == 403
+
+    post_response = client.post(url, {"confirm_apply": "1", "reason": "trying anyway"})
+    assert post_response.status_code == 403
+    order.refresh_from_db()
+    assert order.status == Order.Status.ACTIVE
+    assert AdminAuditLog.objects.count() == 0
+
+
+def test_freeze_enrollment_get_shows_confirmation_page_no_mutation(ops_client):
+    order = make_enrolled_order("action-freeze-confirm-page@example.com")
+    response = ops_client.get(reverse("operations:order_freeze_enrollment", args=[order.reference]))
+    assert response.status_code == 200
+    order.refresh_from_db()
+    assert order.status == Order.Status.ACTIVE
+
+
+def test_freeze_enrollment_requires_reason(ops_client, mocker):
+    order = make_enrolled_order("action-freeze-noreason@example.com")
+    mock_enrollment_bundle(mocker)
+    response = ops_client.post(
+        reverse("operations:order_freeze_enrollment", args=[order.reference]), {"confirm_apply": "1", "reason": ""},
+    )
+    assert response.status_code == 200
+    order.refresh_from_db()
+    assert order.status == Order.Status.ACTIVE
+    assert AdminAuditLog.objects.count() == 0
+
+
+def test_freeze_enrollment_success_creates_audit_record(ops_client, mocker):
+    order = make_enrolled_order("action-freeze-success@example.com")
+    mock_service = mock_enrollment_bundle(mocker)
+
+    response = ops_client.post(
+        reverse("operations:order_freeze_enrollment", args=[order.reference]),
+        {"confirm_apply": "1", "reason": "customer stopped paying"}, follow=True,
+    )
+    assert response.status_code == 200
+    order.refresh_from_db()
+    assert order.status == Order.Status.SUSPENDED
+    mock_service.set_enrollment_suspension.assert_called_once()
+    log = AdminAuditLog.objects.get(order=order, action_type=AdminAuditLog.ActionType.FREEZE_ENROLLMENT)
+    assert log.reason == "customer stopped paying"
+    assert log.outcome_category == AdminAuditLog.OutcomeCategory.SUCCESS
+
+
+def test_resume_enrollment_requires_permission():
+    order = make_enrolled_order("action-resume-noperm@example.com")
+    user = User.objects.create_user(username="resumenoperm", password="x", is_staff=True)
+    client = Client()
+    client.login(username="resumenoperm", password="x")
+    url = reverse("operations:order_resume_enrollment", args=[order.reference])
+
+    get_response = client.get(url)
+    assert get_response.status_code == 403
+    post_response = client.post(url, {"confirm_apply": "1", "reason": "trying anyway"})
+    assert post_response.status_code == 403
+
+
+def test_resume_enrollment_success_creates_audit_record(ops_client, mocker):
+    order = make_enrolled_order("action-resume-success@example.com")
+    mock_service = mock_enrollment_bundle(mocker)
+    ops_client.post(
+        reverse("operations:order_freeze_enrollment", args=[order.reference]),
+        {"confirm_apply": "1", "reason": "frozen first"},
+    )
+    order.refresh_from_db()
+    assert order.status == Order.Status.SUSPENDED
+
+    response = ops_client.post(
+        reverse("operations:order_resume_enrollment", args=[order.reference]),
+        {"confirm_apply": "1", "reason": "payment resumed"}, follow=True,
+    )
+    assert response.status_code == 200
+    order.refresh_from_db()
+    assert order.status == Order.Status.ACTIVE
+    log = AdminAuditLog.objects.get(order=order, action_type=AdminAuditLog.ActionType.RESUME_ENROLLMENT)
+    assert log.reason == "payment resumed"
+    assert log.outcome_category == AdminAuditLog.OutcomeCategory.SUCCESS

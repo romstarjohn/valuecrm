@@ -49,4 +49,7 @@ class EnrollmentDTO(BaseCFDTO):
     contact_id: int | str
     course_id: int | str
     # No "status" field exists in ClickFunnels' create-enrollment response —
-    # success is indicated purely by the 201 HTTP status.
+    # success is indicated purely by the 201 HTTP status. The update/PUT
+    # response (Courses::Enrollment#update) echoes these back.
+    suspended: Optional[bool] = None
+    suspension_reason: Optional[str] = None

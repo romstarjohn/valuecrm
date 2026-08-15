@@ -133,6 +133,41 @@ def test_enroll_contact_in_course_uses_courses_path(client):
 
 
 @responses.activate
+def test_update_enrollment_suspension_uses_enrollment_only_path(client):
+    responses.add(
+        responses.PUT,
+        "https://hammer.myclickfunnels.com/api/v2/courses/enrollments/1",
+        json={"id": 1, "contact_id": 44, "course_id": 123, "suspended": True, "suspension_reason": "non-payment"},
+        status=200,
+    )
+    enrollment = client.update_enrollment_suspension("hammer", enrollment_id=1, suspended=True, suspension_reason="non-payment")
+    assert enrollment.id == 1
+    assert enrollment.suspended is True
+
+    request_url = responses.calls[0].request.url
+    assert request_url == "https://hammer.myclickfunnels.com/api/v2/courses/enrollments/1"
+    sent_body = responses.calls[0].request.body
+    sent = json.loads(sent_body)
+    assert sent == {"courses_enrollment": {"suspended": True, "suspension_reason": "non-payment"}}
+
+
+@responses.activate
+def test_update_enrollment_suspension_resume(client):
+    responses.add(
+        responses.PUT,
+        "https://hammer.myclickfunnels.com/api/v2/courses/enrollments/1",
+        json={"id": 1, "contact_id": 44, "course_id": 123, "suspended": False, "suspension_reason": ""},
+        status=200,
+    )
+    enrollment = client.update_enrollment_suspension("hammer", enrollment_id=1, suspended=False)
+    assert enrollment.suspended is False
+
+    sent_body = responses.calls[0].request.body
+    sent = json.loads(sent_body)
+    assert sent == {"courses_enrollment": {"suspended": False, "suspension_reason": ""}}
+
+
+@responses.activate
 def test_logging_security(client, caplog):
     responses.add(
         responses.GET,

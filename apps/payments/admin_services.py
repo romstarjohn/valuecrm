@@ -28,6 +28,12 @@ from django.db import transaction
 from django.utils import timezone
 
 from shared.logging_utils import get_logger, log_service_start, log_service_success, log_service_failure
+from apps.configuration.services import ConfigurationService
+from apps.contacts.services import ContactService
+from apps.enrollments.models import EnrollmentAttempt
+from apps.enrollments.services import EnrollmentService
+from apps.provisioning.models import ProvisioningAttempt, ProvisioningRequest
+from integrations.clickfunnels.client import ClickFunnelsClient
 from .models import (
     AdminAuditLog,
     Installment,
@@ -568,3 +574,230 @@ class PaymentConfirmationAdministrationService:
         if error_message is not None:
             raise AdminActionError(error_message)
         return confirmation
+
+
+class EnrollmentAdministrationService:
+    """
+    Mutates live ClickFunnels access state (freeze/resume a customer's course
+    enrollment). The core operations — freeze_enrollment_attempt /
+    resume_enrollment_attempt — work on ANY successful EnrollmentAttempt,
+    whether it originated from a checkout Order or a manual/bulk enroll via
+    apps.enrollments (which has always been decoupled from apps.payments).
+    Suspension state therefore lives on EnrollmentAttempt itself, not on
+    anything Order-shaped — an Order may not even exist.
+
+    freeze_order_enrollment/resume_order_enrollment are thin Order-centric
+    wrappers used by the operations hub: they resolve the Order's (contact,
+    course) down to the matching EnrollmentAttempt, delegate to the core
+    method for the actual ClickFunnels call + attempt-level audit row, then
+    additionally mirror Order.status to SUSPENDED/ACTIVE as a secondary,
+    best-effort signal (its own separate audit row, since it's a distinct
+    fact from "is ClickFunnels access suspended").
+
+    Unlike every other method in this file, these call an external provider
+    — so, unlike cancel_order/cancel_installment/waive_installment (which
+    safely lock-then-mutate purely locally), the ClickFunnels call happens
+    OUTSIDE any transaction.atomic() block, mirroring
+    PaymentAttemptAdministrationService.check_tara_status's shape with Tara:
+    plain unlocked read -> external call with no lock held -> re-lock and
+    apply the local mutation only after the provider has responded.
+    """
+
+    def freeze_enrollment_attempt(self, enrollment_attempt_id: int, reason: str, administrator, request=None) -> EnrollmentAttempt:
+        return self._set_attempt_suspension(
+            enrollment_attempt_id, suspended=True, reason=reason, administrator=administrator, request=request,
+            action_type=AdminAuditLog.ActionType.FREEZE_ENROLLMENT,
+        )
+
+    def resume_enrollment_attempt(self, enrollment_attempt_id: int, reason: str, administrator, request=None) -> EnrollmentAttempt:
+        return self._set_attempt_suspension(
+            enrollment_attempt_id, suspended=False, reason=reason, administrator=administrator, request=request,
+            action_type=AdminAuditLog.ActionType.RESUME_ENROLLMENT,
+        )
+
+    def _set_attempt_suspension(
+        self, enrollment_attempt_id: int, suspended: bool, reason: str, administrator, request, action_type: str,
+    ) -> EnrollmentAttempt:
+        log_service_start(
+            logger, "EnrollmentAdministrationService", "_set_attempt_suspension",
+            enrollment_attempt_id=enrollment_attempt_id, suspended=suspended,
+        )
+        attempt = EnrollmentAttempt.objects.select_related("contact", "course").get(pk=enrollment_attempt_id)
+        target_reference = f"EnrollmentAttempt#{attempt.pk}"
+        state_label = lambda s: "SUSPENDED" if s else "ACTIVE"  # noqa: E731
+
+        if attempt.status != EnrollmentAttempt.Status.SUCCESS or not attempt.cf_enrollment_id:
+            AdminAuditService().record(
+                administrator=administrator, action_type=action_type,
+                target_type=AdminAuditLog.TargetType.ENROLLMENT_ATTEMPT, target_reference=target_reference,
+                previous_state=attempt.status, resulting_state=attempt.status,
+                reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
+                request=request,
+            )
+            raise AdminActionError("This enrollment has no successful ClickFunnels record on file; nothing to freeze/resume.")
+
+        if attempt.cf_suspended == suspended:
+            AdminAuditService().record(
+                administrator=administrator, action_type=action_type,
+                target_type=AdminAuditLog.TargetType.ENROLLMENT_ATTEMPT, target_reference=target_reference,
+                previous_state=state_label(suspended), resulting_state=state_label(suspended),
+                reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.NO_OP_ALREADY_IN_STATE,
+                request=request,
+            )
+            return attempt
+
+        bundle = self._build_enrollment_service()
+        if bundle is None:
+            AdminAuditService().record(
+                administrator=administrator, action_type=action_type,
+                target_type=AdminAuditLog.TargetType.ENROLLMENT_ATTEMPT, target_reference=target_reference,
+                previous_state=state_label(attempt.cf_suspended), resulting_state=state_label(attempt.cf_suspended),
+                reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.FAILED,
+                request=request,
+            )
+            raise AdminActionError("No active ClickFunnels configuration/workspace available.")
+        enrollment_service, config = bundle
+
+        try:
+            enrollment_service.set_enrollment_suspension(
+                workspace_subdomain=config.workspace_subdomain,
+                cf_enrollment_id=attempt.cf_enrollment_id, suspended=suspended, reason=reason,
+            )
+        except Exception as e:
+            log_service_failure(
+                logger, "EnrollmentAdministrationService", "_set_attempt_suspension", e,
+                enrollment_attempt_id=enrollment_attempt_id,
+            )
+            AdminAuditService().record(
+                administrator=administrator, action_type=action_type,
+                target_type=AdminAuditLog.TargetType.ENROLLMENT_ATTEMPT, target_reference=target_reference,
+                previous_state=state_label(attempt.cf_suspended), resulting_state=state_label(attempt.cf_suspended),
+                reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.FAILED,
+                request=request,
+            )
+            raise AdminActionError("Could not update the ClickFunnels enrollment; no local state was changed.") from e
+
+        # Provider call succeeded — apply local state atomically, re-locking
+        # in case of a race during the network call above.
+        with transaction.atomic():
+            locked = EnrollmentAttempt.objects.select_for_update().get(pk=attempt.pk)
+            locked.cf_suspended = suspended
+            locked.cf_suspended_at = timezone.now() if suspended else None
+            locked.cf_suspension_reason = reason if suspended else ""
+            locked.save(update_fields=["cf_suspended", "cf_suspended_at", "cf_suspension_reason", "updated_at"])
+
+            AdminAuditService().record(
+                administrator=administrator, action_type=action_type,
+                target_type=AdminAuditLog.TargetType.ENROLLMENT_ATTEMPT, target_reference=target_reference,
+                previous_state=state_label(not suspended), resulting_state=state_label(suspended),
+                reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.SUCCESS,
+                request=request,
+            )
+            log_service_success(
+                logger, "EnrollmentAdministrationService", "_set_attempt_suspension",
+                enrollment_attempt_id=locked.id,
+            )
+
+        return locked
+
+    def freeze_order_enrollment(self, order_id: int, reason: str, administrator, request=None) -> Order:
+        return self._set_order_suspension(order_id, suspended=True, reason=reason, administrator=administrator, request=request)
+
+    def resume_order_enrollment(self, order_id: int, reason: str, administrator, request=None) -> Order:
+        return self._set_order_suspension(order_id, suspended=False, reason=reason, administrator=administrator, request=request)
+
+    def _set_order_suspension(self, order_id: int, suspended: bool, reason: str, administrator, request) -> Order:
+        log_service_start(logger, "EnrollmentAdministrationService", "_set_order_suspension", order_id=order_id, suspended=suspended)
+        action_type = AdminAuditLog.ActionType.FREEZE_ENROLLMENT if suspended else AdminAuditLog.ActionType.RESUME_ENROLLMENT
+
+        order = Order.objects.select_related("customer", "course").get(pk=order_id)
+        required_status = (Order.Status.ACTIVE, Order.Status.PAST_DUE) if suspended else (Order.Status.SUSPENDED,)
+        if order.status not in required_status:
+            AdminAuditService().record(
+                administrator=administrator, action_type=action_type,
+                target_type=AdminAuditLog.TargetType.ORDER, target_reference=_safe_reference(order),
+                order=order, previous_state=order.status, resulting_state=order.status,
+                reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
+                request=request,
+            )
+            wanted = "ACTIVE or PAST_DUE" if suspended else "SUSPENDED"
+            verb = "frozen" if suspended else "resumed"
+            raise AdminActionError(f"Order status {order.status} is not eligible to be {verb} (must be {wanted}).")
+
+        provisioning_request = (
+            ProvisioningRequest.objects.filter(contact_id=order.customer_id, course_id=order.course_id)
+            .exclude(status=ProvisioningRequest.Status.CANCELLED)
+            .order_by("-created_at")
+            .first()
+        )
+        attempt = (
+            provisioning_request.attempts
+            .filter(status=ProvisioningAttempt.Status.SUCCESS, enrollment_attempt__isnull=False)
+            .exclude(enrollment_attempt__cf_enrollment_id="")
+            .exclude(enrollment_attempt__cf_enrollment_id__isnull=True)
+            .order_by("-created_at")
+            .first()
+            if provisioning_request else None
+        )
+        if attempt is None:
+            AdminAuditService().record(
+                administrator=administrator, action_type=action_type,
+                target_type=AdminAuditLog.TargetType.ORDER, target_reference=_safe_reference(order),
+                order=order, previous_state=order.status, resulting_state=order.status,
+                reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
+                request=request,
+            )
+            verb = "freeze" if suspended else "resume"
+            raise AdminActionError(f"This order has no successful ClickFunnels enrollment on record; nothing to {verb}.")
+
+        # Delegate the actual ClickFunnels call + attempt-level audit row to
+        # the core method — propagates AdminActionError as-is on failure.
+        if suspended:
+            self.freeze_enrollment_attempt(attempt.enrollment_attempt_id, reason, administrator, request)
+        else:
+            self.resume_enrollment_attempt(attempt.enrollment_attempt_id, reason, administrator, request)
+
+        # Mirror Order.status as a secondary, best-effort signal — its own
+        # audit row, since "is CF suspended" and "is the order suspended"
+        # are distinct facts recorded above and here respectively.
+        with transaction.atomic():
+            locked_order = Order.objects.select_for_update().get(pk=order.pk)
+            previous_order_status = locked_order.status
+            try:
+                locked_order = OrderService().transition(
+                    locked_order, Order.Status.SUSPENDED if suspended else Order.Status.ACTIVE,
+                )
+                resulting_status = locked_order.status
+            except InvalidStateTransitionError:
+                # ClickFunnels state already changed regardless (a provider
+                # fact that can't be undone here) — e.g. the order was
+                # concurrently cancelled/completed during the network call
+                # above. Still SUCCESS for the mirror attempt; the mismatch
+                # is visible in resulting_state for an operator to reconcile.
+                resulting_status = f"{previous_order_status} (order transition skipped — no longer eligible)"
+
+            AdminAuditService().record(
+                administrator=administrator, action_type=action_type,
+                target_type=AdminAuditLog.TargetType.ORDER, target_reference=_safe_reference(locked_order),
+                order=locked_order, previous_state=previous_order_status, resulting_state=resulting_status,
+                reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.SUCCESS,
+                request=request,
+            )
+            log_service_success(logger, "EnrollmentAdministrationService", "_set_order_suspension", order_id=locked_order.id)
+
+        return locked_order
+
+    def _build_enrollment_service(self):
+        """
+        Mirrors ProvisioningService._build_enrollment_service() exactly
+        (apps/provisioning/services.py) — duplicated rather than shared,
+        consistent with how apps.provisioning.services and this module already
+        resolve their existing circular dependency via function-local imports
+        rather than a new shared helper module.
+        """
+        config = ConfigurationService().get_active_config()
+        if not config or not config.workspace_id or not config.workspace_subdomain:
+            return None
+        client = ClickFunnelsClient.from_configuration(config)
+        contact_service = ContactService(client=client)
+        return EnrollmentService(client=client, contact_service=contact_service), config

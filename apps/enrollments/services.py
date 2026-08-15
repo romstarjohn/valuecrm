@@ -5,7 +5,7 @@ from apps.contacts.services import ContactService
 from apps.courses.models import Course
 from integrations.clickfunnels.client import ClickFunnelsClient
 from .models import EnrollmentAttempt
-from .schemas import EnrollmentResultDTO
+from .schemas import EnrollmentResultDTO, SuspensionResultDTO
 
 logger = get_logger(__name__)
 
@@ -108,6 +108,33 @@ class EnrollmentService:
                 error_message=str(e),
                 error_log=str(e)
             )
+
+    def set_enrollment_suspension(
+        self, workspace_subdomain: str, cf_enrollment_id: str, suspended: bool, reason: str = "",
+    ) -> SuspensionResultDTO:
+        """
+        Pure ClickFunnels call — no Order/ProvisioningRequest knowledge, mirrors
+        enroll_contact's separation of concerns. Unlike enroll_contact, this lets
+        provider errors propagate rather than swallowing them into a DTO: there's
+        no retry loop consuming this (freeze/resume is a single operator-triggered
+        attempt), so the caller (EnrollmentAdministrationService) classifies any
+        failure once, for its own audit log.
+        """
+        log_service_start(
+            logger, "EnrollmentService", "set_enrollment_suspension",
+            cf_enrollment_id=cf_enrollment_id, suspended=suspended,
+        )
+        dto = self.client.update_enrollment_suspension(
+            subdomain=workspace_subdomain,
+            enrollment_id=int(cf_enrollment_id),
+            suspended=suspended,
+            suspension_reason=reason,
+        )
+        log_service_success(
+            logger, "EnrollmentService", "set_enrollment_suspension",
+            cf_enrollment_id=cf_enrollment_id, suspended=suspended,
+        )
+        return SuspensionResultDTO(cf_enrollment_id=str(dto.id), suspended=suspended)
 
     def bulk_enroll(self, workspace_subdomain: str, workspace_id: int, emails: List[str], cf_course_id: str) -> Dict[str, Any]:
         log_service_start(

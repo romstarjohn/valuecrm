@@ -10,6 +10,8 @@ urlpatterns = [
     path("orders/<uuid:reference>/", views.order_detail, name="order_detail"),
     path("orders/<uuid:reference>/cancel/", views.order_cancel, name="order_cancel"),
     path("orders/<uuid:reference>/disposition/", views.order_disposition, name="order_disposition"),
+    path("orders/<uuid:reference>/freeze-enrollment/", views.order_freeze_enrollment, name="order_freeze_enrollment"),
+    path("orders/<uuid:reference>/resume-enrollment/", views.order_resume_enrollment, name="order_resume_enrollment"),
 
     path("installments/", views.installment_list, name="installment_list"),
     path("installments/<int:pk>/cancel/", views.installment_cancel, name="installment_cancel"),

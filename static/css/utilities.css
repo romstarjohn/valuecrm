@@ -1,0 +1,68 @@
+/* utilities.css - small reusable helpers, replaces repeated inline styles */
+
+.avatar-circle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-pill);
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-semibold);
+    flex-shrink: 0;
+    background-color: var(--table-header-bg);
+    color: var(--color-text-secondary);
+}
+
+.avatar-circle-sm {
+    width: 32px;
+    height: 32px;
+    font-size: var(--text-xs);
+}
+
+.avatar-circle-lg {
+    width: 56px;
+    height: 56px;
+    font-size: var(--text-lg);
+}
+
+.avatar-circle-xl {
+    width: 100px;
+    height: 100px;
+    font-size: var(--text-2xl);
+}
+
+.avatar-circle-primary {
+    background-color: var(--primary-blue);
+    color: var(--color-text-inverse);
+}
+
+.avatar-circle-danger {
+    background-color: var(--color-danger-solid);
+    color: var(--color-text-inverse);
+}
+
+.text-truncate-cell {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.text-xs { font-size: var(--text-xs); }
+.text-sm { font-size: var(--text-sm); }
+
+.fs-7 { font-size: var(--text-xs); }
+
+.letter-spacing-wide { letter-spacing: 0.05em; }
+
+/* Fixed-height display box for raw JSON/text blocks (addresses, payloads) */
+.data-block {
+    min-height: 100px;
+}
+
+/* Scrollable box for raw debug payloads (raw API response dumps) */
+.raw-payload-block {
+    max-height: 400px;
+    overflow-y: auto;
+}

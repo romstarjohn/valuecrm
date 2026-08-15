@@ -9,10 +9,21 @@
                 {% endif %}
                 
                 {% for header in headers %}
-                <th class="{% if header.sortable %}sortable{% endif %}" {% if header.id %}id="{{ header.id }}"{% endif %}>
-                    {{ header.label }}
-                    {% if header.sortable %}
-                    <i class="fa-solid fa-sort"></i>
+                <th class="{% if header.sortable %}sortable{% endif %}{% if header.sort_key and header.sort_key == sort_key %} sort-active{% endif %}" {% if header.id %}id="{{ header.id }}"{% endif %}>
+                    {% if header.sort_key %}
+                        <a href="?{% if sort_qs %}{{ sort_qs }}&{% endif %}sort={{ header.sort_key }}&dir={% if header.sort_key == sort_key and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                            {{ header.label }}
+                            {% if header.sort_key == sort_key %}
+                                <i class="fa-solid {% if sort_dir == 'desc' %}fa-sort-down{% else %}fa-sort-up{% endif %}" aria-hidden="true"></i>
+                            {% else %}
+                                <i class="fa-solid fa-sort" aria-hidden="true"></i>
+                            {% endif %}
+                        </a>
+                    {% else %}
+                        {{ header.label }}
+                        {% if header.sortable %}
+                        <i class="fa-solid fa-sort" aria-hidden="true"></i>
+                        {% endif %}
                     {% endif %}
                 </th>
                 {% endfor %}

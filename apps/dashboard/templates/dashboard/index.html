@@ -12,11 +12,11 @@
             </div>
             <div class="col-md-5 text-md-end mt-3 mt-md-0">
                 <div class="d-flex gap-2 justify-content-md-end">
-                    <a href="{% url 'courses:sync' %}" class="btn btn-crm-outline btn-sm">
-                        <i class="fa-solid fa-sync me-1"></i> Sync Data
+                    <a href="{% url 'courses:sync' %}" class="btn-crm btn-crm-outline btn-crm-sm">
+                        <i class="fa-solid fa-sync me-1" aria-hidden="true"></i> Sync Data
                     </a>
-                    <a href="{% url 'enrollments:bulk' %}" class="btn btn-crm btn-crm-primary btn-sm shadow-sm">
-                        <i class="fa-solid fa-bolt me-1"></i> Bulk Enroll
+                    <a href="{% url 'enrollments:bulk' %}" class="btn-crm btn-crm-primary btn-crm-sm shadow-sm">
+                        <i class="fa-solid fa-bolt me-1" aria-hidden="true"></i> Bulk Enroll
                     </a>
                 </div>
             </div>
@@ -25,19 +25,19 @@
 </div>
 
 <div class="container-fluid p-4 fade-in">
-    
+
     {% if recent_failures %}
     <!-- Failure Alert Section -->
-    <div class="alert alert-danger border-0 shadow-sm rounded-4 mb-5 p-4 d-flex align-items-center">
-        <div class="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center me-4 shadow-sm" style="min-width: 56px; height: 56px;">
-            <i class="fa-solid fa-triangle-exclamation fs-3"></i>
+    <div class="alert alert-danger border-0 shadow-sm rounded-4 mb-5 p-4 d-flex align-items-center" role="alert">
+        <div class="avatar-circle avatar-circle-lg avatar-circle-danger shadow-sm me-4">
+            <i class="fa-solid fa-triangle-exclamation fs-3" aria-hidden="true"></i>
         </div>
         <div class="flex-grow-1">
             <h5 class="fw-bold mb-1">Attention Required: Recent Failures</h5>
             <p class="mb-0 small opacity-75">There are {{ recent_failures.count }} recent enrollment failures that may need your review.</p>
         </div>
         <div>
-            <a href="{% url 'enrollments:list' %}?status=FAILURE" class="btn btn-sm btn-danger px-4 rounded-pill">View Failures</a>
+            <a href="{% url 'enrollments:list' %}?status=FAILURE" class="btn-crm btn-crm-danger btn-crm-sm px-4 rounded-pill">View Failures</a>
         </div>
     </div>
     {% endif %}
@@ -47,7 +47,7 @@
         <div class="col-md-6 col-lg-4 col-xl-2">
             <div class="crm-card h-100 border-0">
                 <div class="stat-icon bg-primary bg-opacity-10 text-primary mb-3">
-                    <i class="fa-solid fa-users"></i>
+                    <i class="fa-solid fa-users" aria-hidden="true"></i>
                 </div>
                 <h6 class="text-muted small fw-bold text-uppercase mb-1">Contacts</h6>
                 <h3 class="fw-bold mb-0">{{ total_contacts }}</h3>
@@ -56,7 +56,7 @@
         <div class="col-md-6 col-lg-4 col-xl-2">
             <div class="crm-card h-100 border-0">
                 <div class="stat-icon bg-success bg-opacity-10 text-success mb-3">
-                    <i class="fa-solid fa-graduation-cap"></i>
+                    <i class="fa-solid fa-graduation-cap" aria-hidden="true"></i>
                 </div>
                 <h6 class="text-muted small fw-bold text-uppercase mb-1">Courses</h6>
                 <h3 class="fw-bold mb-0">{{ total_courses }}</h3>
@@ -65,7 +65,7 @@
         <div class="col-md-6 col-lg-4 col-xl-3">
             <div class="crm-card h-100 border-start border-4 border-info">
                 <div class="stat-icon bg-info bg-opacity-10 text-info mb-3">
-                    <i class="fa-solid fa-clipboard-list"></i>
+                    <i class="fa-solid fa-clipboard-list" aria-hidden="true"></i>
                 </div>
                 <h6 class="text-muted small fw-bold text-uppercase mb-1">Total Attempts</h6>
                 <h3 class="fw-bold mb-0">{{ total_attempts }}</h3>
@@ -74,7 +74,7 @@
         <div class="col-md-6 col-lg-4 col-xl-2">
             <div class="crm-card h-100 border-start border-4 border-success">
                 <div class="stat-icon bg-success bg-opacity-10 text-success mb-3">
-                    <i class="fa-solid fa-circle-check"></i>
+                    <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
                 </div>
                 <h6 class="text-muted small fw-bold text-uppercase mb-1">Successful</h6>
                 <h3 class="fw-bold mb-0 text-success">{{ success_enrollments }}</h3>
@@ -83,7 +83,7 @@
         <div class="col-md-6 col-lg-4 col-xl-2">
             <div class="crm-card h-100 border-start border-4 border-danger">
                 <div class="stat-icon bg-danger bg-opacity-10 text-danger mb-3">
-                    <i class="fa-solid fa-circle-xmark"></i>
+                    <i class="fa-solid fa-circle-xmark" aria-hidden="true"></i>
                 </div>
                 <h6 class="text-muted small fw-bold text-uppercase mb-1">Failed</h6>
                 <h3 class="fw-bold mb-0 text-danger">{{ failed_enrollments }}</h3>
@@ -111,9 +111,9 @@
                         </thead>
                         <tbody>
                             {% for enr in recent_enrollments %}
-                            <tr onclick="window.location='{% url 'enrollments:detail' enr.id %}'" style="cursor: pointer;">
-                                <td class="ps-4">
-                                    <div class="fw-bold text-dark">{{ enr.contact.email }}</div>
+                            <tr class="row-linked">
+                                <td class="ps-4 row-link-cell">
+                                    <a href="{% url 'enrollments:detail' enr.id %}" class="row-link-stretched fw-bold text-dark d-block">{{ enr.contact.email }}</a>
                                     <div class="small text-muted">{{ enr.contact.first_name }} {{ enr.contact.last_name }}</div>
                                 </td>
                                 <td><span class="small fw-medium text-muted">{{ enr.course.name }}</span></td>
@@ -148,8 +148,8 @@
                         </thead>
                         <tbody>
                             {% for contact in recent_contacts %}
-                            <tr onclick="window.location='{% url 'contacts:detail' contact.id %}'" style="cursor: pointer;">
-                                <td class="ps-4 fw-bold text-dark">{{ contact.first_name }} {{ contact.last_name }}</td>
+                            <tr class="row-linked">
+                                <td class="ps-4 fw-bold text-dark row-link-cell"><a href="{% url 'contacts:detail' contact.id %}" class="row-link-stretched d-block">{{ contact.first_name }} {{ contact.last_name }}</a></td>
                                 <td><span class="small text-muted">{{ contact.email }}</span></td>
                                 <td>{% include "components/status_badge.html" with status=contact.status %}</td>
                                 <td class="text-end pe-4 text-muted small">{{ contact.source|default:"Direct" }}</td>
@@ -172,25 +172,25 @@
                     <h6 class="text-uppercase fw-bold small opacity-50 mb-0">Integration Bridge</h6>
                     {% include "components/status_badge.html" with status=active_config.validation_status|default:"OFFLINE" %}
                 </div>
-                
+
                 {% if active_config %}
                     <div class="mb-4">
                         <div class="h5 fw-bold mb-1">{{ active_config.name }}</div>
                         <div class="small opacity-50">{{ active_config.team_name|default:"Team Unselected" }}</div>
                     </div>
                     <div class="small mb-4 border-start border-primary border-4 ps-3 py-2 bg-white bg-opacity-10 rounded-end">
-                        <div class="opacity-50 text-uppercase x-small fw-bold mb-1">Active Workspace</div>
+                        <div class="opacity-50 text-uppercase text-xs fw-bold mb-1">Active Workspace</div>
                         <div class="fw-bold">{{ active_config.workspace_name|default:"--" }}</div>
                         <code class="small text-primary opacity-100">{{ active_config.workspace_id }}</code>
                     </div>
-                    <a href="{% url 'configuration:settings' %}" class="btn btn-crm btn-outline-light w-100 py-2 border-opacity-25">
-                        <i class="fa-solid fa-gear me-2 opacity-50"></i>API Settings
+                    <a href="{% url 'configuration:settings' %}" class="btn-crm btn-crm-outline-inverse w-100 py-2">
+                        <i class="fa-solid fa-gear me-2 opacity-50" aria-hidden="true"></i>API Settings
                     </a>
                 {% else %}
                     <div class="text-center py-4">
-                        <i class="fa-solid fa-plug-circle-xmark fs-1 mb-3 opacity-25"></i>
+                        <i class="fa-solid fa-plug-circle-xmark fs-1 mb-3 opacity-25" aria-hidden="true"></i>
                         <p class="small opacity-75">No active ClickFunnels configuration detected.</p>
-                        <a href="{% url 'configuration:settings' %}" class="btn btn-crm btn-crm-primary w-100">Setup Bridge</a>
+                        <a href="{% url 'configuration:settings' %}" class="btn-crm btn-crm-primary w-100">Setup Bridge</a>
                     </div>
                 {% endif %}
             </div>
@@ -200,27 +200,27 @@
                 <h6 class="text-uppercase text-muted fw-bold small mb-4">Quick Actions</h6>
                 <div class="row g-2">
                     <div class="col-6">
-                        <a href="{% url 'contacts:add' %}" class="btn btn-crm btn-crm-outline w-100 text-center py-3">
-                            <i class="fa-solid fa-user-plus d-block mb-2 fs-4"></i>
-                            <span class="x-small">Add Contact</span>
+                        <a href="{% url 'contacts:add' %}" class="btn-crm btn-crm-outline w-100 text-center py-3">
+                            <i class="fa-solid fa-user-plus d-block mb-2 fs-4" aria-hidden="true"></i>
+                            <span class="text-xs">Add Contact</span>
                         </a>
                     </div>
                     <div class="col-6">
-                        <a href="{% url 'courses:sync' %}" class="btn btn-crm btn-crm-outline w-100 text-center py-3">
-                            <i class="fa-solid fa-rotate d-block mb-2 fs-4"></i>
-                            <span class="x-small">Sync Courses</span>
+                        <a href="{% url 'courses:sync' %}" class="btn-crm btn-crm-outline w-100 text-center py-3">
+                            <i class="fa-solid fa-rotate d-block mb-2 fs-4" aria-hidden="true"></i>
+                            <span class="text-xs">Sync Courses</span>
                         </a>
                     </div>
                     <div class="col-6">
-                        <a href="{% url 'enrollments:new' %}" class="btn btn-crm btn-crm-outline w-100 text-center py-3">
-                            <i class="fa-solid fa-user-check d-block mb-2 fs-4"></i>
-                            <span class="x-small">Enroll</span>
+                        <a href="{% url 'enrollments:new' %}" class="btn-crm btn-crm-outline w-100 text-center py-3">
+                            <i class="fa-solid fa-user-check d-block mb-2 fs-4" aria-hidden="true"></i>
+                            <span class="text-xs">Enroll</span>
                         </a>
                     </div>
                     <div class="col-6">
-                        <a href="{% url 'configuration:settings' %}" class="btn btn-crm btn-crm-outline w-100 text-center py-3">
-                            <i class="fa-solid fa-sliders d-block mb-2 fs-4"></i>
-                            <span class="x-small">Settings</span>
+                        <a href="{% url 'configuration:settings' %}" class="btn-crm btn-crm-outline w-100 text-center py-3">
+                            <i class="fa-solid fa-sliders d-block mb-2 fs-4" aria-hidden="true"></i>
+                            <span class="text-xs">Settings</span>
                         </a>
                     </div>
                 </div>
@@ -228,9 +228,4 @@
         </div>
     </div>
 </div>
-
-<style>
-    .x-small { font-size: 0.7rem; }
-    .bg-opacity-10 { --bs-bg-opacity: 0.1; }
-</style>
 {% endblock %}

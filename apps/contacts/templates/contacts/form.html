@@ -3,63 +3,72 @@
 {% block title %}{{ title }} | ValuedCRM{% endblock %}
 
 {% block content %}
-<div class="container-fluid p-4">
-    
-    <div class="mb-4">
-        <a href="{% url 'contacts:list' %}" class="text-decoration-none small text-muted">
-            <i class="fa-solid fa-arrow-left me-1"></i> Back to List
-        </a>
-        <h2 class="fw-bold mt-2">{{ title }}</h2>
-    </div>
+{% include "components/page_header.html" with title=title subtitle=contact|yesno:"Update this contact's profile, address, and metadata.,Fill in the contact's details to add them to your workspace." %}
 
+<div class="container-fluid px-4 fade-in">
     <div class="row">
         <div class="col-lg-8">
             <div class="crm-card">
-                <form method="post">
+                <form method="post" id="contact-form">
                     {% csrf_token %}
-                    
+
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted">First Name</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.first_name.id_for_label }}">First Name</label>
                             {{ form.first_name }}
                             {% if form.first_name.errors %}
-                                <div class="text-danger small mt-1">{{ form.first_name.errors }}</div>
+                                <div class="form-error">{{ form.first_name.errors|striptags }}</div>
                             {% endif %}
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted">Last Name</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.last_name.id_for_label }}">Last Name</label>
                             {{ form.last_name }}
                             {% if form.last_name.errors %}
-                                <div class="text-danger small mt-1">{{ form.last_name.errors }}</div>
+                                <div class="form-error">{{ form.last_name.errors|striptags }}</div>
                             {% endif %}
                         </div>
                         <div class="col-12">
-                            <label class="form-label small fw-bold text-muted">Email Address</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.email.id_for_label }}">Email Address</label>
                             {{ form.email }}
                             {% if form.email.errors %}
-                                <div class="text-danger small mt-1">{{ form.email.errors }}</div>
+                                <div class="form-error">{{ form.email.errors|striptags }}</div>
                             {% endif %}
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted">Phone</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.phone.id_for_label }}">Phone</label>
                             {{ form.phone }}
+                            {% if form.phone.errors %}
+                                <div class="form-error">{{ form.phone.errors|striptags }}</div>
+                            {% endif %}
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label small fw-bold text-muted">Status</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.status.id_for_label }}">Status</label>
                             {{ form.status }}
+                            {% if form.status.errors %}
+                                <div class="form-error">{{ form.status.errors|striptags }}</div>
+                            {% endif %}
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label small fw-bold text-muted">Source</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.source.id_for_label }}">Source</label>
                             {{ form.source }}
+                            {% if form.source.errors %}
+                                <div class="form-error">{{ form.source.errors|striptags }}</div>
+                            {% endif %}
                         </div>
                         <div class="col-12">
-                            <label class="form-label small fw-bold text-muted">Time Zone</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.time_zone.id_for_label }}">Time Zone</label>
                             {{ form.time_zone }}
+                            {% if form.time_zone.errors %}
+                                <div class="form-error">{{ form.time_zone.errors|striptags }}</div>
+                            {% endif %}
                         </div>
                         <div class="col-12">
-                            <label class="form-label small fw-bold text-muted">Tags (JSON)</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.tags.id_for_label }}">Tags (JSON)</label>
                             {{ form.tags }}
                             <div class="form-text small">Provide tags as a JSON list, e.g., <code>["student", "active"]</code></div>
+                            {% if form.tags.errors %}
+                                <div class="form-error">{{ form.tags.errors|striptags }}</div>
+                            {% endif %}
                         </div>
                     </div>
 
@@ -67,12 +76,18 @@
                     <h5 class="fw-bold mb-3">Address Information</h5>
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted">Shipping Address (JSON)</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.shipping_address.id_for_label }}">Shipping Address (JSON)</label>
                             {{ form.shipping_address }}
+                            {% if form.shipping_address.errors %}
+                                <div class="form-error">{{ form.shipping_address.errors|striptags }}</div>
+                            {% endif %}
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted">Billing Address (JSON)</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.billing_address.id_for_label }}">Billing Address (JSON)</label>
                             {{ form.billing_address }}
+                            {% if form.billing_address.errors %}
+                                <div class="form-error">{{ form.billing_address.errors|striptags }}</div>
+                            {% endif %}
                         </div>
                     </div>
 
@@ -80,29 +95,59 @@
                     <h5 class="fw-bold mb-3">Placeholders</h5>
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted">Payment Method Placeholder</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.payment_method_placeholder.id_for_label }}">Payment Method Placeholder</label>
                             {{ form.payment_method_placeholder }}
+                            {% if form.payment_method_placeholder.errors %}
+                                <div class="form-error">{{ form.payment_method_placeholder.errors|striptags }}</div>
+                            {% endif %}
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted">Order Info Placeholder</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.order_information_placeholder.id_for_label }}">Order Info Placeholder</label>
                             {{ form.order_information_placeholder }}
+                            {% if form.order_information_placeholder.errors %}
+                                <div class="form-error">{{ form.order_information_placeholder.errors|striptags }}</div>
+                            {% endif %}
                         </div>
                     </div>
 
                     <div class="mt-5 d-flex gap-2 justify-content-end">
-                        <a href="{% if contact %}{% url 'contacts:detail' contact.pk %}{% else %}{% url 'contacts:list' %}{% endif %}" class="btn btn-crm btn-outline-secondary">Cancel</a>
-                        <button type="submit" class="btn btn-crm btn-crm-primary px-5">Save Contact</button>
+                        <a href="{% if contact %}{% url 'contacts:detail' contact.pk %}{% else %}{% url 'contacts:list' %}{% endif %}" class="btn-crm btn-crm-outline">Cancel</a>
+                        <button type="submit" class="btn-crm btn-crm-primary px-5" id="contact-form-submit">Save Contact</button>
                     </div>
                 </form>
             </div>
         </div>
-        
+
         <div class="col-lg-4">
+            {% if contact %}
+            <div class="crm-card border-0 shadow-sm text-center mb-4">
+                <div class="avatar-circle avatar-circle-lg avatar-circle-primary mx-auto mb-3">
+                    {{ contact.first_name|slice:":1"|upper }}{{ contact.last_name|slice:":1"|upper }}
+                </div>
+                <h6 class="fw-bold mb-1 text-dark">{{ contact.first_name }} {{ contact.last_name }}</h6>
+                <p class="text-muted small mb-0">{{ contact.email }}</p>
+            </div>
+            {% endif %}
             <div class="alert alert-info border-0 shadow-sm rounded-4">
-                <h6 class="fw-bold"><i class="fa-solid fa-circle-info me-2"></i>Note</h6>
+                <h6 class="fw-bold"><i class="fa-solid fa-circle-info me-2" aria-hidden="true"></i>Note</h6>
                 <p class="small mb-0">Changes made here are local. Use the <strong>Enroll</strong> action to sync or update data with ClickFunnels.</p>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Purely a UX affordance — disables the submit button and shows a
+    // spinner while the POST round-trips, so a slow save doesn't look
+    // like a missed click. The server remains the source of truth for
+    // validation; on a validation error the page re-renders normally
+    // with the button back in its default state.
+    document.getElementById("contact-form").addEventListener("submit", function () {
+        var btn = document.getElementById("contact-form-submit");
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving…';
+    });
+</script>
 {% endblock %}

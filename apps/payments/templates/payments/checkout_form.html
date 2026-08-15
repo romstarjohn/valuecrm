@@ -25,22 +25,22 @@
         {{ form.idempotency_key }}
 
         <div class="mb-3">
-            <label class="form-label">{{ form.email.label }}</label>
+            <label class="form-label" for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
             {{ form.email }}
             {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors|striptags }}</div>{% endif %}
         </div>
         <div class="mb-3">
-            <label class="form-label">{{ form.phone.label }}</label>
+            <label class="form-label" for="{{ form.phone.id_for_label }}">{{ form.phone.label }}</label>
             {{ form.phone }}
             {% if form.phone.errors %}<div class="text-danger small mt-1">{{ form.phone.errors|striptags }}</div>{% endif %}
         </div>
         <div class="row">
             <div class="col-md-6 mb-3">
-                <label class="form-label">{{ form.first_name.label }}</label>
+                <label class="form-label" for="{{ form.first_name.id_for_label }}">{{ form.first_name.label }}</label>
                 {{ form.first_name }}
             </div>
             <div class="col-md-6 mb-3">
-                <label class="form-label">{{ form.last_name.label }}</label>
+                <label class="form-label" for="{{ form.last_name.id_for_label }}">{{ form.last_name.label }}</label>
                 {{ form.last_name }}
             </div>
         </div>

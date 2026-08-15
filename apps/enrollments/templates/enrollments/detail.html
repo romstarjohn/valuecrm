@@ -3,7 +3,7 @@
 {% block title %}Enrollment Audit #{{ attempt.id }} | ValuedCRM{% endblock %}
 
 {% block content %}
-{% include "includes/page_header.html" with title="Enrollment Audit" subtitle="Detailed transaction log for student enrollment." %}
+{% include "components/page_header.html" with title="Enrollment Audit" subtitle="Detailed transaction log for student enrollment." %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="row">
@@ -17,6 +17,30 @@
                     </div>
                     {% include "components/status_badge.html" with status=attempt.status %}
                 </div>
+
+                {% if attempt.status == "SUCCESS" and attempt.cf_enrollment_id %}
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-4">
+                    {% if attempt.cf_suspended %}
+                        <span class="badge-status badge-warning">SUSPENDED</span>
+                        {% if can_resume_enrollment %}
+                            <a href="{% url 'enrollments:resume' attempt.pk %}" class="btn-crm btn-crm-outline btn-crm-sm text-success">
+                                <i class="fa-solid fa-play me-1 small" aria-hidden="true"></i> Resume Enrollment
+                            </a>
+                        {% endif %}
+                    {% else %}
+                        {% if can_freeze_enrollment %}
+                            <a href="{% url 'enrollments:freeze' attempt.pk %}" class="btn-crm btn-crm-outline btn-crm-sm text-warning">
+                                <i class="fa-solid fa-pause me-1 small" aria-hidden="true"></i> Freeze Enrollment
+                            </a>
+                        {% endif %}
+                    {% endif %}
+                    {% if can_view_order and order_reference %}
+                        <a href="{% url 'operations:order_detail' order_reference %}" class="btn-crm btn-crm-outline btn-crm-sm">
+                            <i class="fa-solid fa-arrow-up-right-from-square me-1 small" aria-hidden="true"></i> View Order
+                        </a>
+                    {% endif %}
+                </div>
+                {% endif %}
 
                 <div class="row g-4 mb-4">
                     <div class="col-md-6">
@@ -45,26 +69,21 @@
                 {% endif %}
             </div>
 
-            <!-- Debug Data -->
-            <div class="accordion border-0 shadow-sm rounded-3 overflow-hidden mb-5" id="debugAccordion">
-                <div class="accordion-item border-0">
-                    <h2 class="accordion-header">
-                        <button class="accordion-button collapsed bg-white fw-bold small text-uppercase text-muted py-3" type="button" data-bs-toggle="collapse" data-bs-target="#collapseResponse">
-                            <i class="fa-solid fa-bug me-2 opacity-50"></i> Raw API Response
+            <!-- Debug Data: native <details> — expand/collapse works with no
+                 JavaScript at all (not dependent on Bootstrap's collapse JS) -->
+            <details class="crm-card border-0 shadow-sm mb-5 p-0 overflow-hidden">
+                <summary class="p-3 fw-bold small text-uppercase text-muted">
+                    <i class="fa-solid fa-bug me-2 opacity-50" aria-hidden="true"></i> Raw API Response
+                </summary>
+                <div class="bg-light border-top p-3">
+                    <pre class="small m-0 p-3 bg-dark text-success rounded-3 raw-payload-block">{{ attempt.response_payload|json_script:"response-data" }}</pre>
+                    <div class="mt-3 text-end">
+                        <button type="button" class="btn-crm btn-crm-outline btn-crm-sm" onclick="copyData('response-data')">
+                            <i class="fa-solid fa-copy me-1" aria-hidden="true"></i> Copy JSON
                         </button>
-                    </h2>
-                    <div id="collapseResponse" class="accordion-collapse collapse" data-bs-parent="#debugAccordion">
-                        <div class="accordion-body bg-light border-top">
-                            <pre class="small m-0 p-3 bg-dark text-success rounded-3" style="max-height: 400px; overflow-y: auto;">{{ attempt.response_payload|json_script:"response-data" }}</pre>
-                            <div class="mt-3 text-end">
-                                <button class="btn btn-sm btn-crm-outline" onclick="copyData('response-data')">
-                                    <i class="fa-solid fa-copy me-1"></i> Copy JSON
-                                </button>
-                            </div>
-                        </div>
                     </div>
                 </div>
-            </div>
+            </details>
         </div>
 
         <div class="col-lg-4">
@@ -72,7 +91,7 @@
             <div class="crm-card border-0 shadow-sm mb-4">
                 <h6 class="text-uppercase text-muted fw-bold small mb-4">Student Info</h6>
                 <div class="d-flex align-items-center mb-4">
-                    <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center fw-bold me-3" style="width: 56px; height: 56px; font-size: 1.25rem;">
+                    <div class="avatar-circle avatar-circle-lg avatar-circle-primary me-3">
                         {{ attempt.contact.first_name|slice:":1"|upper }}{{ attempt.contact.last_name|slice:":1"|upper }}
                     </div>
                     <div>
@@ -80,7 +99,7 @@
                         <div class="small text-muted">{{ attempt.contact.email }}</div>
                     </div>
                 </div>
-                <a href="{% url 'contacts:detail' attempt.contact.id %}" class="btn btn-crm-outline w-100 py-2 fs-7">
+                <a href="{% url 'contacts:detail' attempt.contact.id %}" class="btn-crm btn-crm-outline btn-crm-sm w-100">
                     View Full Profile
                 </a>
             </div>
@@ -88,25 +107,21 @@
             <div class="crm-card border-0 shadow-sm">
                 <h6 class="text-uppercase text-muted fw-bold small mb-4">Course Info</h6>
                 <div class="d-flex align-items-center mb-4">
-                    <div class="bg-success bg-opacity-10 text-success rounded-3 d-flex align-items-center justify-content-center me-3" style="width: 56px; height: 56px; font-size: 1.5rem;">
-                        <i class="fa-solid fa-graduation-cap"></i>
+                    <div class="avatar-circle-lg bg-success bg-opacity-10 text-success rounded-3 d-flex align-items-center justify-content-center me-3">
+                        <i class="fa-solid fa-graduation-cap" aria-hidden="true"></i>
                     </div>
                     <div>
                         <div class="fw-bold text-dark">{{ attempt.course.name }}</div>
                         <div class="small text-muted">ID: <code>{{ attempt.course.cf_course_id }}</code></div>
                     </div>
                 </div>
-                <a href="{% url 'courses:detail' attempt.course.cf_course_id %}" class="btn btn-crm-outline w-100 py-2 fs-7">
+                <a href="{% url 'courses:detail' attempt.course.cf_course_id %}" class="btn-crm btn-crm-outline btn-crm-sm w-100">
                     View Course Catalog
                 </a>
             </div>
         </div>
     </div>
 </div>
-
-<style>
-    .fs-7 { font-size: 0.85rem; }
-</style>
 {% endblock %}
 
 {% block extra_js %}

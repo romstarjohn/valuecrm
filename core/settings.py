@@ -77,6 +77,15 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "core.wsgi.application"
 
+# Django's default messages framework tags "error" doesn't match any
+# Bootstrap alert class (Bootstrap only has "alert-danger") — without this
+# mapping, error flash messages render with no color styling at all.
+from django.contrib.messages import constants as message_constants  # noqa: E402
+
+MESSAGE_TAGS = {
+    message_constants.ERROR: "danger",
+}
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
