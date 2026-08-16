@@ -27,11 +27,11 @@ def clear_ratelimit_cache():
 def test_checkout_start_is_rate_limited_per_ip(client, settings):
     settings.RATELIMIT_ENABLE = True
     course = Course.objects.create(cf_course_id="crs_rl", name="Bootcamp", workspace_id="ws_1")
-    plan = PaymentPlan.objects.create(
+    PaymentPlan.objects.create(
         code="rl-plan", name="RL Plan", course=course,
         installment_count=1, installment_amount=Decimal("1.00"), is_active=True,
     )
-    url = reverse("payments:checkout_start", args=[plan.id])
+    url = reverse("payments:checkout_start")
 
     statuses = [client.get(url).status_code for _ in range(25)]
     assert 429 in statuses or 403 in statuses, "expected at least one rate-limited response among 25 rapid requests"

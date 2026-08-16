@@ -14,11 +14,22 @@ class CheckoutContactForm(forms.Form):
     count, total, interval, or access policy — CheckoutService always
     re-derives those server-side from the authoritative PaymentPlan.
 
+    plan_id is a ModelChoiceField scoped to active plans only — the browser
+    picks one of the rendered radio options, but a submitted id for an
+    inactive (or nonexistent) plan is rejected by field validation itself,
+    the same guarantee the old get_object_or_404(is_active=True) gave when
+    the plan lived in the URL instead of the form body.
+
     idempotency_key is generated once when the form is first rendered (GET)
     and round-tripped as a hidden field, so a double-click/back-button
     resubmission carries the same key rather than a fresh one each time.
     """
-    plan_id = forms.IntegerField(widget=forms.HiddenInput())
+    plan_id = forms.ModelChoiceField(
+        queryset=PaymentPlan.objects.filter(is_active=True),
+        widget=forms.RadioSelect,
+        empty_label=None,
+        error_messages={"invalid_choice": "This plan is no longer available. Please choose another."},
+    )
     idempotency_key = forms.CharField(widget=forms.HiddenInput(), max_length=64)
 
     email = forms.EmailField(
@@ -44,12 +55,6 @@ class CheckoutContactForm(forms.Form):
     def clean_phone(self):
         return normalize_phone(self.cleaned_data.get("phone", ""))
 
-    def clean_plan_id(self):
-        plan_id = self.cleaned_data["plan_id"]
-        if not PaymentPlan.objects.filter(pk=plan_id, is_active=True).exists():
-            raise forms.ValidationError("This plan is no longer available.")
-        return plan_id
-
     @staticmethod
-    def initial_for_plan(plan: PaymentPlan) -> dict:
-        return {"plan_id": plan.id, "idempotency_key": str(uuid.uuid4())}
+    def initial() -> dict:
+        return {"idempotency_key": str(uuid.uuid4())}

@@ -65,13 +65,26 @@ class TaraClient(PaymentProviderClient):
 
     list_paid_transactions() implements the real documented POST
     /tara/paid/transactionlist contract as of Phase 9 (was disabled/fabricated
-    in Phases 4-8 — see git history). Its response has no productId, so its
-    only live caller (apps/payments/reconciliation_services.py) uses it for
-    reporting only, never to grant payment credit; authoritative attempt
-    verification still goes through check_transaction_status().
+    in Phases 4-8 — see git history). This is the PAID-status filter variant —
+    distinct from /tara/transactionlist (all transactions, unpaginated-caller's
+    responsibility, not currently implemented by any method here). Its response
+    has no productId, so its only live caller
+    (apps/payments/reconciliation_services.py) uses it for reporting only,
+    never to grant payment credit; authoritative attempt verification still
+    goes through check_transaction_status().
+
+    BASE_URL correction: was "https://www.dklo.co/api" (missing the /tara
+    segment) through at least 2026-08-16, which every endpoint below silently
+    inherited — Tara's API rejected every call built from it with HTTP 405.
+    Confirmed correct value verified live against Tara for paymentlinks and
+    both transactionlist variants; check_transaction_status was not
+    independently reconfirmed but shares the same base per this class's own
+    preexisting docstrings (which already documented /tara/paymentlinks and
+    /tara/transactions/status — this fix makes the code match what these
+    docstrings always claimed).
     """
 
-    BASE_URL = "https://www.dklo.co/api"
+    BASE_URL = "https://www.dklo.co/api/tara"
     WEBHOOK_SIGNATURE_HEADER = "X-Tara-Signature"  # TBD — placeholder header name, never confirmed by Tara; unused for trust decisions as of Phase 6 (see verify_webhook_signature's docstring)
 
     def __init__(self, api_key: str, webhook_secret: str, business_id: str):

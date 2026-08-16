@@ -19,7 +19,7 @@ from integrations.payments.tara.exceptions import (
     TaraTimeoutError,
 )
 
-URL = "https://www.dklo.co/api/paymentlinks"
+URL = "https://www.dklo.co/api/tara/paymentlinks"
 
 
 @pytest.fixture
@@ -75,7 +75,7 @@ def test_caller_cannot_override_business_id_api_key_or_base_url():
     assert "api_key" not in params
     assert "business_id" not in params
     assert "base_url" not in params
-    assert not hasattr(TaraClient, "BASE_URL") or TaraClient.BASE_URL == "https://www.dklo.co/api"
+    assert not hasattr(TaraClient, "BASE_URL") or TaraClient.BASE_URL == "https://www.dklo.co/api/tara"
 
 
 @responses.activate

@@ -1,0 +1,338 @@
+/*
+ * checkout.css - public guest checkout shell + checkout page layout.
+ * Loaded by templates/public_base.html for every public payments/* page
+ * (plan list, checkout form, status, error). Layers on top of
+ * tokens.css/base.css/components.css/utilities.css — no new design tokens
+ * are defined here, only checkout-specific composition.
+ */
+
+.checkout-body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* --- Minimal public header --- */
+.checkout-header {
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--border-color);
+    padding: var(--space-4) var(--space-5);
+}
+
+.checkout-header-inner {
+    max-width: 1180px;
+    margin-inline: auto;
+}
+
+.checkout-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-weight: var(--font-weight-bold);
+    font-size: var(--text-xl);
+    color: var(--color-text-primary);
+}
+
+.checkout-brand i {
+    color: var(--primary-blue);
+}
+
+/* --- Page shell --- */
+.checkout-shell {
+    flex: 1;
+    width: 100%;
+    max-width: 720px;
+    margin-inline: auto;
+    padding: var(--space-8) var(--space-5);
+}
+
+.checkout-shell--wide {
+    max-width: 1180px;
+}
+
+/* --- Compact public footer --- */
+.checkout-footer {
+    border-top: 1px solid var(--border-color);
+    padding: var(--space-5);
+    margin-top: auto;
+}
+
+.checkout-footer-inner {
+    max-width: 1180px;
+    margin-inline: auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-4);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+}
+
+/* --- Programme introduction (hero) --- */
+.checkout-intro {
+    grid-area: hero;
+    display: flex;
+    align-items: center;
+    gap: var(--space-5);
+    min-width: 0;
+}
+
+.checkout-intro-icon {
+    flex-shrink: 0;
+    width: 64px;
+    height: 64px;
+    border-radius: var(--radius-lg);
+    background: var(--color-info-bg);
+    color: var(--primary-blue);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--text-2xl);
+}
+
+.checkout-intro-title {
+    font-weight: var(--font-weight-bold);
+    font-size: var(--text-2xl);
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-1);
+    overflow-wrap: anywhere;
+}
+
+.checkout-intro-course {
+    color: var(--color-text-muted);
+    font-size: var(--text-base);
+}
+
+/* --- Single-page checkout layout ---
+   Mobile (single column): hero -> card (summary+form+payment) -> description.
+   Desktop (>=992px), ~60/40 split: hero+description stack on the left,
+   the checkout card spans both rows on the right and is sticky within
+   that combined height. Only non-interactive content is reordered, so
+   tab order stays correct. The card's containing block ends at the
+   bottom of the left column's content, well above the page footer (a
+   sibling of .checkout-layout, outside this grid), so sticky can never
+   overlap it. */
+.checkout-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "hero" "card" "description";
+    gap: var(--space-6);
+}
+
+@media (min-width: 992px) {
+    .checkout-layout {
+        grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+        grid-template-areas:
+            "hero        card"
+            "description card";
+        column-gap: var(--space-8);
+        row-gap: var(--space-6);
+        align-items: start;
+    }
+}
+
+.checkout-description-col {
+    grid-area: description;
+    min-width: 0;
+}
+
+.checkout-card-col {
+    grid-area: card;
+    min-width: 0;
+}
+
+@media (min-width: 992px) {
+    .checkout-card-col {
+        position: sticky;
+        top: var(--space-6);
+    }
+}
+
+/* --- Form sections --- */
+.checkout-section-title {
+    font-weight: var(--font-weight-bold);
+    font-size: var(--text-lg);
+    margin-bottom: var(--space-1);
+}
+
+.checkout-section-hint {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    margin-bottom: var(--space-4);
+}
+
+.checkout-field {
+    margin-bottom: var(--space-4);
+}
+
+.checkout-field-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+}
+
+@media (min-width: 576px) {
+    .checkout-field-row {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+}
+
+.checkout-help {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    margin-top: var(--space-1);
+}
+
+/* --- Left column: programme description content --- */
+.checkout-body-text {
+    color: var(--color-text-secondary);
+    line-height: var(--line-height-normal);
+    margin-bottom: 0;
+    overflow-wrap: anywhere;
+}
+
+.checkout-support-note {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    margin: 0;
+}
+
+.checkout-support-note i {
+    color: var(--color-success-text);
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+/* --- Right column: single checkout card (summary + form + payment) --- */
+.checkout-card-divider {
+    border-top: 1px solid var(--border-color);
+    padding-top: var(--space-5);
+    margin-top: var(--space-5);
+}
+
+.checkout-consent {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    margin-top: var(--space-3);
+    margin-bottom: 0;
+}
+
+/* --- Payment section --- */
+.checkout-payment-section {
+    border-top: 1px solid var(--border-color);
+    padding-top: var(--space-5);
+    margin-top: var(--space-2);
+}
+
+.checkout-total-recap {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+    font-size: var(--text-md);
+    color: var(--color-text-secondary);
+}
+
+.checkout-total-recap strong {
+    font-size: var(--text-xl);
+    color: var(--color-text-primary);
+}
+
+.checkout-submit {
+    width: 100%;
+}
+
+.checkout-reassurance {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+    margin-bottom: 0;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+}
+
+.checkout-reassurance i {
+    color: var(--color-success-text);
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+/* --- Order summary block (top of the checkout card) --- */
+.checkout-price-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding-top: var(--space-4);
+    margin-top: var(--space-4);
+    border-top: 1px solid var(--border-color);
+}
+
+.checkout-price-label {
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-secondary);
+}
+
+.checkout-price-value {
+    font-weight: var(--font-weight-bold);
+    font-size: var(--text-2xl);
+    color: var(--color-text-primary);
+    overflow-wrap: anywhere;
+    text-align: right;
+}
+
+.checkout-installment-note {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    margin-top: var(--space-1);
+}
+
+/* --- Plan picker (left column): radio-selectable plan cards --- */
+.checkout-plan-fieldset {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    border: 0;
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+}
+
+.checkout-plan-option {
+    display: block;
+    cursor: pointer;
+    position: relative;
+    margin-bottom: 0;
+    padding-left: calc(var(--space-6) + 20px);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.checkout-plan-option-input {
+    position: absolute;
+    top: var(--space-5);
+    left: var(--space-5);
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary-blue);
+    cursor: pointer;
+}
+
+.checkout-plan-option-body {
+    min-width: 0;
+}
+
+.checkout-plan-option:has(.checkout-plan-option-input:focus-visible) {
+    outline: 2px solid var(--primary-blue);
+    outline-offset: 2px;
+}
+
+.checkout-plan-option--selected {
+    border-color: var(--primary-blue);
+    box-shadow: 0 0 0 1px var(--primary-blue);
+}

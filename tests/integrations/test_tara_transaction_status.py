@@ -16,7 +16,7 @@ from integrations.payments.tara.exceptions import (
 )
 from integrations.payments.tara.schemas import TaraTransactionStatus
 
-URL = "https://www.dklo.co/api/transactions/status"
+URL = "https://www.dklo.co/api/tara/transactions/status"
 
 
 @pytest.fixture

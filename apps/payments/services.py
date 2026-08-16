@@ -526,13 +526,10 @@ class CheckoutService:
             return CheckoutResult(order.reference, signed_reference, "link_ready", checkout_url=attempt.general_link)
         if attempt.status == PaymentAttempt.Status.UNKNOWN:
             return self._recheck_unknown_attempt(order, signed_reference, attempt)
-        if attempt.status == PaymentAttempt.Status.FAILED:
-            return CheckoutResult(
-                order.reference, signed_reference, "failed",
-                message="This payment attempt could not be completed. Please contact support.",
-            )
 
-        # attempt.status == CREATED (or LINK_CREATED without a stored link, defensively) -> call Tara.
+        # attempt.status == CREATED (a fresh attempt — including one just
+        # created above to replace a FAILED/EXPIRED predecessor — or
+        # LINK_CREATED without a stored link, defensively) -> call Tara.
         log_service_success(logger, "CheckoutService", "start_checkout", order_id=order.id)
         return self._create_link_for_attempt(order, signed_reference, installment, attempt, base_url)
 
@@ -553,11 +550,17 @@ class CheckoutService:
         the SAME installment; the DB constraint
         one_active_payment_attempt_per_installment (apps/payments/models.py)
         backstops this even against a caller that bypasses this method.
+
+        A FAILED/EXPIRED attempt never blocks a fresh one — per PaymentAttempt's
+        own docstring, "an installment may have multiple attempts (e.g. retry
+        after FAILED/EXPIRED) — each gets its own unique tara_product_id". The
+        old attempt is left untouched as history; a new one is simply logged
+        and returned so checkout can proceed normally.
         """
         with transaction.atomic():
             installment = Installment.objects.select_for_update().get(pk=installment_id)
             existing = installment.payment_attempts.order_by("-created_at").first()
-            if existing:
+            if existing and existing.status not in (PaymentAttempt.Status.FAILED, PaymentAttempt.Status.EXPIRED):
                 return existing, False
             attempt = PaymentAttemptService().create_attempt(installment)
             return attempt, True

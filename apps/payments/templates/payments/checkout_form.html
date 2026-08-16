@@ -1,69 +1,192 @@
 {% extends "public_base.html" %}
 
-{% block title %}Checkout — {{ plan.name }} | ValuedCRM{% endblock %}
+{% block title %}Checkout | ValuedCRM{% endblock %}
+
+{% block shell_modifier %} checkout-shell--wide{% endblock %}
 
 {% block content %}
-<div class="crm-card mb-4">
-    <h4 class="fw-bold mb-1">{{ plan.name }}</h4>
-    <div class="text-muted small mb-3"><i class="fa-solid fa-graduation-cap me-1"></i>{{ plan.course.name }}</div>
-    <div class="d-flex justify-content-between align-items-center">
-        <span class="badge-status badge-info">{{ plan.get_access_policy_display }}</span>
-        <div class="text-end">
-            <div class="fs-4 fw-bold">{{ plan.computed_total|floatformat:2 }} {{ plan.currency }}</div>
-            {% if plan.installment_count > 1 %}
-                <div class="text-muted small">{{ plan.installment_count }} installments of {{ plan.installment_amount|floatformat:2 }} {{ plan.currency }}</div>
-            {% endif %}
+{% if plans %}
+<form method="post" id="checkout-form" class="checkout-layout">
+    {% csrf_token %}
+
+    <div class="checkout-intro">
+        <div class="checkout-intro-icon" aria-hidden="true">
+            <i class="fa-solid fa-graduation-cap"></i>
+        </div>
+        <div>
+            <h1 class="checkout-intro-title">Choose your plan</h1>
+            <div class="checkout-intro-course">Pick a plan below, then complete your details to continue to payment.</div>
         </div>
     </div>
-</div>
 
-<div class="crm-card">
-    <h5 class="fw-bold mb-4">Your Information</h5>
-    <form method="post" id="checkout-form">
-        {% csrf_token %}
-        {{ form.plan_id }}
-        {{ form.idempotency_key }}
+    <div class="checkout-description-col">
+        <fieldset class="checkout-plan-fieldset">
+            <legend class="visually-hidden">Available payment plans</legend>
+            {% if form.plan_id.errors %}
+                <div class="form-error mb-3" role="alert">{{ form.plan_id.errors|striptags }}</div>
+            {% endif %}
+            {% for plan in plans %}
+            <label class="crm-card checkout-plan-option" for="plan-{{ plan.id }}">
+                <input
+                    type="radio" name="plan_id" value="{{ plan.id }}" id="plan-{{ plan.id }}"
+                    class="checkout-plan-option-input"
+                    {% if plan.id|stringformat:"s" == selected_plan_id %}checked{% endif %}
+                    data-name="{{ plan.name }}"
+                    data-course="{{ plan.course.name }}"
+                    data-price="{{ plan.computed_total|floatformat:2 }} {{ plan.currency }}"
+                    data-installment-note="{% if plan.installment_count > 1 %}{{ plan.installment_count }} installments of {{ plan.installment_amount|floatformat:2 }} {{ plan.currency }}{% else %}One-time payment{% endif %}"
+                    data-access="{{ plan.get_access_policy_display }}"
+                >
+                <div class="checkout-plan-option-body">
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                        <div>
+                            <div class="fw-bold">{{ plan.name }}</div>
+                            <div class="text-muted small mb-2">
+                                <i class="fa-solid fa-graduation-cap me-1" aria-hidden="true"></i>{{ plan.course.name }}
+                            </div>
+                            {% if plan.description %}
+                                <p class="checkout-body-text mb-2">{{ plan.description|linebreaksbr }}</p>
+                            {% endif %}
+                            <span class="badge-status badge-info">{{ plan.get_access_policy_display }}</span>
+                        </div>
+                        <div class="text-end">
+                            <div class="fs-4 fw-bold">{{ plan.computed_total|floatformat:2 }} {{ plan.currency }}</div>
+                            {% if plan.installment_count > 1 %}
+                                <div class="text-muted small">{{ plan.installment_count }} installments of {{ plan.installment_amount|floatformat:2 }} {{ plan.currency }}</div>
+                            {% else %}
+                                <div class="text-muted small">One-time payment</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </label>
+            {% endfor %}
+        </fieldset>
+    </div>
 
-        <div class="mb-3">
-            <label class="form-label" for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
-            {{ form.email }}
-            {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors|striptags }}</div>{% endif %}
-        </div>
-        <div class="mb-3">
-            <label class="form-label" for="{{ form.phone.id_for_label }}">{{ form.phone.label }}</label>
-            {{ form.phone }}
-            {% if form.phone.errors %}<div class="text-danger small mt-1">{{ form.phone.errors|striptags }}</div>{% endif %}
-        </div>
-        <div class="row">
-            <div class="col-md-6 mb-3">
-                <label class="form-label" for="{{ form.first_name.id_for_label }}">{{ form.first_name.label }}</label>
-                {{ form.first_name }}
+    <div class="checkout-card-col">
+        <div class="crm-card checkout-card">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <h2 class="checkout-section-title mb-0">Order summary</h2>
+                <span class="badge-status badge-info" id="summary-access"></span>
             </div>
-            <div class="col-md-6 mb-3">
-                <label class="form-label" for="{{ form.last_name.id_for_label }}">{{ form.last_name.label }}</label>
-                {{ form.last_name }}
+
+            <div class="fw-bold" id="summary-name"></div>
+            <div class="text-muted small mb-2" id="summary-course"></div>
+
+            <div class="checkout-price-row">
+                <span class="checkout-price-label">Total</span>
+                <span class="checkout-price-value" id="summary-price"></span>
+            </div>
+            <div class="checkout-installment-note" id="summary-installment-note"></div>
+
+            <h2 class="checkout-section-title checkout-card-divider">Your information</h2>
+            <p class="checkout-section-hint">We'll use this to confirm your order and send your receipt.</p>
+
+            {{ form.idempotency_key }}
+
+            {% if form.non_field_errors %}
+                <div class="form-error mb-3" role="alert">{{ form.non_field_errors|striptags }}</div>
+            {% endif %}
+
+            <div class="checkout-field">
+                <label class="form-label" for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+                {{ form.email }}
+                {% if form.email.errors %}<div class="form-error" role="alert">{{ form.email.errors|striptags }}</div>{% endif %}
+            </div>
+
+            <div class="checkout-field">
+                <label class="form-label" for="{{ form.phone.id_for_label }}">{{ form.phone.label }}</label>
+                {{ form.phone }}
+                <p class="checkout-help">Optional — used only if we need to reach you about this order.</p>
+                {% if form.phone.errors %}<div class="form-error" role="alert">{{ form.phone.errors|striptags }}</div>{% endif %}
+            </div>
+
+            <div class="checkout-field-row">
+                <div class="checkout-field">
+                    <label class="form-label" for="{{ form.first_name.id_for_label }}">{{ form.first_name.label }}</label>
+                    {{ form.first_name }}
+                    {% if form.first_name.errors %}<div class="form-error" role="alert">{{ form.first_name.errors|striptags }}</div>{% endif %}
+                </div>
+                <div class="checkout-field">
+                    <label class="form-label" for="{{ form.last_name.id_for_label }}">{{ form.last_name.label }}</label>
+                    {{ form.last_name }}
+                    {% if form.last_name.errors %}<div class="form-error" role="alert">{{ form.last_name.errors|striptags }}</div>{% endif %}
+                </div>
+            </div>
+
+            <div class="checkout-payment-section">
+                <h2 class="checkout-section-title">Payment</h2>
+                <p class="checkout-section-hint">You'll be taken to our secure payment provider to complete this purchase.</p>
+
+                <div class="checkout-total-recap">
+                    <span>Total due today</span>
+                    <strong id="summary-total-due"></strong>
+                </div>
+
+                <button type="submit" class="btn btn-crm btn-crm-primary checkout-submit" id="checkout-submit">
+                    Continue to Payment <i class="fa-solid fa-lock ms-2" aria-hidden="true"></i>
+                </button>
+
+                <p class="checkout-reassurance">
+                    <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+                    <span>Your payment is processed securely. We never store your card details.</span>
+                </p>
+
+                <p class="checkout-consent">
+                    By continuing, you'll be redirected to our payment provider to complete this purchase securely.
+                </p>
             </div>
         </div>
-        {% if form.non_field_errors %}
-            <div class="text-danger small mb-3">{{ form.non_field_errors|striptags }}</div>
-        {% endif %}
-
-        <button type="submit" class="btn btn-crm btn-crm-primary w-100 py-3 fs-5" id="checkout-submit">
-            Continue to Payment <i class="fa-solid fa-lock ms-2"></i>
-        </button>
-    </form>
-</div>
+    </div>
+</form>
+{% else %}
+    {% include "components/empty_state.html" with title="No plans available" message="There are no payment plans available for purchase right now. Please check back later." icon="fa-solid fa-basket-shopping" %}
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script>
+    (function () {
+        const radios = document.querySelectorAll(".checkout-plan-option-input");
+        if (!radios.length) return;
+
+        const summaryName = document.getElementById("summary-name");
+        const summaryCourse = document.getElementById("summary-course");
+        const summaryPrice = document.getElementById("summary-price");
+        const summaryInstallmentNote = document.getElementById("summary-installment-note");
+        const summaryAccess = document.getElementById("summary-access");
+        const summaryTotalDue = document.getElementById("summary-total-due");
+
+        function applySelection(radio) {
+            summaryName.textContent = radio.dataset.name;
+            summaryCourse.innerHTML = '<i class="fa-solid fa-graduation-cap me-1" aria-hidden="true"></i>' + radio.dataset.course;
+            summaryPrice.textContent = radio.dataset.price;
+            summaryInstallmentNote.textContent = radio.dataset.installmentNote;
+            summaryAccess.textContent = radio.dataset.access;
+            summaryTotalDue.textContent = radio.dataset.price;
+
+            radios.forEach(function (r) {
+                r.closest(".checkout-plan-option").classList.toggle("checkout-plan-option--selected", r === radio);
+            });
+        }
+
+        radios.forEach(function (radio) {
+            radio.addEventListener("change", function () { applySelection(radio); });
+        });
+
+        const initial = document.querySelector(".checkout-plan-option-input:checked") || radios[0];
+        applySelection(initial);
+    })();
+
     // Prevent duplicate submission from a double-click/impatient customer —
     // the server-side idempotency_key already makes a genuine resubmit safe,
     // this is purely a UX affordance.
     document.getElementById("checkout-form").addEventListener("submit", function () {
         const btn = document.getElementById("checkout-submit");
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing…';
+        btn.setAttribute("aria-busy", "true");
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Processing…';
     });
 </script>
 {% endblock %}

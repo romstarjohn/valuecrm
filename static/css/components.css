@@ -159,6 +159,13 @@
     transform: translateY(-1px);
 }
 
+.btn-crm:disabled,
+.btn-crm[aria-busy="true"] {
+    opacity: 0.75;
+    cursor: not-allowed;
+    transform: none;
+}
+
 .btn-crm-outline {
     background: transparent;
     border-color: var(--border-color);

@@ -18,9 +18,11 @@
     <link rel="stylesheet" href="{% static 'css/base.css' %}">
     <link rel="stylesheet" href="{% static 'css/components.css' %}">
     <link rel="stylesheet" href="{% static 'css/utilities.css' %}">
+    <!-- Checkout-specific shell (header/footer/layout) — public pages only -->
+    <link rel="stylesheet" href="{% static 'css/checkout.css' %}">
     {% block extra_css %}{% endblock %}
 </head>
-<body>
+<body class="checkout-body">
     <!--
         Public/guest checkout shell — deliberately NOT templates/base.html.
         base.html's sidebar (templates/includes/sidebar.html) and topbar
@@ -28,17 +30,30 @@
         authenticated-user account menu; neither applies to an anonymous
         customer buying a course. This template reuses the same design
         system (tokens, .crm-card, .btn-crm, .form-control, status badges)
-        without that internal navigation chrome.
+        without that internal navigation chrome — plus a minimal public
+        header/footer defined in static/css/checkout.css.
     -->
     <a class="skip-link" href="#main-content">Skip to main content</a>
-    <div id="main-content" class="container py-5" style="max-width: 720px;">
-        <div class="text-center mb-4">
-            <i class="fa-solid fa-bridge text-primary me-2 fs-4"></i>
-            <span class="fw-bold fs-4">ValuedCRM</span>
+
+    <header class="checkout-header">
+        <div class="checkout-header-inner">
+            <span class="checkout-brand">
+                <i class="fa-solid fa-bridge" aria-hidden="true"></i>
+                <span>ValuedCRM</span>
+            </span>
         </div>
+    </header>
+
+    <main id="main-content" class="checkout-shell{% block shell_modifier %}{% endblock %}">
         {% include "includes/messages.html" %}
         {% block content %}{% endblock %}
-    </div>
+    </main>
+
+    <footer class="checkout-footer">
+        <div class="checkout-footer-inner">
+            <span>&copy; {% now "Y" %} ValuedCRM. All rights reserved.</span>
+        </div>
+    </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bundle.min.js"></script>
     {% block extra_js %}{% endblock %}

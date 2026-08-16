@@ -226,18 +226,23 @@ def test_malformed_response_handled_safely_as_unknown(service, contact, plan, mo
     assert PaymentAttempt.objects.get().status == PaymentAttempt.Status.UNKNOWN
 
 
-def test_no_automatic_retry_after_failure(service, contact, plan, mocker):
-    """A second start_checkout call after a definitive FAILED must not call Tara again automatically."""
+def test_retry_after_failure_logs_new_attempt_and_calls_tara_again(service, contact, plan, mocker):
+    """A FAILED attempt never blocks retry — a second start_checkout call must log a fresh
+    attempt and call Tara again, leaving the first FAILED attempt untouched as history."""
     mock_client = Mock()
     mock_client.create_payment_link.side_effect = TaraProviderBusinessError("unsuccessful")
     mocker.patch("apps.payments.services.TaraConfigService.get_client", return_value=mock_client)
 
     service.start_checkout(contact, plan.id, "idem-1")
+    mock_client.create_payment_link.side_effect = None
+    mock_client.create_payment_link.return_value = success_response()
     result = service.start_checkout(contact, plan.id, "idem-1")
 
-    assert result.status == "failed"
-    mock_client.create_payment_link.assert_called_once()  # still only the first call
-    assert PaymentAttempt.objects.count() == 1
+    assert result.status == "link_ready"
+    assert mock_client.create_payment_link.call_count == 2
+    assert PaymentAttempt.objects.count() == 2
+    statuses = set(PaymentAttempt.objects.values_list("status", flat=True))
+    assert statuses == {PaymentAttempt.Status.FAILED, PaymentAttempt.Status.LINK_CREATED}
 
 
 # --- Repeated request after UNKNOWN: check status first, don't blindly recreate ---

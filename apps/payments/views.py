@@ -1,4 +1,4 @@
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import redirect, render
 from django.views.decorators.cache import never_cache
 from django_ratelimit.decorators import ratelimit
 
@@ -7,34 +7,32 @@ from .models import PaymentAttempt, PaymentPlan
 from .services import CheckoutConfigurationError, CheckoutError, CheckoutService
 
 
-def plan_list(request):
+@ratelimit(key="ip", rate="20/m", block=True)
+def checkout_start(request):
     """
-    Public checkout entry point — active PaymentPlans only. Every displayed
-    field (name, description, course, currency, installment count/amount,
-    computed total, access policy) is read directly from the server-side
-    PaymentPlan/Course records; nothing here is browser-supplied.
+    Single-page checkout — active PaymentPlans are rendered as radio options
+    directly on this page (no per-plan URL). GET renders plan choices + the
+    contact form; POST resolves/creates the guest Contact and runs
+    CheckoutService.start_checkout() for whichever plan was selected.
+
+    The submitted plan_id is re-validated server-side by
+    CheckoutContactForm's ModelChoiceField (scoped to is_active=True) —
+    never trusted as-is; a tampered/stale/inactive id simply fails
+    validation and the form is re-rendered with an error, same guarantee
+    the old get_object_or_404(is_active=True) gave when the plan lived in
+    the URL.
     """
     plans = (
         PaymentPlan.objects.filter(is_active=True)
         .select_related("course")
         .order_by("display_order", "name")
     )
-    return render(request, "payments/plan_list.html", {"plans": plans})
-
-
-@ratelimit(key="ip", rate="20/m", block=True)
-def checkout_start(request, plan_id):
-    """
-    GET renders the contact form for an active plan; POST resolves/creates
-    the guest Contact and runs CheckoutService.start_checkout(). The plan_id
-    in the URL and the hidden plan_id form field are both re-validated
-    server-side against PaymentPlan.is_active — never trusted as-is.
-    """
-    plan = get_object_or_404(PaymentPlan.objects.select_related("course"), pk=plan_id, is_active=True)
 
     if request.method == "POST":
         form = CheckoutContactForm(request.POST)
-        if form.is_valid() and form.cleaned_data["plan_id"] == plan.id:
+        selected_plan_id = request.POST.get("plan_id", "")
+        if form.is_valid():
+            plan = form.cleaned_data["plan_id"]
             checkout_service = CheckoutService()
             contact = checkout_service.resolve_guest_contact(
                 email=form.cleaned_data["email"],
@@ -59,9 +57,13 @@ def checkout_start(request, plan_id):
                 return redirect(result.checkout_url)
             return redirect("payments:checkout_status", token=result.signed_reference)
     else:
-        form = CheckoutContactForm(initial=CheckoutContactForm.initial_for_plan(plan))
+        form = CheckoutContactForm(initial=CheckoutContactForm.initial())
+        first_plan = plans.first()
+        selected_plan_id = str(first_plan.id) if first_plan else ""
 
-    return render(request, "payments/checkout_form.html", {"plan": plan, "form": form})
+    return render(request, "payments/checkout_form.html", {
+        "plans": plans, "form": form, "selected_plan_id": selected_plan_id,
+    })
 
 
 @never_cache
