@@ -153,6 +153,13 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@valuedcrm.example
 # Apache terminates HTTPS and forwards requests to Gunicorn over HTTP.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
+# Number of reverse proxies in front of Gunicorn that append to
+# X-Forwarded-For (Apache = 1). 0 keeps REMOTE_ADDR, correct only without a
+# proxy — behind Apache it would turn every per-IP rate limit into one global
+# bucket. See shared/ratelimit.py.
+TRUSTED_PROXY_COUNT = int(os.getenv("TRUSTED_PROXY_COUNT", "0"))
+RATELIMIT_IP_META_KEY = "shared.ratelimit.client_ip"
+
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 

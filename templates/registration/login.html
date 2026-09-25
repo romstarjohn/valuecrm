@@ -19,8 +19,12 @@
         <h1 class="login-title">{{ BRAND_NAME }}</h1>
         <p class="login-subtitle">Connectez-vous à l’espace équipe.</p>
 
-        {% if form.errors %}
-        <div class="login-error">
+        {% if ratelimited %}
+        <div class="login-error" role="alert">
+            Trop de tentatives de connexion. Merci de patienter quelques minutes avant de réessayer.
+        </div>
+        {% elif form.errors %}
+        <div class="login-error" role="alert">
             Identifiants incorrects. Merci de réessayer.
         </div>
         {% endif %}

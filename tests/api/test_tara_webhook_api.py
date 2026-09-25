@@ -140,7 +140,7 @@ def test_rate_limit_enforced(client, active_config, settings):
             post_json(client, {"businessId": "biz_123", "productId": f"x{i}", "status": "SUCCESS"}).status_code
             for i in range(70)
         ]
-        assert 403 in statuses
+        assert 429 in statuses  # Ratelimited -> 429 via shared.error_views.permission_denied
     finally:
         cache.clear()
 

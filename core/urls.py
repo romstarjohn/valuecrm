@@ -10,6 +10,7 @@ from apps.contacts.api import router as contacts_router
 from apps.courses.api import router as courses_router
 from apps.enrollments.api import router as enrollments_router
 from apps.payments.api import router as payments_router
+from shared.auth import RateLimitedLoginView
 from shared.forms import BootstrapPasswordChangeForm
 
 api = NinjaAPI(
@@ -38,7 +39,7 @@ urlpatterns = [
     # English — every {% url %} reference and Django's own next_page="login"
     # resolution use the name, not the path — only the visible path is French,
     # matching /paiement/'s precedent.
-    path("connexion/", auth_views.LoginView.as_view(
+    path("connexion/", RateLimitedLoginView.as_view(
         template_name="registration/login.html", redirect_authenticated_user=True,
     ), name="login"),
     path("deconnexion/", auth_views.LogoutView.as_view(next_page="login"), name="logout"),
@@ -67,3 +68,5 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", api.urls),
 ]
+
+handler403 = "shared.error_views.permission_denied"

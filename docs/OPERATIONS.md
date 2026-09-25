@@ -69,6 +69,7 @@ Search the `stdout` logs for `FAILURE` tags to see stack traces for unexpected e
 - `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`.
 - `EMAIL_BACKEND`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`, `DEFAULT_FROM_EMAIL` — payment confirmations. Defaults to the console backend (no-op) if unset.
 - `ALLOWED_HOSTS`, `DEBUG=False` in production.
+- `TRUSTED_PROXY_COUNT` — number of reverse proxies in front of Gunicorn that append to `X-Forwarded-For` (Apache → `1`). Default `0` uses `REMOTE_ADDR`, which behind Apache is the proxy's own IP: every per-IP rate limit (login, checkout, Tara webhook) would then be one global bucket. Only set it if the outermost proxy really appends the client IP.
 
 ### Tara credential setup
 1. Django Admin → **Tara Configurations** → add one, mark **Is Active**.

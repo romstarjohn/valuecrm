@@ -1,0 +1,31 @@
+{% load static %}<!DOCTYPE html>
+{% comment %}
+    Standalone error shell. Must render with an EMPTY context: Django renders
+    500.html and 403_csrf.html without a request, so no context processor
+    (BRAND_NAME, user, messages) is available there — and a 500 may be caused
+    by the database itself. Only {% static %} and literal text are used here.
+{% endcomment %}
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <title>{% block title %}Erreur{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
+    <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+    <link rel="stylesheet" href="{% static 'css/components.css' %}">
+    <link rel="stylesheet" href="{% static 'css/login.css' %}">
+</head>
+<body class="login-body">
+    <main class="login-card crm-card" role="main">
+        <img class="login-mark" src="{% static 'images/watermark/watermark noir_1@4x.png' %}" alt="">
+        <p class="login-subtitle" style="margin-bottom: var(--space-2);">{% block code %}{% endblock %}</p>
+        <h1 class="login-title">{% block heading %}{% endblock %}</h1>
+        <p class="login-subtitle">{% block message %}{% endblock %}</p>
+        {% block actions %}
+        <a href="javascript:history.back()" class="btn-crm btn-crm-primary login-submit">Revenir à la page précédente</a>
+        {% endblock %}
+    </main>
+</body>
+</html>
