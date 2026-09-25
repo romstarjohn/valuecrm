@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}Order {{ order.reference }} | ValuedCRM{% endblock %}
+{% block title %}Commande {{ order.reference }} | {{ BRAND_NAME }}{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title="Order Detail" subtitle=order.reference %}
+{% include "components/page_header.html" with title="Détail de la commande" subtitle=order.reference %}
 
 <div class="container-fluid px-4 fade-in pb-5">
     <div class="row g-4">
@@ -12,8 +12,8 @@
             <!-- Customer -->
             <div class="crm-card border-0 shadow-sm mb-4">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="fw-bold mb-0">Customer</h5>
-                    <a href="{% url 'contacts:detail' order.customer_id %}" class="small text-decoration-none fw-bold">View Contact Profile</a>
+                    <h5 class="fw-bold mb-0">Client</h5>
+                    <a href="{% url 'contacts:detail' order.customer_id %}" class="small text-decoration-none fw-bold">Voir la fiche contact</a>
                 </div>
                 <div class="fw-bold text-dark">{{ order.customer.first_name }} {{ order.customer.last_name }}</div>
                 <div class="text-muted small">{{ order.customer.email }}</div>
@@ -22,48 +22,48 @@
             <!-- Plan / Course snapshot -->
             <div class="crm-card border-0 shadow-sm mb-4">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="fw-bold mb-0">Purchased Plan Snapshot</h5>
-                    <a href="{% url 'courses:detail' order.course.cf_course_id %}" class="small text-decoration-none fw-bold">View Course</a>
+                    <h5 class="fw-bold mb-0">Aperçu du plan acheté</h5>
+                    <a href="{% url 'courses:detail' order.course.cf_course_id %}" class="small text-decoration-none fw-bold">Voir la formation</a>
                 </div>
                 <div class="row g-3">
                     <div class="col-md-6"><label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Plan</label>{{ order.plan_name }} <span class="text-muted small">({{ order.plan_code }})</span></div>
-                    <div class="col-md-6"><label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Course</label>{{ order.course_name }}</div>
-                    <div class="col-md-4"><label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Access Policy</label>{{ order.access_policy }}</div>
-                    <div class="col-md-4"><label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Installments</label>{{ order.installment_count }} &times; {{ order.installment_amount }} {{ order.currency }}</div>
-                    <div class="col-md-4"><label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Access Eligible</label>
-                        {% if order.display_access_eligible %}<span class="badge-status badge-success">ELIGIBLE</span>{% else %}<span class="badge-status badge-warning">NOT YET</span>{% endif %}
+                    <div class="col-md-6"><label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Formation</label>{{ order.course_name }}</div>
+                    <div class="col-md-4"><label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Politique d'accès</label>{{ order.access_policy }}</div>
+                    <div class="col-md-4"><label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Versements</label>{{ order.installment_count }} &times; {{ order.installment_amount }} {{ order.currency }}</div>
+                    <div class="col-md-4"><label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Accès éligible</label>
+                        {% if order.display_access_eligible %}<span class="badge-status badge-success">ÉLIGIBLE</span>{% else %}<span class="badge-status badge-warning">PAS ENCORE</span>{% endif %}
                     </div>
                 </div>
-                <div class="form-text small mt-3">Snapshot frozen at purchase — never affected by later edits to the live plan/course.</div>
+                <div class="form-text small mt-3">Instantané figé à l'achat — jamais affecté par des modifications ultérieures du plan/de la formation en vigueur.</div>
             </div>
 
             <!-- Financial summary -->
             <div class="crm-card border-0 shadow-sm mb-4">
-                <h5 class="fw-bold mb-3">Financial Summary</h5>
+                <h5 class="fw-bold mb-3">Résumé financier</h5>
                 <div class="row g-3 text-center">
-                    <div class="col-4"><div class="small text-muted text-uppercase fw-bold">Expected</div><div class="h5 fw-bold">{{ order.total_expected_amount }} {{ order.currency }}</div></div>
-                    <div class="col-4"><div class="small text-muted text-uppercase fw-bold">Paid</div><div class="h5 fw-bold text-success">{{ order.display_total_paid }} {{ order.currency }}</div></div>
-                    <div class="col-4"><div class="small text-muted text-uppercase fw-bold">Remaining</div><div class="h5 fw-bold">{{ order.display_remaining_balance }} {{ order.currency }}</div></div>
+                    <div class="col-4"><div class="small text-muted text-uppercase fw-bold">Attendu</div><div class="h5 fw-bold">{{ order.total_expected_amount }} {{ order.currency }}</div></div>
+                    <div class="col-4"><div class="small text-muted text-uppercase fw-bold">Payé</div><div class="h5 fw-bold text-success">{{ order.display_total_paid }} {{ order.currency }}</div></div>
+                    <div class="col-4"><div class="small text-muted text-uppercase fw-bold">Restant</div><div class="h5 fw-bold">{{ order.display_remaining_balance }} {{ order.currency }}</div></div>
                 </div>
                 <div class="row g-3 mt-2">
-                    <div class="col-6"><label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Order Status</label>{% include "components/status_badge.html" with status=order.status %}</div>
-                    <div class="col-6"><label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Manual Disposition</label>{% include "components/status_badge.html" with status=order.manual_disposition %}</div>
+                    <div class="col-6"><label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Statut de la commande</label>{% include "components/status_badge.html" with status=order.status %}</div>
+                    <div class="col-6"><label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Disposition manuelle</label>{% include "components/status_badge.html" with status=order.manual_disposition %}</div>
                 </div>
                 {% if can_cancel_order or can_apply_disposition or can_freeze_enrollment or can_resume_enrollment %}
                 <div class="mt-4 d-flex gap-2">
                     {% if can_cancel_order and order.status != "CANCELLED" %}
-                        <a href="{% url 'operations:order_cancel' order.reference %}" class="btn btn-crm-outline btn-sm text-danger">Cancel Order</a>
+                        <a href="{% url 'operations:order_cancel' order.reference %}" class="btn btn-crm-outline btn-sm text-danger">Annuler la commande</a>
                     {% endif %}
                     {% if can_apply_disposition %}
-                        <a href="{% url 'operations:order_disposition' order.reference %}?value=NEEDS_REVIEW" class="btn btn-crm-outline btn-sm">Flag for Review</a>
+                        <a href="{% url 'operations:order_disposition' order.reference %}?value=NEEDS_REVIEW" class="btn btn-crm-outline btn-sm">Signaler pour vérification</a>
                     {% endif %}
                     {% if can_freeze_enrollment %}
                         {% if order.status == "ACTIVE" or order.status == "PAST_DUE" %}
-                            <a href="{% url 'operations:order_freeze_enrollment' order.reference %}" class="btn btn-crm-outline btn-sm text-warning">Freeze Enrollment</a>
+                            <a href="{% url 'operations:order_freeze_enrollment' order.reference %}" class="btn btn-crm-outline btn-sm text-warning">Suspendre l'inscription</a>
                         {% endif %}
                     {% endif %}
                     {% if can_resume_enrollment and order.status == "SUSPENDED" %}
-                        <a href="{% url 'operations:order_resume_enrollment' order.reference %}" class="btn btn-crm-outline btn-sm text-success">Resume Enrollment</a>
+                        <a href="{% url 'operations:order_resume_enrollment' order.reference %}" class="btn btn-crm-outline btn-sm text-success">Reprendre l'inscription</a>
                     {% endif %}
                 </div>
                 {% endif %}
@@ -71,10 +71,10 @@
 
             <!-- Installments -->
             <div class="crm-card p-0 overflow-hidden border-0 mb-4">
-                <div class="p-4 border-bottom bg-white"><h5 class="fw-bold mb-0">Installments</h5></div>
+                <div class="p-4 border-bottom bg-white"><h5 class="fw-bold mb-0">Versements</h5></div>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
-                        <thead><tr><th class="ps-4">#</th><th>Due Date</th><th>Expected</th><th>Paid</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+                        <thead><tr><th class="ps-4">#</th><th>Échéance</th><th>Attendu</th><th>Payé</th><th>Statut</th><th class="text-end">Actions</th></tr></thead>
                         <tbody>
                             {% for installment in installments %}
                             <tr>
@@ -86,34 +86,34 @@
                                 <td class="text-end">
                                     {% if installment.status != "PAID" and installment.status != "WAIVED" and installment.status != "CANCELLED" %}
                                         {% if can_cancel_installment %}
-                                            <a href="{% url 'operations:installment_cancel' installment.pk %}" class="btn btn-crm-outline btn-sm">Cancel</a>
+                                            <a href="{% url 'operations:installment_cancel' installment.pk %}" class="btn btn-crm-outline btn-sm">Annuler</a>
                                         {% endif %}
                                         {% if can_waive_installment %}
-                                            <a href="{% url 'operations:installment_waive' installment.pk %}" class="btn btn-crm-outline btn-sm">Waive</a>
+                                            <a href="{% url 'operations:installment_waive' installment.pk %}" class="btn btn-crm-outline btn-sm">Exonérer</a>
                                         {% endif %}
                                     {% endif %}
                                 </td>
                             </tr>
                             {% for attempt in installment.payment_attempts.all %}
                             <tr class="table-light">
-                                <td class="ps-4 text-muted small">↳ attempt</td>
+                                <td class="ps-4 text-muted small">↳ tentative</td>
                                 <td class="small text-muted" colspan="2">
                                     <code class="small">{{ attempt.tara_product_id }}</code>
-                                    — provider: <span class="text-muted">{{ attempt.raw_provider_status|default:"--" }}</span>
+                                    — fournisseur : <span class="text-muted">{{ attempt.raw_provider_status|default:"--" }}</span>
                                 </td>
                                 <td class="small text-muted">{{ attempt.expected_amount }} {{ attempt.currency }}</td>
                                 <td>{% include "components/status_badge.html" with status=attempt.status %}</td>
                                 <td class="text-end">
                                     {% if can_check_tara_status %}
-                                        {% if attempt.status == "PENDING" or attempt.status == "UNKNOWN" %}
-                                            <a href="{% url 'operations:payment_attempt_check_status' attempt.pk %}" class="btn btn-crm-outline btn-sm">Check Status</a>
+                                        {% if attempt.status == "LINK_CREATED" or attempt.status == "PENDING" or attempt.status == "UNKNOWN" or attempt.status == "FAILED" or attempt.status == "EXPIRED" %}
+                                            <a href="{% url 'operations:payment_attempt_check_status' attempt.pk %}" class="btn btn-crm-outline btn-sm">Vérifier le statut</a>
                                         {% endif %}
                                     {% endif %}
                                 </td>
                             </tr>
                             {% endfor %}
                             {% empty %}
-                            <tr><td colspan="6" class="text-center py-4 text-muted small">No installments.</td></tr>
+                            <tr><td colspan="6" class="text-center py-4 text-muted small">Aucun versement.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -122,20 +122,20 @@
 
             <!-- Webhook verification history -->
             <div class="crm-card p-0 overflow-hidden border-0 mb-4">
-                <div class="p-4 border-bottom bg-white"><h5 class="fw-bold mb-0">Webhook Verification History</h5></div>
+                <div class="p-4 border-bottom bg-white"><h5 class="fw-bold mb-0">Historique de vérification Webhook</h5></div>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
-                        <thead><tr><th class="ps-4">Received</th><th>Verification</th><th>Processing</th><th>Failure Category</th></tr></thead>
+                        <thead><tr><th class="ps-4">Reçu</th><th>Vérification</th><th>Traitement</th><th>Catégorie d'échec</th></tr></thead>
                         <tbody>
                             {% for event in webhook_events %}
                             <tr>
-                                <td class="ps-4 small text-muted">{{ event.received_at|date:"M d, H:i" }}</td>
+                                <td class="ps-4 small text-muted">{{ event.received_at|date:"d M, H:i" }}</td>
                                 <td>{% include "components/status_badge.html" with status=event.verification_result %}</td>
                                 <td>{% include "components/status_badge.html" with status=event.processing_status %}</td>
                                 <td class="small text-muted">{{ event.failure_category|default:"--" }}</td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="4" class="text-center py-4 text-muted small">No webhook events correlated yet.</td></tr>
+                            <tr><td colspan="4" class="text-center py-4 text-muted small">Aucun événement webhook corrélé pour le moment.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -144,27 +144,27 @@
 
             <!-- Confirmations -->
             <div class="crm-card p-0 overflow-hidden border-0 mb-4">
-                <div class="p-4 border-bottom bg-white"><h5 class="fw-bold mb-0">Payment Confirmations</h5></div>
+                <div class="p-4 border-bottom bg-white"><h5 class="fw-bold mb-0">Confirmations de paiement</h5></div>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
-                        <thead><tr><th class="ps-4">Channel</th><th>Status</th><th>Attempts</th><th>Sent</th><th class="text-end">Actions</th></tr></thead>
+                        <thead><tr><th class="ps-4">Canal</th><th>Statut</th><th>Tentatives</th><th>Envoyé</th><th class="text-end">Actions</th></tr></thead>
                         <tbody>
                             {% for confirmation in confirmations %}
                             <tr>
                                 <td class="ps-4 small">{{ confirmation.channel }}</td>
                                 <td>{% include "components/status_badge.html" with status=confirmation.status %}</td>
                                 <td class="small text-muted">{{ confirmation.attempt_count }}</td>
-                                <td class="small text-muted">{{ confirmation.sent_at|date:"M d, H:i"|default:"--" }}</td>
+                                <td class="small text-muted">{{ confirmation.sent_at|date:"d M, H:i"|default:"--" }}</td>
                                 <td class="text-end">
                                     {% if can_retry_confirmation %}
                                         {% if confirmation.status == "FAILED" or confirmation.status == "MANUAL_REVIEW" %}
-                                            <a href="{% url 'operations:confirmation_retry' confirmation.pk %}" class="btn btn-crm-outline btn-sm">Retry</a>
+                                            <a href="{% url 'operations:confirmation_retry' confirmation.pk %}" class="btn btn-crm-outline btn-sm">Relancer</a>
                                         {% endif %}
                                     {% endif %}
                                 </td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="5" class="text-center py-4 text-muted small">No confirmations yet.</td></tr>
+                            <tr><td colspan="5" class="text-center py-4 text-muted small">Aucune confirmation pour le moment.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -173,30 +173,30 @@
 
             <!-- Provisioning / enrollment -->
             <div class="crm-card p-0 overflow-hidden border-0 mb-4">
-                <div class="p-4 border-bottom bg-white"><h5 class="fw-bold mb-0">Provisioning / Enrollment</h5></div>
+                <div class="p-4 border-bottom bg-white"><h5 class="fw-bold mb-0">Provisionnement / Inscription</h5></div>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
-                        <thead><tr><th class="ps-4">Course</th><th>Status</th><th>Attempts</th><th>Failure Category</th><th class="text-end">Actions</th></tr></thead>
+                        <thead><tr><th class="ps-4">Formation</th><th>Statut</th><th>Tentatives</th><th>Catégorie d'échec</th><th class="text-end">Actions</th></tr></thead>
                         <tbody>
                             {% for req in provisioning_requests %}
                             <tr>
                                 <td class="ps-4 small">{{ req.course.name }}</td>
                                 <td>
                                     {% include "components/status_badge.html" with status=req.status %}
-                                    {% if req.cf_suspended %}<span class="badge-status badge-warning">SUSPENDED</span>{% endif %}
+                                    {% if req.cf_suspended %}<span class="badge-status badge-warning">SUSPENDU</span>{% endif %}
                                 </td>
                                 <td class="small text-muted">{{ req.attempt_count }}</td>
                                 <td class="small text-muted">{{ req.failure_category|default:"--" }}</td>
                                 <td class="text-end">
                                     {% if can_retry_provisioning %}
                                         {% if req.status == "FAILED" or req.status == "MANUAL_REVIEW" %}
-                                            <a href="{% url 'operations:provisioning_retry' req.pk %}" class="btn btn-crm-outline btn-sm">Retry</a>
+                                            <a href="{% url 'operations:provisioning_retry' req.pk %}" class="btn btn-crm-outline btn-sm">Relancer</a>
                                         {% endif %}
                                     {% endif %}
                                 </td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="5" class="text-center py-4 text-muted small">No enrollment work yet.</td></tr>
+                            <tr><td colspan="5" class="text-center py-4 text-muted small">Aucun travail d'inscription pour le moment.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -205,21 +205,21 @@
 
             <!-- Administrative audit history -->
             <div class="crm-card p-0 overflow-hidden border-0">
-                <div class="p-4 border-bottom bg-white"><h5 class="fw-bold mb-0">Administrative Audit History</h5></div>
+                <div class="p-4 border-bottom bg-white"><h5 class="fw-bold mb-0">Historique d'audit administratif</h5></div>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
-                        <thead><tr><th class="ps-4">When</th><th>Administrator</th><th>Action</th><th>Outcome</th><th>Reason</th></tr></thead>
+                        <thead><tr><th class="ps-4">Quand</th><th>Administrateur</th><th>Action</th><th>Résultat</th><th>Motif</th></tr></thead>
                         <tbody>
                             {% for event in audit_events %}
                             <tr>
-                                <td class="ps-4 small text-muted">{{ event.created_at|date:"M d, H:i" }}</td>
+                                <td class="ps-4 small text-muted">{{ event.created_at|date:"d M, H:i" }}</td>
                                 <td class="small">{{ event.administrator_username|default:"--" }}</td>
                                 <td class="small">{{ event.action_type }}</td>
                                 <td>{% include "components/status_badge.html" with status=event.outcome_category %}</td>
                                 <td class="small text-muted">{{ event.reason }}</td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="5" class="text-center py-4 text-muted small">No administrative actions recorded.</td></tr>
+                            <tr><td colspan="5" class="text-center py-4 text-muted small">Aucune action administrative enregistrée.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -229,10 +229,10 @@
 
         <div class="col-lg-4">
             <div class="crm-card border-0 shadow-sm sticky-top" style="top: 100px;">
-                <h6 class="text-uppercase text-muted fw-bold small mb-3">At a Glance</h6>
-                <div class="small mb-2"><span class="text-muted">Order Reference</span><br><code class="small">{{ order.reference }}</code></div>
-                <div class="small mb-2"><span class="text-muted">Created</span><br>{{ order.created_at|date:"M d, Y H:i" }}</div>
-                <div class="small mb-2"><span class="text-muted">Updated</span><br>{{ order.updated_at|date:"M d, Y H:i" }}</div>
+                <h6 class="text-uppercase text-muted fw-bold small mb-3">En un coup d'œil</h6>
+                <div class="small mb-2"><span class="text-muted">Référence de la commande</span><br><code class="small">{{ order.reference }}</code></div>
+                <div class="small mb-2"><span class="text-muted">Créée le</span><br>{{ order.created_at|date:"d M Y H:i" }}</div>
+                <div class="small mb-2"><span class="text-muted">Mise à jour le</span><br>{{ order.updated_at|date:"d M Y H:i" }}</div>
             </div>
         </div>
     </div>

@@ -30,6 +30,7 @@ from .schemas import (
     TaraPaymentDTO,
     TaraPaymentLinkRequest,
     TaraPaymentLinkResponse,
+    TaraResendWebhookRequest,
     TaraTransactionListItem,
     TaraTransactionListRequest,
     TaraTransactionStatusRequest,
@@ -297,6 +298,43 @@ class TaraClient(PaymentProviderClient):
             product_id=product_id, normalized_result=response_dto.normalized_status.value,
         )
         return response_dto
+
+    # --- Phase 10: POST /tara/resend-webhook ---
+
+    def resend_webhook(self, product_id: str) -> Any:
+        """
+        POST /tara/resend-webhook. Asks Tara to redeliver its most recent
+        webhook notification for this productId to this client's configured
+        webHookUrl. This does NOT itself report a payment status — Tara's
+        docs (§8) document no response body or error contract for this
+        endpoint, so the raw parsed JSON is returned as-is and a caller must
+        treat any non-exception return only as "redelivery requested," never
+        as a status verdict. Use check_transaction_status() for a
+        synchronous, structured status answer; this method exists purely as
+        a secondary recovery path when a webhook may have been lost —
+        redelivery still lands on the normal WebhookProcessingService path,
+        asynchronously, same as any other webhook call.
+        """
+        log_service_start(logger, "TaraClient", "resend_webhook", product_id=product_id)
+
+        try:
+            request_dto = TaraResendWebhookRequest(
+                api_key=self.api_key, business_id=self.business_id, product_id=product_id,
+            )
+        except PydanticValidationError as e:
+            raise TaraInvalidRequestError(f"Invalid resend-webhook request ({_safe_validation_summary(e)}).") from e
+
+        url = f"{self.BASE_URL}/resend-webhook"
+        data = self._request(
+            "POST", url,
+            json=request_dto.model_dump(by_alias=True, exclude_none=True),
+            timeout=(TARA_CONNECT_TIMEOUT_SECONDS, TARA_READ_TIMEOUT_SECONDS),
+            allow_redirects=False,
+            operation="resend_webhook",
+        )
+
+        log_service_success(logger, "TaraClient", "resend_webhook", product_id=product_id)
+        return data
 
     # --- Webhook handling ---
 

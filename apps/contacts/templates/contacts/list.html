@@ -1,92 +1,72 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Contacts | ValuedCRM{% endblock %}
+{% block title %}Contacts | {{ BRAND_NAME }}{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title="Contacts" subtitle="Comprehensive list of students and contact data from ClickFunnels." action_label="Add New Contact" action_url="/contacts/add/" action_icon="fa-solid fa-user-plus" %}
+{% include "components/page_header.html" with title="Contacts" subtitle="Retrouver un client et traiter son dossier de bout en bout, en une seule fiche." action_label="Ajouter un contact" action_url="/contacts/add/" action_icon="fa-solid fa-user-plus" %}
 
-<div class="container-fluid px-4 fade-in">
-    <div class="table-container mb-4 shadow-sm border-0">
-        <!-- Toolbar: search submits via a real GET form; filters/sort are preserved as hidden fields -->
-        <div class="table-toolbar">
-            <form method="get" class="d-flex align-items-center flex-grow-1 gap-3 flex-wrap">
-                {% include "components/search_bar.html" with placeholder="Search students..." %}
-                <div class="d-flex gap-2 flex-wrap">
-                    {% include "components/filter_dropdown.html" with label=status_label options=status_filter_options %}
-                    {% include "components/filter_dropdown.html" with label=source_label options=source_filter_options %}
-                </div>
-                {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
-                {% if source_filter %}<input type="hidden" name="source" value="{{ source_filter }}">{% endif %}
-                {% if sort_key %}
-                    <input type="hidden" name="sort" value="{{ sort_key }}">
-                    <input type="hidden" name="dir" value="{{ sort_dir }}">
-                {% endif %}
-            </form>
-        </div>
+<div class="container-fluid px-4 fade-in pb-5">
+    <div class="mb-4">
+        <form method="get" class="d-flex align-items-center flex-grow-1 gap-3 flex-wrap">
+            {% include "components/search_bar.html" with placeholder="Rechercher des étudiants..." %}
+            <div class="d-flex gap-2 flex-wrap">
+                {% include "components/filter_dropdown.html" with label=status_label options=status_filter_options %}
+                {% include "components/filter_dropdown.html" with label=course_label options=course_filter_options %}
+            </div>
+            {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+            {% if course_filter %}<input type="hidden" name="course_id" value="{{ course_filter }}">{% endif %}
+            {% if sort_key %}
+                <input type="hidden" name="sort" value="{{ sort_key }}">
+                <input type="hidden" name="dir" value="{{ sort_dir }}">
+            {% endif %}
+        </form>
+    </div>
 
-        <!-- Data Table -->
-        {% if page_obj %}
-            {% include "components/table_start.html" with selectable=True headers=headers has_actions=True sort_key=sort_key sort_dir=sort_dir sort_qs=sort_qs %}
-                {% for contact in page_obj %}
+    {% if page_obj %}
+    <div class="table-wrap">
+        <table>
+            <thead>
                 <tr>
-                    <td class="table-check">
-                        <input class="form-check-input row-select" type="checkbox" value="{{ contact.id }}" aria-label="Select {{ contact.first_name }} {{ contact.last_name }}">
+                    {% for header in headers %}
+                    <th class="{% if header.align %}{{ header.align }}{% endif %}">
+                        {% if header.sort_key %}
+                            <a href="?{% if sort_qs %}{{ sort_qs }}&{% endif %}sort={{ header.sort_key }}&dir={% if header.sort_key == sort_key and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none" style="color:inherit;">
+                                {{ header.label }}
+                                {% if header.sort_key == sort_key %}<i class="fa-solid {% if sort_dir == 'desc' %}fa-sort-down{% else %}fa-sort-up{% endif %} ms-1" aria-hidden="true"></i>{% endif %}
+                            </a>
+                        {% else %}
+                            {{ header.label }}
+                        {% endif %}
+                    </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for contact in page_obj %}
+                <tr class="clickable" data-panel-url="{% url 'contacts:detail_panel' contact.id %}" data-panel-title="{{ contact.first_name }} {{ contact.last_name }}">
+                    <td>
+                        <div class="cell-title">{{ contact.first_name }} {{ contact.last_name }}</div>
+                        <div class="cell-sub">{{ contact.email }}</div>
                     </td>
                     <td>
-                        <div class="d-flex align-items-center">
-                            <div class="avatar-circle avatar-circle-primary me-3">
-                                {{ contact.first_name|slice:":1"|upper }}{{ contact.last_name|slice:":1"|upper }}
-                            </div>
-                            <div>
-                                <a href="{% url 'contacts:detail' contact.id %}" class="text-decoration-none fw-bold text-dark h6 mb-0">
-                                    {{ contact.first_name }} {{ contact.last_name }}
-                                </a>
-                                <div class="text-muted small">{{ contact.email }}</div>
-                            </div>
-                        </div>
+                        {% for tag in contact.tags %}<span class="pill accent">{{ tag }}</span>{% empty %}<span class="cell-sub">—</span>{% endfor %}
                     </td>
-                    <td>
-                        {% include "components/status_badge.html" with status=contact.status %}
-                    </td>
-                    <td>
-                        <span class="badge bg-light text-muted border rounded-pill px-2">
-                            <i class="fa-solid fa-tags me-1 small" aria-hidden="true"></i>{{ contact.tags|length }}
-                        </span>
-                    </td>
-                    <td><span class="small fw-medium">{{ contact.source|default:"--" }}</span></td>
-                    <td class="text-end">
-                        <div class="action-menu">
-                            <button type="button" class="btn-action action-menu-toggle" aria-haspopup="true" aria-expanded="false" aria-label="Actions for {{ contact.email }}">
-                                <i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i>
-                            </button>
-                            <ul class="action-menu-list" role="menu">
-                                <li role="none"><a class="action-menu-item" role="menuitem" href="{% url 'contacts:detail' contact.id %}"><i class="fa-solid fa-user me-2 small" aria-hidden="true"></i>View Profile</a></li>
-                                <li role="none"><a class="action-menu-item" role="menuitem" href="{% url 'contacts:edit' contact.id %}"><i class="fa-solid fa-edit me-2 small" aria-hidden="true"></i>Edit Contact</a></li>
-                                <li role="none"><hr class="action-menu-divider"></li>
-                                <li role="none"><a class="action-menu-item text-primary" role="menuitem" href="{% url 'enrollments:new' %}?email={{ contact.email }}"><i class="fa-solid fa-user-plus me-2 small" aria-hidden="true"></i>Enroll</a></li>
-                            </ul>
-                        </div>
-                    </td>
+                    <td>{% include "components/status_badge.html" with status=contact.status %}</td>
+                    <td class="num">{{ contact.total_paid_amount|default_if_none:0 }} XAF</td>
+                    <td class="cell-sub">{{ contact.created_at|date:"d/m/Y" }}</td>
+                    <td class="cell-sub">{{ contact.updated_at|date:"d/m/Y H:i" }}</td>
                 </tr>
                 {% endfor %}
-            {% include "components/table_end.html" %}
-        {% else %}
-            {% include "components/table_empty_state.html" with title="No contacts found" description="Adjust your filters or add a new student to your workspace." action_label="Add New Contact" action_url="/contacts/add/" action_icon="fa-solid fa-plus" %}
-        {% endif %}
+            </tbody>
+        </table>
     </div>
+    {% else %}
+        {% include "components/table_empty_state.html" with title="Aucun contact trouvé" description="Ajustez vos filtres ou ajoutez un nouvel étudiant à votre espace de travail." action_label="Ajouter un contact" action_url="/contacts/add/" action_icon="fa-solid fa-plus" %}
+    {% endif %}
 
     {% if page_obj %}
         {% include "components/pagination.html" with page_obj=page_obj querystring=querystring %}
     {% endif %}
 </div>
-
-<!-- Bulk Actions: shows once a row is selected; only wired action is clearing the selection -->
-{% include "components/bulk_actions.html" %}
-
-{% endblock %}
-
-{% block extra_js %}
-<script src="{% static 'js/bulk-select.js' %}"></script>
-<script src="{% static 'js/action-menu.js' %}"></script>
 {% endblock %}

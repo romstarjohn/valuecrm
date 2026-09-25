@@ -38,7 +38,7 @@ def test_anonymous_cannot_view(client, new_flow_request):
 
 def test_staff_without_permissions_cannot_view(staff_client, new_flow_request):
     response = staff_client.get(CHANGELIST_URL)
-    assert response.status_code == 403
+    assert response.status_code == 302
 
 
 def test_superuser_can_view_new_flow_request(superuser_client, new_flow_request):

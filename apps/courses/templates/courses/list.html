@@ -1,76 +1,77 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Course Catalog | ValuedCRM{% endblock %}
+{% block title %}Cours | {{ BRAND_NAME }}{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title="Course Catalog" subtitle="View and manage synced ClickFunnels products available for enrollment." action_label="Sync Courses" action_url="/courses/sync/" action_icon="fa-solid fa-sync" %}
+{% include "components/page_header.html" with title="Cours" subtitle="Un produit par cours importé · le lien de paiement se copie et se partage directement." action_label="Synchroniser tous les cours" action_url="/courses/sync/" action_icon="fa-solid fa-sync" %}
 
-<div class="container-fluid px-4 fade-in">
-    <div class="table-container mb-4 shadow-sm border-0">
-        <!-- Toolbar: search submits via a real GET form; filter/sort are preserved as hidden fields -->
-        <div class="table-toolbar">
-            <form method="get" class="d-flex align-items-center flex-grow-1 gap-3 flex-wrap">
-                {% include "components/search_bar.html" with placeholder="Search course name or ID..." %}
-                {% include "components/filter_dropdown.html" with label=workspace_label options=workspace_filter_options %}
-                {% if workspace_filter %}<input type="hidden" name="workspace_id" value="{{ workspace_filter }}">{% endif %}
-                {% if sort_key %}
-                    <input type="hidden" name="sort" value="{{ sort_key }}">
-                    <input type="hidden" name="dir" value="{{ sort_dir }}">
-                {% endif %}
-            </form>
-        </div>
+<div class="container-fluid px-4 fade-in pb-5">
+    <div class="mb-4">
+        <form method="get" class="d-flex align-items-center flex-grow-1 gap-3 flex-wrap">
+            {% include "components/search_bar.html" with placeholder="Rechercher un nom de formation ou un ID..." %}
+            {% include "components/filter_dropdown.html" with label=workspace_label options=workspace_filter_options %}
+            {% if workspace_filter %}<input type="hidden" name="workspace_id" value="{{ workspace_filter }}">{% endif %}
+            {% if sort_key %}
+                <input type="hidden" name="sort" value="{{ sort_key }}">
+                <input type="hidden" name="dir" value="{{ sort_dir }}">
+            {% endif %}
+        </form>
+    </div>
 
-        <!-- Data Table -->
-        {% if page_obj %}
-            {% include "components/table_start.html" with selectable=False headers=headers has_actions=True sort_key=sort_key sort_dir=sort_dir sort_qs=sort_qs %}
-                {% for course in page_obj %}
+    {% if page_obj %}
+    <div class="table-wrap">
+        <table>
+            <thead>
                 <tr>
+                    {% for header in headers %}
+                    <th class="{% if header.align %}{{ header.align }}{% endif %}">
+                        {% if header.sort_key %}
+                            <a href="?{% if sort_qs %}{{ sort_qs }}&{% endif %}sort={{ header.sort_key }}&dir={% if header.sort_key == sort_key and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none" style="color:inherit;">
+                                {{ header.label }}
+                                {% if header.sort_key == sort_key %}<i class="fa-solid {% if sort_dir == 'desc' %}fa-sort-down{% else %}fa-sort-up{% endif %} ms-1" aria-hidden="true"></i>{% endif %}
+                            </a>
+                        {% else %}
+                            {{ header.label }}
+                        {% endif %}
+                    </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for course in page_obj %}
+                <tr class="clickable" data-panel-url="{% url 'courses:detail_panel' course.cf_course_id %}" data-panel-title="{{ course.name }}">
                     <td>
-                        <div class="d-flex align-items-center">
-                            <div class="stat-icon bg-success bg-opacity-10 text-success me-3">
-                                <i class="fa-solid fa-graduation-cap" aria-hidden="true"></i>
-                            </div>
-                            <div class="min-w-0">
-                                <a href="{% url 'courses:detail' course.cf_course_id %}" class="text-decoration-none fw-bold text-dark h6 mb-0">
-                                    {{ course.name }}
-                                </a>
-                                <div class="text-muted small">ID: <code>{{ course.cf_course_id }}</code></div>
-                            </div>
-                        </div>
+                        <div class="cell-title">{{ course.name }}</div>
+                        <div class="cell-sub">{{ course.workspace_id|default:"—" }}</div>
                     </td>
-                    <td><span class="text-muted small fw-medium">{{ course.workspace_id|default:"--" }}</span></td>
+                    <td>{{ course.cf_course_id }}</td>
                     <td>
-                        <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-10 rounded-pill px-2">
-                            {{ course.enrollment_count }} enrollments
-                        </span>
+                        <span class="pill good"><span class="dot"></span>il y a {{ course.updated_at|timesince }}</span>
                     </td>
-                    <td class="text-muted small">{{ course.updated_at|date:"M d, Y" }}</td>
-                    <td class="text-end">
-                        <div class="action-menu">
-                            <button type="button" class="btn-action action-menu-toggle" aria-haspopup="true" aria-expanded="false" aria-label="Actions for {{ course.name }}">
-                                <i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i>
-                            </button>
-                            <ul class="action-menu-list" role="menu">
-                                <li role="none"><a class="action-menu-item" role="menuitem" href="{% url 'courses:detail' course.cf_course_id %}"><i class="fa-solid fa-eye me-2 small" aria-hidden="true"></i>View Details</a></li>
-                                <li role="none"><a class="action-menu-item text-primary" role="menuitem" href="{% url 'enrollments:new' %}?course_id={{ course.cf_course_id }}"><i class="fa-solid fa-user-plus me-2 small" aria-hidden="true"></i>Enroll Member</a></li>
-                            </ul>
-                        </div>
+                    <td>
+                        {% with plan=course.active_plans|first %}
+                            {% if plan %}
+                                {% if plan.installment_count == 1 %}Unique · {{ plan.installment_amount }} {{ plan.currency }}
+                                {% else %}{{ plan.installment_count }} × {{ plan.installment_amount }} {{ plan.currency }} / {{ plan.installment_interval_days }} j{% endif %}
+                                {% if course.active_plans|length > 1 %}<span class="cell-sub">+{{ course.active_plans|length|add:"-1" }} autre{{ course.active_plans|length|add:"-1"|pluralize }}</span>{% endif %}
+                            {% else %}
+                                <span class="cell-sub fst-italic">Aucun plan actif</span>
+                            {% endif %}
+                        {% endwith %}
                     </td>
+                    <td class="num">{{ course.active_enrollment_count }}</td>
                 </tr>
                 {% endfor %}
-            {% include "components/table_end.html" %}
-        {% else %}
-            {% include "components/table_empty_state.html" with title="No courses synced" description="Synchronize your ClickFunnels products to start enrolling students." action_label="Sync Now" action_url="/courses/sync/" action_icon="fa-solid fa-sync" %}
-        {% endif %}
+            </tbody>
+        </table>
     </div>
+    {% else %}
+        {% include "components/table_empty_state.html" with title="Aucune formation synchronisée" description="Synchronisez vos produits ClickFunnels pour commencer à inscrire des étudiants." action_label="Synchroniser maintenant" action_url="/courses/sync/" action_icon="fa-solid fa-sync" %}
+    {% endif %}
 
     {% if page_obj %}
         {% include "components/pagination.html" with page_obj=page_obj querystring=querystring %}
     {% endif %}
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script src="{% static 'js/action-menu.js' %}"></script>
 {% endblock %}

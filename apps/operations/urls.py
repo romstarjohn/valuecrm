@@ -21,6 +21,7 @@ urlpatterns = [
     path("payment-attempts/<int:pk>/check-status/", views.payment_attempt_check_status, name="payment_attempt_check_status"),
 
     path("webhook-events/", views.webhook_event_list, name="webhook_event_list"),
+    path("webhook-events/<int:pk>/attribute/", views.webhook_event_attribute, name="webhook_event_attribute"),
 
     path("confirmations/", views.confirmation_list, name="confirmation_list"),
     path("confirmations/<int:pk>/retry/", views.confirmation_retry, name="confirmation_retry"),

@@ -9,8 +9,8 @@ class ClickFunnelsSettingsForm(forms.ModelForm):
     api_access_token = forms.CharField(
         widget=forms.PasswordInput(render_value=False), 
         required=False,
-        help_text="Leave blank to keep current token.",
-        label="API Access Token"
+        help_text="Laissez vide pour conserver le jeton actuel.",
+        label="Jeton d’accès API"
     )
 
     class Meta:
@@ -45,14 +45,14 @@ class TaraConfigSettingsForm(forms.ModelForm):
     api_key = forms.CharField(
         widget=forms.PasswordInput(render_value=False),
         required=False,
-        help_text="Leave blank to keep the current key.",
-        label="API Key",
+        help_text="Laissez vide pour conserver la clé actuelle.",
+        label="Clé API",
     )
     webhook_secret = forms.CharField(
         widget=forms.PasswordInput(render_value=False),
         required=False,
-        help_text="Leave blank to keep the current secret.",
-        label="Webhook Secret",
+        help_text="Laissez vide pour conserver le secret actuel.",
+        label="Secret du webhook",
     )
 
     class Meta:
@@ -73,7 +73,7 @@ class TaraConfigSettingsForm(forms.ModelForm):
     def clean_business_id(self):
         business_id = (self.cleaned_data.get("business_id") or "").strip()
         if not business_id:
-            raise forms.ValidationError("Business ID is required.")
+            raise forms.ValidationError("L’ID d’entreprise est obligatoire.")
         return business_id
 
     def clean(self):
@@ -89,9 +89,9 @@ class TaraConfigSettingsForm(forms.ModelForm):
         has_existing_webhook_secret = bool(self.instance.pk and self.instance.webhook_secret)
 
         if not cleaned_data.get("api_key") and not has_existing_api_key:
-            self.add_error("api_key", "API key is required.")
+            self.add_error("api_key", "La clé API est obligatoire.")
         if not cleaned_data.get("webhook_secret") and not has_existing_webhook_secret:
-            self.add_error("webhook_secret", "Webhook secret is required.")
+            self.add_error("webhook_secret", "Le secret du webhook est obligatoire.")
         return cleaned_data
 
 
@@ -100,7 +100,7 @@ class TeamSelectionForm(forms.Form):
     Step 2 Form: Team selection
     """
     team_id = forms.ChoiceField(
-        label="Select Team",
+        label="Sélectionner l’équipe",
         widget=forms.Select(attrs={"class": "form-select"})
     )
 
@@ -109,6 +109,6 @@ class WorkspaceSelectionForm(forms.Form):
     Step 3 Form: Workspace selection
     """
     workspace_id = forms.ChoiceField(
-        label="Select Workspace",
+        label="Sélectionner l’espace de travail",
         widget=forms.Select(attrs={"class": "form-select"})
     )

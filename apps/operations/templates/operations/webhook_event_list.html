@@ -1,46 +1,56 @@
 {% extends "base.html" %}
-{% block title %}Tara Webhook Events | ValuedCRM{% endblock %}
+{% block title %}Événements Webhook Tara | {{ BRAND_NAME }}{% endblock %}
 {% block content %}
-{% include "components/page_header.html" with title="Tara Webhook Events" subtitle="Untrusted-by-design deliveries, used only as a trigger — server-to-server verified before any credit." %}
+{% include "components/page_header.html" with title="Événements Webhook Tara" subtitle="Envois non fiables par nature, utilisés uniquement comme déclencheur — vérifiés de serveur à serveur avant tout crédit." %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="table-container mb-4 shadow-sm border-0">
         <div class="table-toolbar flex-wrap gap-3">
             <form method="get" class="d-flex flex-wrap align-items-center gap-2 flex-grow-1">
                 <select name="processing_status" class="form-select form-select-sm w-auto">
-                    <option value="">All Processing States</option>
+                    <option value="">Tous les états de traitement</option>
                     {% for value, label in processing_status_options %}
                         <option value="{{ value }}" {% if processing_status_filter == value %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                 </select>
                 <select name="verification_result" class="form-select form-select-sm w-auto">
-                    <option value="">All Verification Results</option>
+                    <option value="">Tous les résultats de vérification</option>
                     {% for value, label in verification_result_options %}
                         <option value="{{ value }}" {% if verification_result_filter == value %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                 </select>
                 <input type="date" name="date_from" class="form-control form-control-sm w-auto" value="{{ date_from }}">
                 <input type="date" name="date_to" class="form-control form-control-sm w-auto" value="{{ date_to }}">
-                <button type="submit" class="btn btn-crm btn-crm-primary btn-sm">Apply</button>
-                <a href="{% url 'operations:webhook_event_list' %}" class="btn btn-crm-outline btn-sm">Reset</a>
+                <button type="submit" class="btn btn-crm btn-crm-primary btn-sm">Appliquer</button>
+                <a href="{% url 'operations:webhook_event_list' %}" class="btn btn-crm-outline btn-sm">Réinitialiser</a>
             </form>
         </div>
 
         {% if page_obj %}
-            {% include "components/table_start.html" with headers=headers %}
+            {% include "components/table_start.html" with headers=headers has_actions=True %}
                 {% for event in page_obj %}
                 <tr>
                     <td><code class="small">{{ event.reference }}</code></td>
+                    <td class="small fw-bold font-mono">{% if event.amount %}{{ event.amount }} XAF{% else %}—{% endif %}</td>
                     <td class="small text-muted">{{ event.processing_status }}</td>
                     <td>{% include "components/status_badge.html" with status=event.verification_result %}</td>
                     <td>{% include "components/status_badge.html" with status=event.processing_status %}</td>
                     <td class="small text-muted">{{ event.failure_category|default:"--" }}</td>
-                    <td class="small text-muted">{{ event.received_at|date:"M d, H:i" }}</td>
+                    <td class="small text-muted">{{ event.received_at|date:"d M, H:i" }}</td>
+                    <td class="text-end">
+                        {% if event.processing_status == "UNCORRELATED" %}
+                            {% if can_attribute_payment %}
+                                <a href="{% url 'operations:webhook_event_attribute' event.pk %}" class="btn btn-crm btn-crm-primary btn-sm">Associer ce paiement</a>
+                            {% else %}
+                                <span class="small text-muted fst-italic" title="Réservé au rôle administrateur">Réservé à l'administrateur</span>
+                            {% endif %}
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             {% include "components/table_end.html" %}
         {% else %}
-            {% include "components/table_empty_state.html" with title="No webhook events found" description="Adjust your filters." %}
+            {% include "components/table_empty_state.html" with title="Aucun événement webhook trouvé" description="Ajustez vos filtres." %}
         {% endif %}
     </div>
     {% if page_obj %}{% include "components/pagination.html" with page_obj=page_obj %}{% endif %}

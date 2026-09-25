@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}API Configuration | ValuedCRM{% endblock %}
+{% block title %}Configuration API | {{ BRAND_NAME }}{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title="API Configuration" subtitle="Build your secure bridge to ClickFunnels 2.0." %}
+{% include "components/page_header.html" with title="Configuration API" subtitle="Construisez votre passerelle sécurisée vers ClickFunnels 2.0." %}
 
 <div class="container-fluid px-4 fade-in pb-5">
     <div class="row g-4">
@@ -13,33 +13,33 @@
             <!-- Step 1: Token -->
             <div class="crm-card border-0 shadow-sm mb-4">
                 <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h5 class="fw-bold mb-0"><span class="badge bg-primary rounded-circle me-2">1</span> API Access Token</h5>
+                    <h5 class="fw-bold mb-0"><span class="badge bg-primary rounded-circle me-2">1</span> Jeton d’accès API</h5>
                     {% if config.validation_status == 'VALID' %}
-                        <span class="badge bg-success rounded-pill px-3"><i class="fa-solid fa-check me-1"></i> Authorized</span>
+                        <span class="badge bg-success rounded-pill px-3"><i class="fa-solid fa-check me-1"></i> Autorisé</span>
                     {% endif %}
                 </div>
-                
+
                 <form method="post">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="save_token">
-                    
+
                     <div class="row g-4">
                         <div class="col-md-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ token_form.name.id_for_label }}">Friendly Name</label>
+                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ token_form.name.id_for_label }}">Nom convivial</label>
                             {{ token_form.name }}
                         </div>
 
                         <div class="col-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ token_form.api_access_token.id_for_label }}">API Access Token</label>
+                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ token_form.api_access_token.id_for_label }}">Jeton d’accès API</label>
                             {{ token_form.api_access_token }}
                             <div class="form-text small mt-2">
-                                <i class="fa-solid fa-shield-halved me-1 text-success"></i> 
-                                Tokens are encrypted with Fernet AES-256. Leave blank to keep the current secure token.
+                                <i class="fa-solid fa-shield-halved me-1 text-success"></i>
+                                Les jetons sont chiffrés avec Fernet AES-256. Laissez vide pour conserver le jeton actuel.
                             </div>
                         </div>
 
                         <div class="col-md-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ token_form.api_user_agent.id_for_label }}">User Agent String</label>
+                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ token_form.api_user_agent.id_for_label }}">Chaîne User-Agent</label>
                             {{ token_form.api_user_agent }}
                         </div>
 
@@ -47,16 +47,16 @@
                             <div class="form-check form-switch p-3 bg-light rounded-3 border border-dashed">
                                 <div class="ms-1">
                                     {{ token_form.is_active }}
-                                    <label class="form-check-label fw-bold ms-2" for="{{ token_form.is_active.id_for_label }}">Set as Active Configuration</label>
+                                    <label class="form-check-label fw-bold ms-2" for="{{ token_form.is_active.id_for_label }}">Définir comme configuration active</label>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <div class="mt-4 d-flex gap-2">
-                        <button type="submit" class="btn btn-crm btn-crm-outline px-4">Save Settings</button>
+                        <button type="submit" class="btn btn-crm btn-crm-outline px-4">Enregistrer les paramètres</button>
                         <button type="submit" name="action" value="verify_token" formmethod="post" class="btn btn-crm btn-crm-primary px-4 shadow-sm">
-                            <i class="fa-solid fa-bolt me-2"></i> Verify & Fetch Teams
+                            <i class="fa-solid fa-bolt me-2"></i> Vérifier et récupérer les équipes
                         </button>
                     </div>
                 </form>
@@ -64,57 +64,57 @@
 
             <!-- Step 2: Select Team -->
             <div class="crm-card border-0 shadow-sm mb-4 {% if config.validation_status != 'VALID' %}opacity-50{% endif %}">
-                <h5 class="fw-bold mb-4"><span class="badge bg-primary rounded-circle me-2">2</span> Select Team</h5>
-                
+                <h5 class="fw-bold mb-4"><span class="badge bg-primary rounded-circle me-2">2</span> Sélectionner l’équipe</h5>
+
                 {% if team_form %}
                     <form method="post">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="select_team">
                         <div class="mb-4">
-                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ team_form.team_id.id_for_label }}">Available Teams</label>
+                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ team_form.team_id.id_for_label }}">Équipes disponibles</label>
                             {{ team_form.team_id }}
                         </div>
-                        <button type="submit" class="btn btn-crm btn-crm-primary px-4">Confirm Team</button>
+                        <button type="submit" class="btn btn-crm btn-crm-primary px-4">Confirmer l’équipe</button>
                     </form>
                 {% else %}
-                    <p class="text-muted small italic">Verify your token first to load available teams.</p>
+                    <p class="text-muted small italic">Vérifiez d’abord votre jeton pour charger les équipes disponibles.</p>
                 {% endif %}
             </div>
 
             <!-- Step 3: Select Workspace -->
             <div class="crm-card border-0 shadow-sm mb-4 {% if not config.team_id %}opacity-50{% endif %}">
-                <h5 class="fw-bold mb-4"><span class="badge bg-primary rounded-circle me-2">3</span> Select Workspace</h5>
-                
+                <h5 class="fw-bold mb-4"><span class="badge bg-primary rounded-circle me-2">3</span> Sélectionner l’espace de travail</h5>
+
                 {% if workspace_form %}
                     <form method="post">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="select_workspace">
                         <div class="mb-4">
-                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ workspace_form.workspace_id.id_for_label }}">Team Workspaces</label>
+                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ workspace_form.workspace_id.id_for_label }}">Espaces de travail de l’équipe</label>
                             {{ workspace_form.workspace_id }}
-                            <div class="form-text small mt-2">Selecting a workspace will automatically link the required API subdomain.</div>
+                            <div class="form-text small mt-2">Sélectionner un espace de travail liera automatiquement le sous-domaine API requis.</div>
                         </div>
-                        <button type="submit" class="btn btn-crm btn-crm-primary px-4">Activate Workspace</button>
+                        <button type="submit" class="btn btn-crm btn-crm-primary px-4">Activer l’espace de travail</button>
                     </form>
                 {% else %}
-                    <p class="text-muted small italic">Select a team first to load available workspaces.</p>
+                    <p class="text-muted small italic">Sélectionnez d’abord une équipe pour charger les espaces de travail disponibles.</p>
                 {% endif %}
             </div>
 
             <!-- Advanced Details -->
             <div class="crm-card border-0 shadow-sm bg-light">
-                <h6 class="text-uppercase text-muted fw-bold small mb-4 letter-spacing-wider">Advanced Connection Details</h6>
+                <h6 class="text-uppercase text-muted fw-bold small mb-4 letter-spacing-wider">Détails de connexion avancés</h6>
                 <div class="row g-3">
                     <div class="col-md-4">
-                        <label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Team ID</label>
+                        <label class="text-muted x-small fw-bold text-uppercase d-block mb-1">ID d’équipe</label>
                         <code class="small text-dark">{{ config.team_id|default:"--" }}</code>
                     </div>
                     <div class="col-md-4">
-                        <label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Workspace ID</label>
+                        <label class="text-muted x-small fw-bold text-uppercase d-block mb-1">ID d’espace de travail</label>
                         <code class="small text-dark">{{ config.workspace_id|default:"--" }}</code>
                     </div>
                     <div class="col-md-4">
-                        <label class="text-muted x-small fw-bold text-uppercase d-block mb-1">API Subdomain</label>
+                        <label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Sous-domaine API</label>
                         <code class="small text-primary fw-bold">{{ config.workspace_subdomain|default:"--" }}</code>
                     </div>
                 </div>
@@ -124,15 +124,15 @@
         <!-- Sidebar / Status -->
         <div class="col-lg-4">
             <div class="crm-card bg-dark text-white border-0 shadow-lg p-4 sticky-top" style="top: 100px;">
-                <h5 class="fw-bold mb-4 text-white">Bridge Readiness</h5>
-                
+                <h5 class="fw-bold mb-4 text-white">État de la passerelle</h5>
+
                 <div class="mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="small fw-bold text-uppercase opacity-50">Token Status</span>
+                        <span class="small fw-bold text-uppercase opacity-50">Statut du jeton</span>
                         {% if config.validation_status == 'VALID' %}
-                            <span class="text-success small fw-bold">VALID</span>
+                            <span class="text-success small fw-bold">VALIDE</span>
                         {% else %}
-                            <span class="text-danger small fw-bold">INVALID</span>
+                            <span class="text-danger small fw-bold">INVALIDE</span>
                         {% endif %}
                     </div>
                     <div class="progress" style="height: 6px; background-color: rgba(255,255,255,0.1);">
@@ -142,11 +142,11 @@
 
                 <div class="mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="small fw-bold text-uppercase opacity-50">Team Selected</span>
+                        <span class="small fw-bold text-uppercase opacity-50">Équipe sélectionnée</span>
                         {% if config.team_id %}
-                            <span class="text-success small fw-bold">YES</span>
+                            <span class="text-success small fw-bold">OUI</span>
                         {% else %}
-                            <span class="text-warning small fw-bold">NO</span>
+                            <span class="text-warning small fw-bold">NON</span>
                         {% endif %}
                     </div>
                     <div class="progress" style="height: 6px; background-color: rgba(255,255,255,0.1);">
@@ -156,11 +156,11 @@
 
                 <div class="mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="small fw-bold text-uppercase opacity-50">Workspace Active</span>
+                        <span class="small fw-bold text-uppercase opacity-50">Espace de travail actif</span>
                         {% if config.workspace_id %}
-                            <span class="text-success small fw-bold">YES</span>
+                            <span class="text-success small fw-bold">OUI</span>
                         {% else %}
-                            <span class="text-warning small fw-bold">NO</span>
+                            <span class="text-warning small fw-bold">NON</span>
                         {% endif %}
                     </div>
                     <div class="progress" style="height: 6px; background-color: rgba(255,255,255,0.1);">
@@ -170,11 +170,11 @@
 
                 {% if config.workspace_subdomain %}
                     <div class="alert alert-success border-0 bg-white bg-opacity-10 text-white small mb-0 mt-4">
-                        <i class="fa-solid fa-check-circle me-2"></i> Bridge is ready for transactions.
+                        <i class="fa-solid fa-check-circle me-2"></i> La passerelle est prête pour les transactions.
                     </div>
                 {% else %}
                     <div class="alert alert-warning border-0 bg-white bg-opacity-10 text-white small mb-0 mt-4">
-                        <i class="fa-solid fa-circle-exclamation me-2"></i> Select a workspace to finish.
+                        <i class="fa-solid fa-circle-exclamation me-2"></i> Sélectionnez un espace de travail pour terminer.
                     </div>
                 {% endif %}
             </div>

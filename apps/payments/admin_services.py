@@ -22,6 +22,7 @@ keep. Every method below therefore records the rejection audit row, lets the
 `with transaction.atomic():` block exit normally (so it commits), and only
 raises AFTER that block has exited.
 """
+from decimal import Decimal
 from typing import Optional
 
 from django.db import transaction
@@ -40,8 +41,10 @@ from .models import (
     Order,
     PaymentAttempt,
     PaymentConfirmation,
+    TaraWebhookEvent,
 )
 from .services import (
+    DuplicatePaymentError,
     InstallmentService,
     InvalidStateTransitionError,
     OrderService,
@@ -82,6 +85,7 @@ class AdminAuditService:
         reason: str, outcome_category: str,
         order: Optional[Order] = None, installment: Optional[Installment] = None,
         payment_attempt: Optional[PaymentAttempt] = None,
+        webhook_event: Optional[TaraWebhookEvent] = None,
         previous_state: str = "", resulting_state: str = "",
         request=None,
     ) -> AdminAuditLog:
@@ -101,6 +105,7 @@ class AdminAuditService:
             order=order,
             installment=installment,
             payment_attempt=payment_attempt,
+            webhook_event=webhook_event,
             previous_state=previous_state,
             resulting_state=resulting_state,
             reason=reason,
@@ -382,6 +387,12 @@ class OrderAdministrationService:
         return order
 
 
+CHECKABLE_ATTEMPT_STATUSES = (
+    PaymentAttempt.Status.LINK_CREATED, PaymentAttempt.Status.PENDING, PaymentAttempt.Status.UNKNOWN,
+    PaymentAttempt.Status.FAILED, PaymentAttempt.Status.EXPIRED,
+)
+
+
 class PaymentAttemptAdministrationService:
     """Administrative operations on PaymentAttempt (Phase 8)."""
 
@@ -393,15 +404,26 @@ class PaymentAttemptAdministrationService:
         applying a result), but the Tara call itself is a direct, on-demand
         admin operation, not a durable/queued one — consistent with how the
         webhook path itself already calls Tara synchronously within its own
-        request/response cycle. Only PENDING/UNKNOWN attempts are eligible.
-        Never creates a new PaymentAttempt or payment link. Never marks paid
-        from administrator input — only Tara's own response can do that,
-        via the same PaymentCreditService the webhook path uses.
+        request/response cycle. LINK_CREATED/PENDING/UNKNOWN/FAILED/EXPIRED
+        attempts are eligible. FAILED/EXPIRED are included because a customer
+        can still pay on the same Tara link after a first failed try — Tara's
+        verified SUCCESS then reopens the attempt (see
+        PaymentCreditService._reopen_for_late_success). Of the remaining
+        states, LINK_CREATED is also — LINK_CREATED is included because a customer can complete
+        payment on a generated link before Tara's webhook ever arrives (or
+        if it's lost entirely), leaving the attempt stuck with nothing to
+        surface it for reconciliation otherwise; PaymentAttempt's own
+        transition table already allows LINK_CREATED -> SUCCEEDED/FAILED
+        directly, so no state-machine change was needed, only this
+        eligibility gate. Never creates a new PaymentAttempt or payment
+        link. Never marks paid from administrator input — only Tara's own
+        response can do that, via the same PaymentCreditService the webhook
+        path uses.
         """
         log_service_start(logger, "PaymentAttemptAdministrationService", "check_tara_status", attempt_id=attempt_id)
 
         attempt = PaymentAttempt.objects.select_related("installment__order").get(pk=attempt_id)
-        if attempt.status not in (PaymentAttempt.Status.PENDING, PaymentAttempt.Status.UNKNOWN):
+        if attempt.status not in CHECKABLE_ATTEMPT_STATUSES:
             AdminAuditService().record(
                 administrator=administrator, action_type=AdminAuditLog.ActionType.CHECK_TARA_STATUS,
                 target_type=AdminAuditLog.TargetType.PAYMENT_ATTEMPT, target_reference=_safe_reference(attempt),
@@ -410,7 +432,7 @@ class PaymentAttemptAdministrationService:
                 reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
                 request=request,
             )
-            raise AdminActionError("Only PENDING or UNKNOWN payment attempts can be checked.")
+            raise AdminActionError("Only LINK_CREATED, PENDING, UNKNOWN, FAILED, or EXPIRED payment attempts can be checked.")
 
         previous_status = attempt.status
 
@@ -483,6 +505,14 @@ class PaymentAttemptAdministrationService:
                 log_service_failure(logger, "PaymentAttemptAdministrationService", "check_tara_status", e, attempt_id=attempt_id)
                 attempt.refresh_from_db()
                 write_audit(attempt, AdminAuditLog.OutcomeCategory.FAILED)
+            except (DuplicatePaymentError, InvalidStateTransitionError) as e:
+                log_service_failure(logger, "PaymentAttemptAdministrationService", "check_tara_status", e, attempt_id=attempt_id)
+                attempt.refresh_from_db()
+                write_audit(attempt, AdminAuditLog.OutcomeCategory.FAILED)
+                raise AdminActionError(
+                    "Tara confirms this payment, but it could not be credited automatically "
+                    "(installment already paid via another attempt, or cancelled/waived). Manual review required."
+                ) from e
         elif normalized == TaraTransactionStatus.FAILURE:
             attempt = PaymentCreditService().apply_verified_failure(
                 attempt.id, on_applied=lambda a: write_audit(a, AdminAuditLog.OutcomeCategory.SUCCESS),
@@ -496,6 +526,121 @@ class PaymentAttemptAdministrationService:
             attempt_id=attempt.id, normalized_result=normalized.value,
         )
         return attempt
+
+
+class ReconciliationAdministrationService:
+    """
+    Administrative resolution of an UNCORRELATED TaraWebhookEvent — a payment
+    Tara confirmed that could not be matched to a PaymentAttempt by
+    tara_product_id, most commonly a payment made directly in the Tara app
+    rather than through our checkout link (docs/PRODUCT_CADRAGE_PMI.md §6
+    exception table, "paiement confirmé, utilisateur ou achat introuvable" —
+    reserved to the administrator role, not the general gestionnaire).
+
+    Never fabricates a payment: the administrator-confirmed amount is what
+    gets credited (PaymentCreditService.apply_verified_success's
+    verified_amount), and an amount below the installment's expected_amount
+    is refused outright rather than accepted at the wrong figure — the
+    cumulative-balance rule a genuine partial-payment attribution would need
+    is an open product decision (D3) and is deliberately not implemented here.
+    """
+
+    def attribute_webhook_event(
+        self, webhook_event_id: int, installment_id: int, confirmed_amount: Decimal,
+        reason: str, administrator, request=None,
+    ) -> TaraWebhookEvent:
+        log_service_start(
+            logger, "ReconciliationAdministrationService", "attribute_webhook_event",
+            webhook_event_id=webhook_event_id, installment_id=installment_id,
+        )
+        error_message = None
+        with transaction.atomic():
+            event = TaraWebhookEvent.objects.select_for_update().get(pk=webhook_event_id)
+            installment = Installment.objects.select_for_update().get(pk=installment_id)
+            order = Order.objects.select_for_update().get(pk=installment.order_id)
+            previous_status = event.processing_status
+
+            if event.processing_status != TaraWebhookEvent.ProcessingStatus.UNCORRELATED:
+                error_message = "Seul un événement non rapproché (UNCORRELATED) peut être associé."
+            elif installment.status in (Installment.Status.PAID, Installment.Status.CANCELLED, Installment.Status.WAIVED):
+                error_message = f"Le versement n°{installment.sequence} est déjà {installment.status} — impossible d'y associer ce paiement."
+            elif confirmed_amount < installment.expected_amount:
+                error_message = (
+                    "Le montant confirmé est inférieur au montant attendu pour ce versement — le rattachement "
+                    "d'un paiement partiel n'est pas encore pris en charge (règle de cumul non arrêtée, décision D3)."
+                )
+
+            if error_message is not None:
+                AdminAuditService().record(
+                    administrator=administrator, action_type=AdminAuditLog.ActionType.ATTRIBUTE_PAYMENT,
+                    target_type=AdminAuditLog.TargetType.TARA_WEBHOOK_EVENT, target_reference=_safe_reference(event),
+                    order=order, installment=installment, webhook_event=event,
+                    previous_state=previous_status, resulting_state=previous_status,
+                    reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
+                    request=request,
+                )
+            else:
+                # Reuse an existing non-terminal attempt on this installment if
+                # our checkout already created one (e.g. it just failed to match
+                # this specific webhook for another reason); otherwise this is a
+                # genuine direct-to-Tara payment and needs a new attempt row for
+                # PaymentCreditService to credit against.
+                attempt = installment.payment_attempts.select_for_update().filter(
+                    status__in=_NON_TERMINAL_ATTEMPT_STATUSES,
+                ).first()
+                if attempt is None:
+                    attempt = PaymentAttempt.objects.create(
+                        installment=installment, expected_amount=installment.expected_amount,
+                        currency=installment.currency, status=PaymentAttempt.Status.PENDING,
+                    )
+
+                def write_audit(applied_attempt: PaymentAttempt, outcome: str) -> None:
+                    AdminAuditService().record(
+                        administrator=administrator, action_type=AdminAuditLog.ActionType.ATTRIBUTE_PAYMENT,
+                        target_type=AdminAuditLog.TargetType.TARA_WEBHOOK_EVENT, target_reference=_safe_reference(event),
+                        order=order, installment=installment, payment_attempt=applied_attempt, webhook_event=event,
+                        previous_state=previous_status, resulting_state=TaraWebhookEvent.ProcessingStatus.PROCESSED,
+                        reason=reason, outcome_category=outcome, request=request,
+                    )
+
+                try:
+                    attempt = PaymentCreditService().apply_verified_success(
+                        attempt.id, tara_payment_id=(event.tara_payment_id or None), verified_amount=confirmed_amount,
+                        on_applied=lambda a, newly_applied: write_audit(a, AdminAuditLog.OutcomeCategory.SUCCESS),
+                    )
+                except PaymentIdConflictError as e:
+                    log_service_failure(
+                        logger, "ReconciliationAdministrationService", "attribute_webhook_event", e,
+                        webhook_event_id=webhook_event_id,
+                    )
+                    AdminAuditService().record(
+                        administrator=administrator, action_type=AdminAuditLog.ActionType.ATTRIBUTE_PAYMENT,
+                        target_type=AdminAuditLog.TargetType.TARA_WEBHOOK_EVENT, target_reference=_safe_reference(event),
+                        order=order, installment=installment, webhook_event=event,
+                        previous_state=previous_status, resulting_state=previous_status,
+                        reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.FAILED,
+                        request=request,
+                    )
+                    error_message = "Ce paymentId Tara est déjà rattaché à une autre tentative de paiement."
+                else:
+                    event.processing_status = TaraWebhookEvent.ProcessingStatus.PROCESSED
+                    event.verification_mode = TaraWebhookEvent.VerificationMode.SERVER_TO_SERVER
+                    event.verification_result = TaraWebhookEvent.VerificationResult.SUCCESS
+                    event.failure_category = ""
+                    event.payment_attempt = attempt
+                    event.processed_at = timezone.now()
+                    event.save(update_fields=[
+                        "processing_status", "verification_mode", "verification_result",
+                        "failure_category", "payment_attempt", "processed_at", "updated_at",
+                    ])
+                    log_service_success(
+                        logger, "ReconciliationAdministrationService", "attribute_webhook_event",
+                        webhook_event_id=event.id, installment_id=installment.id,
+                    )
+
+        if error_message is not None:
+            raise AdminActionError(error_message)
+        return event
 
 
 class PaymentConfirmationAdministrationService:

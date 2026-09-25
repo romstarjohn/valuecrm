@@ -39,8 +39,16 @@ def test_anonymous_cannot_view_orders(client, order):
 
 
 def test_staff_without_permissions_cannot_view_orders(staff_client, order):
+    """
+    Non-superuser staff are now blocked at the admin-site level, not just the
+    per-model permission level — shared/admin_site.py::SuperuserOnlyAdminSite
+    (AGENT.md) restricts the whole /admin/ backend to is_superuser accounts,
+    so this is a redirect-to-login now, never a 403 from Django's normal
+    per-model ModelAdmin permission check.
+    """
     response = staff_client.get(CHANGELIST_URL)
-    assert response.status_code == 403
+    assert response.status_code == 302
+    assert "/admin/login/" in response.url
 
 
 def test_authorized_superuser_can_view_orders(superuser_client, order):
@@ -52,7 +60,9 @@ def test_authorized_superuser_can_view_orders(superuser_client, order):
 def test_authorized_superuser_can_view_order_detail_with_installments(superuser_client, order):
     response = superuser_client.get(change_url(order))
     assert response.status_code == 200
-    assert b"100000.00" in response.content or b"100,000.00" in response.content
+    # LANGUAGE_CODE="fr" (AGENT.md) localizes Django's own number rendering:
+    # comma decimal separator, no thousands grouping.
+    assert b"100000,00" in response.content
 
 
 # --- Read-only: no add/change/delete exposed in Phase 3 ---

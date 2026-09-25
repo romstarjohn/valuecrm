@@ -1,28 +1,28 @@
 {% extends "base.html" %}
 
-{% block title %}Bulk Enrollment | ValuedCRM{% endblock %}
+{% block title %}Inscription groupée | {{ BRAND_NAME }}{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title="Bulk Enrollment" subtitle="Enroll multiple students in a course at once." %}
+{% include "components/page_header.html" with title="Inscription groupée" subtitle="Inscrivez plusieurs étudiants à une formation en une seule fois." %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="row">
         <div class="col-lg-12">
             {% if bulk_result %}
                 <div class="crm-card mb-4 border-start border-4 border-info">
-                    <h5 class="fw-bold mb-4">Bulk Processing Summary</h5>
+                    <h5 class="fw-bold mb-4">Résumé du traitement groupé</h5>
                     <div class="row g-4 text-center">
                         <div class="col-md-4 border-end">
                             <h3 class="fw-bold mb-0">{{ bulk_result.total }}</h3>
-                            <div class="text-muted small text-uppercase">Total Processed</div>
+                            <div class="text-muted small text-uppercase">Total traité</div>
                         </div>
                         <div class="col-md-4 border-end">
                             <h3 class="fw-bold mb-0 text-success">{{ bulk_result.success_count }}</h3>
-                            <div class="text-muted small text-uppercase">Successful</div>
+                            <div class="text-muted small text-uppercase">Réussies</div>
                         </div>
                         <div class="col-md-4">
                             <h3 class="fw-bold mb-0 text-danger">{{ bulk_result.failure_count }}</h3>
-                            <div class="text-muted small text-uppercase">Failed</div>
+                            <div class="text-muted small text-uppercase">Échouées</div>
                         </div>
                     </div>
                 </div>
@@ -31,9 +31,9 @@
                     <table class="table table-sm align-middle">
                         <thead>
                             <tr>
-                                <th>Email</th>
-                                <th>Status</th>
-                                <th class="text-end">Details</th>
+                                <th>E-mail</th>
+                                <th>Statut</th>
+                                <th class="text-end">Détails</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -45,7 +45,7 @@
                                     {% if res.enrollment_attempt_id %}
                                         <a href="{% url 'enrollments:detail' res.enrollment_attempt_id %}" class="btn-crm btn-crm-outline btn-crm-sm">Audit</a>
                                     {% else %}
-                                        <span class="text-muted small fst-italic">{{ res.error_message|default:"Internal Error" }}</span>
+                                        <span class="text-muted small fst-italic">{{ res.error_message|default:"Erreur interne" }}</span>
                                     {% endif %}
                                 </td>
                             </tr>
@@ -55,7 +55,7 @@
                 </div>
 
                 <div class="d-flex justify-content-center mb-5">
-                    <a href="{% url 'enrollments:bulk' %}" class="btn-crm btn-crm-outline">Start New Bulk Process</a>
+                    <a href="{% url 'enrollments:bulk' %}" class="btn-crm btn-crm-outline">Démarrer un nouveau traitement groupé</a>
                 </div>
 
             {% else %}
@@ -65,7 +65,7 @@
                             <form method="post" id="bulk-enrollment-form">
                                 {% csrf_token %}
                                 <div class="mb-4">
-                                    <label class="form-label small fw-bold text-muted" for="{{ form.course_id.id_for_label }}">Select Target Course</label>
+                                    <label class="form-label small fw-bold text-muted" for="{{ form.course_id.id_for_label }}">Choisir la formation cible</label>
                                     {{ form.course_id }}
                                     {% if form.course_id.errors %}
                                         <div class="form-error">{{ form.course_id.errors|striptags }}</div>
@@ -73,39 +73,39 @@
                                 </div>
 
                                 <div class="mb-4">
-                                    <label class="form-label small fw-bold text-muted" for="{{ form.emails.id_for_label }}">Email Addresses</label>
+                                    <label class="form-label small fw-bold text-muted" for="{{ form.emails.id_for_label }}">Adresses e-mail</label>
                                     {{ form.emails }}
-                                    <div class="form-text small mt-2">Paste emails one per line. We'll automatically identify existing contacts.</div>
+                                    <div class="form-text small mt-2">Collez les e-mails, un par ligne. Nous identifierons automatiquement les contacts existants.</div>
                                     {% if form.emails.errors %}
                                         <div class="form-error">{{ form.emails.errors|striptags }}</div>
                                     {% endif %}
                                 </div>
 
                                 <button type="submit" class="btn-crm btn-crm-primary w-100 py-3 fs-5" id="bulk-enrollment-form-submit">
-                                    <i class="fa-solid fa-bolt me-2" aria-hidden="true"></i>Run Bulk Enrollment
+                                    <i class="fa-solid fa-bolt me-2" aria-hidden="true"></i>Lancer l'inscription groupée
                                 </button>
                             </form>
                         </div>
                     </div>
                     <div class="col-lg-4">
                         <div class="crm-card bg-dark text-white border-0 h-100">
-                            <h5 class="fw-bold mb-4">Bulk Process Rules</h5>
+                            <h5 class="fw-bold mb-4">Règles du traitement groupé</h5>
                             <ul class="list-unstyled">
                                 <li class="mb-3 d-flex align-items-top">
                                     <i class="fa-solid fa-circle-check text-primary mt-1 me-3" aria-hidden="true"></i>
-                                    <span>Maximum of 50 emails per request.</span>
+                                    <span>Maximum 50 e-mails par requête.</span>
                                 </li>
                                 <li class="mb-3 d-flex align-items-top">
                                     <i class="fa-solid fa-circle-check text-primary mt-1 me-3" aria-hidden="true"></i>
-                                    <span>Each student is verified/created in CF before enrollment.</span>
+                                    <span>Chaque étudiant est vérifié/créé dans CF avant l'inscription.</span>
                                 </li>
                                 <li class="mb-3 d-flex align-items-top">
                                     <i class="fa-solid fa-circle-check text-primary mt-1 me-3" aria-hidden="true"></i>
-                                    <span>Failed individual enrollments won't stop the queue.</span>
+                                    <span>Un échec d'inscription individuel n'interrompt pas la file.</span>
                                 </li>
                                 <li class="mb-3 d-flex align-items-top">
                                     <i class="fa-solid fa-circle-check text-primary mt-1 me-3" aria-hidden="true"></i>
-                                    <span>Audit logs are created for every single student attempt.</span>
+                                    <span>Un journal d'audit est créé pour chaque tentative d'inscription.</span>
                                 </li>
                             </ul>
                         </div>
@@ -126,7 +126,7 @@
         form.addEventListener("submit", function () {
             var btn = document.getElementById("bulk-enrollment-form-submit");
             btn.disabled = true;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Processing…';
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Traitement en cours…';
         });
     }
 </script>

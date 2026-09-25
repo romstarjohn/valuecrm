@@ -27,7 +27,7 @@ def test_course_sync_view_get(staff_client):
     url = reverse("courses:sync")
     response = staff_client.get(url)
     assert response.status_code == 200
-    assert "Sync Courses" in response.content.decode()
+    assert "Synchroniser les formations" in response.content.decode()
 
 @pytest.mark.django_db
 def test_course_sync_view_post_success(mocker, staff_client):
@@ -58,7 +58,7 @@ def test_course_sync_view_missing_config_fails(staff_client):
     # No config
     url = reverse("courses:sync")
     response = staff_client.post(url, follow=True)
-    assert "No active ClickFunnels configuration found" in response.content.decode()
+    assert "Aucune configuration ClickFunnels active trouvée" in response.content.decode()
 
 @pytest.mark.django_db
 def test_course_sync_view_missing_workspace_fails(staff_client):
@@ -70,4 +70,4 @@ def test_course_sync_view_missing_workspace_fails(staff_client):
     )
     url = reverse("courses:sync")
     response = staff_client.post(url, follow=True)
-    assert "Select a workspace before syncing courses" in response.content.decode()
+    assert "Sélectionnez un espace de travail avant de synchroniser les formations" in response.content.decode()

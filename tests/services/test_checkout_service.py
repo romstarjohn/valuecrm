@@ -13,6 +13,7 @@ from apps.payments.services import (
     CheckoutService,
     InstallmentService,
     OrderService,
+    PaymentAttemptService,
 )
 from integrations.payments.tara.exceptions import (
     TaraClientError,
@@ -100,7 +101,7 @@ def test_tara_called_with_authoritative_data_not_browser_input(service, contact,
     assert call_kwargs["product_id"] == attempt.tara_product_id
     assert call_kwargs["product_price"] == Decimal("100000.00")  # from Installment, not any browser value
     assert call_kwargs["web_hook_url"] == "https://checkout.example.com/api/tara/webhook/"
-    assert call_kwargs["return_url"].startswith("https://checkout.example.com/checkout/status/")
+    assert call_kwargs["return_url"].startswith("https://checkout.example.com/paiement/status/")
     assert "api_key" not in call_kwargs
     assert "business_id" not in call_kwargs
 
@@ -507,3 +508,66 @@ def test_bare_order_reference_is_not_a_valid_token():
     service = CheckoutService()
     with pytest.raises(CheckoutError):
         service.resolve_signed_reference("00000000-0000-0000-0000-000000000000")
+
+
+# --- request_status_refresh: customer-triggered resend-webhook nudge ---
+
+@pytest.mark.parametrize("status", [
+    PaymentAttempt.Status.LINK_CREATED, PaymentAttempt.Status.PENDING, PaymentAttempt.Status.UNKNOWN,
+])
+def test_request_status_refresh_calls_resend_webhook_for_eligible_statuses(service, contact, plan, mocker, status):
+    order, _ = OrderService().create_order(contact, plan.id, "idem-refresh-eligible")
+    installment = order.installments.get()
+    attempt = PaymentAttemptService().create_attempt(installment)
+    PaymentAttemptService().transition(attempt, PaymentAttempt.Status.LINK_CREATED)
+    if status != PaymentAttempt.Status.LINK_CREATED:
+        PaymentAttemptService().transition(attempt, status)
+
+    mock_client = Mock()
+    mocker.patch("apps.payments.services.TaraConfigService.get_client", return_value=mock_client)
+
+    service.request_status_refresh(order)
+
+    mock_client.resend_webhook.assert_called_once_with(attempt.tara_product_id)
+
+
+@pytest.mark.parametrize("status", [
+    PaymentAttempt.Status.CREATED, PaymentAttempt.Status.SUCCEEDED,
+    PaymentAttempt.Status.FAILED, PaymentAttempt.Status.EXPIRED,
+])
+def test_request_status_refresh_skips_ineligible_statuses(service, contact, plan, mocker, status):
+    order, _ = OrderService().create_order(contact, plan.id, f"idem-refresh-{status}")
+    installment = order.installments.get()
+    attempt = PaymentAttemptService().create_attempt(installment)
+    if status != PaymentAttempt.Status.CREATED:
+        for intermediate in (PaymentAttempt.Status.LINK_CREATED,):
+            if intermediate != status:
+                PaymentAttemptService().transition(attempt, intermediate)
+        PaymentAttemptService().transition(attempt, status)
+
+    mock_client = Mock()
+    mocker.patch("apps.payments.services.TaraConfigService.get_client", return_value=mock_client)
+
+    service.request_status_refresh(order)
+
+    mock_client.resend_webhook.assert_not_called()
+
+
+def test_request_status_refresh_swallows_tara_errors(service, contact, plan, mocker):
+    """A customer clicking 'check again' must never see an error page just because Tara itself failed."""
+    order, _ = OrderService().create_order(contact, plan.id, "idem-refresh-error")
+    installment = order.installments.get()
+    attempt = PaymentAttemptService().create_attempt(installment)
+    PaymentAttemptService().transition(attempt, PaymentAttempt.Status.LINK_CREATED)
+
+    mock_client = Mock()
+    mock_client.resend_webhook.side_effect = TaraServerError("unavailable")
+    mocker.patch("apps.payments.services.TaraConfigService.get_client", return_value=mock_client)
+
+    service.request_status_refresh(order)  # must not raise
+
+
+def test_request_status_refresh_no_installment_is_a_noop(service, contact, plan):
+    order, _ = OrderService().create_order(contact, plan.id, "idem-refresh-noop")
+    order.installments.all().delete()
+    service.request_status_refresh(order)  # must not raise

@@ -56,6 +56,13 @@
 
 .letter-spacing-wide { letter-spacing: 0.05em; }
 
+/* Amounts, dates, references — tabular figures, set in the mono face so
+   money and IDs read as counted, not just typeset (matches code elements). */
+.font-mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
 /* Fixed-height display box for raw JSON/text blocks (addresses, payloads) */
 .data-block {
     min-height: 100px;

@@ -31,8 +31,8 @@ def plan(course):
     )
 
 
-def checkout_url():
-    return reverse("payments:checkout_start")
+def checkout_url(course_slug="bootcamp"):
+    return reverse("payments:checkout_start", args=[course_slug])
 
 
 def valid_payload(plan, idempotency_key=None, **overrides):
@@ -132,6 +132,37 @@ def test_phone_is_normalized(client, plan, mock_tara_success):
     client.post(checkout_url(), data=valid_payload(plan, phone="+237 600 00 00 00"))
     contact = Contact.objects.get()
     assert contact.phone == "+237600000000"
+
+
+@pytest.mark.parametrize("phone", [None, "", "   ", "aucun", "+", "++237600000000"])
+def test_phone_is_required_before_creating_order_or_payment(client, plan, mock_tara_success, phone):
+    payload = valid_payload(plan)
+    if phone is None:
+        payload.pop("phone")
+    else:
+        payload["phone"] = phone
+    response = client.post(checkout_url(), data=payload)
+    assert response.status_code == 200
+    assert "phone" in response.context["form"].errors
+    assert not Order.objects.exists()
+    assert not Contact.objects.filter(email="buyer@example.com").exists()
+    mock_tara_success.create_payment_link.assert_not_called()
+
+
+@pytest.mark.parametrize("field", ["first_name", "last_name"])
+@pytest.mark.parametrize("value", [None, "", "   "])
+def test_names_are_required_before_creating_order_or_payment(client, plan, mock_tara_success, field, value):
+    payload = valid_payload(plan)
+    if value is None:
+        payload.pop(field)
+    else:
+        payload[field] = value
+    response = client.post(checkout_url(), data=payload)
+    assert response.status_code == 200
+    assert field in response.context["form"].errors
+    assert not Order.objects.exists()
+    assert not Contact.objects.filter(email="buyer@example.com").exists()
+    mock_tara_success.create_payment_link.assert_not_called()
 
 
 def test_duplicate_contact_not_created_on_repeat_checkout(client, plan, mock_tara_success):

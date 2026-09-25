@@ -30,6 +30,7 @@ from django.db.models import Q
 
 from .models import Installment, Order, PaymentAttempt, PaymentConfirmation, ReconciliationRun
 from .services import (
+    DuplicatePaymentError,
     InvalidStateTransitionError,
     PaymentAttemptService,
     PaymentConfirmationDeliveryService,
@@ -198,7 +199,7 @@ class ReconciliationService:
             try:
                 PaymentCreditService().apply_verified_success(attempt_id)
                 counters["verified_successes"] += 1
-            except (InvalidStateTransitionError, PaymentIdConflictError):
+            except (InvalidStateTransitionError, PaymentIdConflictError, DuplicatePaymentError):
                 counters["still_pending_or_unknown"] += 1
         elif normalized == TaraTransactionStatus.FAILURE:
             try:

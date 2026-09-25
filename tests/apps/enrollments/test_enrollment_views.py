@@ -96,7 +96,7 @@ def test_enrollment_bulk_view_post(mocker, staff_client, setup_data):
     response = staff_client.post(url, data=payload)
     
     assert response.status_code == 200
-    assert "Bulk Processing Summary" in response.content.decode()
+    assert "Résumé du traitement groupé" in response.content.decode()
 
 @pytest.mark.django_db
 def test_enrollment_detail_view(staff_client, setup_data):

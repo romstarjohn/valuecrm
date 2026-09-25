@@ -17,10 +17,10 @@
                     <span class="d-none d-sm-inline">{{ user.username }}</span>
                 </a>
                 <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-3">
-                    <li><h6 class="dropdown-header small text-uppercase">Account</h6></li>
-                    <li><a class="dropdown-item py-2" href="/admin/password_change/"><i class="fa-solid fa-key me-2 small opacity-50"></i>Change Password</a></li>
+                    <li><h6 class="dropdown-header small text-uppercase">Compte</h6></li>
+                    <li><a class="dropdown-item py-2" href="{% url 'password_change' %}"><i class="fa-solid fa-key me-2 small opacity-50"></i>Changer le mot de passe</a></li>
                     <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item py-2 text-danger fw-bold" href="/admin/logout/"><i class="fa-solid fa-right-from-bracket me-2 small"></i>Sign Out</a></li>
+                    <li><a class="dropdown-item py-2 text-danger fw-bold" href="{% url 'logout' %}"><i class="fa-solid fa-right-from-bracket me-2 small"></i>Déconnexion</a></li>
                 </ul>
             </div>
         </div>

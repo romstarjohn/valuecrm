@@ -1,27 +1,27 @@
 {% extends "base.html" %}
-{% block title %}Payment Attempts | ValuedCRM{% endblock %}
+{% block title %}Tentatives de paiement | {{ BRAND_NAME }}{% endblock %}
 {% block content %}
-{% include "components/page_header.html" with title="Tara Payment Attempts" subtitle="Internal status kept clearly separate from raw Tara provider facts." %}
+{% include "components/page_header.html" with title="Tentatives de paiement Tara" subtitle="Statut interne toujours distinct des données brutes fournies par Tara." %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="table-container mb-4 shadow-sm border-0">
         <div class="table-toolbar flex-wrap gap-3">
             <form method="get" class="d-flex flex-wrap align-items-center gap-2 flex-grow-1">
                 <select name="status" class="form-select form-select-sm w-auto">
-                    <option value="">All Internal Statuses</option>
+                    <option value="">Tous les statuts internes</option>
                     {% for value, label in status_options %}
                         <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                 </select>
-                <input type="text" name="provider_status" class="form-control form-control-sm w-auto" placeholder="Provider status contains..." value="{{ provider_status_filter }}">
+                <input type="text" name="provider_status" class="form-control form-control-sm w-auto" placeholder="Statut fournisseur contient..." value="{{ provider_status_filter }}">
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" name="pending_unknown" value="1" id="pendingUnknown" {% if pending_unknown_only == "1" %}checked{% endif %}>
-                    <label class="form-check-label small" for="pendingUnknown">PENDING/UNKNOWN only</label>
+                    <label class="form-check-label small" for="pendingUnknown">En attente/inconnu uniquement</label>
                 </div>
                 <input type="date" name="date_from" class="form-control form-control-sm w-auto" value="{{ date_from }}">
                 <input type="date" name="date_to" class="form-control form-control-sm w-auto" value="{{ date_to }}">
-                <button type="submit" class="btn btn-crm btn-crm-primary btn-sm">Apply</button>
-                <a href="{% url 'operations:payment_attempt_list' %}" class="btn btn-crm-outline btn-sm">Reset</a>
+                <button type="submit" class="btn btn-crm btn-crm-primary btn-sm">Appliquer</button>
+                <a href="{% url 'operations:payment_attempt_list' %}" class="btn btn-crm-outline btn-sm">Réinitialiser</a>
             </form>
         </div>
 
@@ -36,15 +36,15 @@
                     <td class="small">{{ attempt.expected_amount }} {{ attempt.currency }}</td>
                     <td>
                         <a href="{% url 'operations:order_detail' attempt.installment.order.reference %}" class="text-decoration-none small fw-bold">{{ attempt.installment.order.reference }}</a>
-                        <div class="text-muted small">installment #{{ attempt.installment.sequence }}</div>
+                        <div class="text-muted small">versement n°{{ attempt.installment.sequence }}</div>
                     </td>
-                    <td class="small text-muted">{{ attempt.updated_at|date:"M d, H:i" }}</td>
+                    <td class="small text-muted">{{ attempt.updated_at|date:"d M, H:i" }}</td>
                     <td class="text-end">
                         {% if can_check_tara_status %}
-                            {% if attempt.status == "PENDING" or attempt.status == "UNKNOWN" %}
+                            {% if attempt.status == "LINK_CREATED" or attempt.status == "PENDING" or attempt.status == "UNKNOWN" or attempt.status == "FAILED" or attempt.status == "EXPIRED" %}
                             {% include "components/action_menu.html" %}
                                 {% block menu_items %}
-                                    <li><a class="dropdown-item" href="{% url 'operations:payment_attempt_check_status' attempt.pk %}"><i class="fa-solid fa-satellite-dish me-2 small"></i>Check Tara Status</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'operations:payment_attempt_check_status' attempt.pk %}"><i class="fa-solid fa-satellite-dish me-2 small"></i>Vérifier le statut Tara</a></li>
                                 {% endblock %}
                             {% endif %}
                         {% endif %}
@@ -53,7 +53,7 @@
                 {% endfor %}
             {% include "components/table_end.html" %}
         {% else %}
-            {% include "components/table_empty_state.html" with title="No payment attempts found" description="Adjust your filters." %}
+            {% include "components/table_empty_state.html" with title="Aucune tentative de paiement trouvée" description="Ajustez vos filtres." %}
         {% endif %}
     </div>
     {% if page_obj %}{% include "components/pagination.html" with page_obj=page_obj %}{% endif %}

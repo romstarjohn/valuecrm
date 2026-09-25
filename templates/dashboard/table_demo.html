@@ -1,29 +1,29 @@
 {% extends "base.html" %}
 
-{% block title %}Table Components Demo | ValuedCRM{% endblock %}
+{% block title %}Table Components Demo | {{ BRAND_NAME }}{% endblock %}
 
 {% block content %}
 <div class="container-fluid p-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h1 class="h3 fw-bold mb-1">CRM Components Demo</h1>
-            <p class="text-muted small mb-0">Showcasing the reusable table and UI components.</p>
+            <h1 class="h3 fw-bold mb-1">Démo des composants CRM</h1>
+            <p class="text-muted small mb-0">Présentation des composants de tableau et d’interface réutilisables.</p>
         </div>
         <div class="d-flex gap-2">
-            <button class="btn btn-crm btn-crm-outline">Secondary Action</button>
-            <button class="btn btn-crm btn-crm-primary">Primary Action</button>
+            <button class="btn btn-crm btn-crm-outline">Action secondaire</button>
+            <button class="btn btn-crm btn-crm-primary">Action principale</button>
         </div>
     </div>
 
     <!-- Toolbar Demo -->
     <div class="table-container shadow-sm border-0 mb-4">
-        {% include "components/table_toolbar.html" with has_search=True search_placeholder="Search demo data..." has_filters=True %}
+        {% include "components/table_toolbar.html" with has_search=True search_placeholder="Rechercher dans les données de démo..." has_filters=True %}
             {% block table_filters %}
-                {% include "components/filter_dropdown.html" with label="Status" options=status_options %}
+                {% include "components/filter_dropdown.html" with label="Statut" options=status_options %}
             {% endblock %}
             {% block table_actions %}
                 <button class="btn btn-crm btn-crm-primary btn-sm">
-                    <i class="fa-solid fa-plus me-2"></i>Add Record
+                    <i class="fa-solid fa-plus me-2"></i>Ajouter un enregistrement
                 </button>
             {% endblock %}
         
@@ -43,8 +43,8 @@
                     <td class="text-end">
                         {% include "components/action_menu.html" %}
                             {% block menu_items %}
-                                <li><a class="dropdown-item" href="#"><i class="fa-solid fa-edit me-2 small"></i>Edit</a></li>
-                                <li><a class="dropdown-item text-danger" href="#"><i class="fa-solid fa-trash me-2 small"></i>Delete</a></li>
+                                <li><a class="dropdown-item" href="#"><i class="fa-solid fa-edit me-2 small"></i>Modifier</a></li>
+                                <li><a class="dropdown-item text-danger" href="#"><i class="fa-solid fa-trash me-2 small"></i>Supprimer</a></li>
                             {% endblock %}
                     </td>
                 </tr>
@@ -59,16 +59,16 @@
     <hr class="my-5">
 
     <!-- Empty State Demo -->
-    <h4 class="mb-4">Empty State Variation</h4>
-    {% include "components/table_empty_state.html" with title="No contacts found" description="Try adjusting your search or filters to find what you're looking for." action_label="Add New Contact" action_url="#" action_icon="fa-solid fa-plus" %}
+    <h4 class="mb-4">Variante d’état vide</h4>
+    {% include "components/table_empty_state.html" with title="Aucun contact trouvé" description="Essayez d’ajuster votre recherche ou vos filtres." action_label="Ajouter un contact" action_url="#" action_icon="fa-solid fa-plus" %}
 
 </div>
 
 <!-- Bulk Actions Mockup -->
 {% include "components/bulk_actions.html" %}
     {% block bulk_buttons %}
-        <button class="btn btn-sm btn-primary rounded-pill px-3">Bulk Delete</button>
-        <button class="btn btn-sm btn-outline-light rounded-pill px-3">Bulk Export</button>
+        <button class="btn btn-sm btn-primary rounded-pill px-3">Supprimer en masse</button>
+        <button class="btn btn-sm btn-outline-light rounded-pill px-3">Exporter en masse</button>
     {% endblock %}
 
 {% endblock %}

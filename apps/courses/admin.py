@@ -1,14 +1,15 @@
 from django.contrib import admin, messages
-from .models import Course
+from .models import Course, CheckoutOffer, CheckoutBenefit
 from .services import CourseService
 from apps.configuration.services import ConfigurationService
 from integrations.clickfunnels.client import ClickFunnelsClient
 
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
-    list_display = ("name", "cf_course_id", "workspace_id", "created_at")
-    search_fields = ("name", "cf_course_id")
+    list_display = ("name", "slug", "cf_course_id", "workspace_id", "created_at")
+    search_fields = ("name", "slug", "cf_course_id")
     list_filter = ("workspace_id", "created_at")
+    prepopulated_fields = {"slug": ("name",)}
     readonly_fields = ("cf_course_id", "workspace_id", "raw_payload", "created_at", "updated_at")
     actions = ["sync_courses_action"]
 
@@ -43,3 +44,24 @@ class CourseAdmin(admin.ModelAdmin):
             )
         except Exception as e:
             self.message_user(request, f"Error syncing courses: {str(e)}", level=messages.ERROR)
+
+
+class CheckoutBenefitInline(admin.StackedInline):
+    model = CheckoutBenefit
+    extra = 1
+    fields = ("title", "description", "is_bonus", "display_order")
+
+
+@admin.register(CheckoutOffer)
+class CheckoutOfferAdmin(admin.ModelAdmin):
+    list_display = ("title", "course", "is_default", "language", "updated_at")
+    list_filter = ("language",)
+    search_fields = ("title", "course__name")
+    autocomplete_fields = ("course",)
+    prepopulated_fields = {"slug": ("title",)}
+    inlines = [CheckoutBenefitInline]
+    fieldsets = (
+        ("Course", {"fields": ("course", "is_default", "title", "slug", "language", "subtitle")}),
+        ("Product mockup", {"fields": ("mockup_image", "mockup_alt")}),
+        ("Offer details", {"fields": ("highlights", "closing_note")}),
+    )

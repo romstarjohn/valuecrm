@@ -1,24 +1,24 @@
 {% extends "base.html" %}
 
-{% block title %}Payment & Enrollment Operations | ValuedCRM{% endblock %}
+{% block title %}Opérations de paiement et d'inscription | {{ BRAND_NAME }}{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title="Payment & Enrollment Operations" subtitle="Customer → Order → Installments → Tara payment → Verification → Confirmation → Enrollment → Reconciliation." %}
+{% include "components/page_header.html" with title="Opérations de paiement et d'inscription" subtitle="Client → Commande → Versements → Paiement Tara → Vérification → Confirmation → Inscription → Réconciliation." %}
 
 <div class="container-fluid px-4 fade-in pb-5">
 
     <!-- Workflow overview -->
     <div class="crm-card border-0 shadow-sm mb-4">
-        <h6 class="text-uppercase text-muted fw-bold small mb-4 letter-spacing-wider">Workflow</h6>
+        <h6 class="text-uppercase text-muted fw-bold small mb-4 letter-spacing-wider">Déroulement</h6>
         <div class="row g-2 text-center">
-            <div class="col"><div class="small fw-bold">1. Customer</div></div>
-            <div class="col"><div class="small fw-bold">2. Order</div></div>
-            <div class="col"><div class="small fw-bold">3. Installments</div></div>
-            <div class="col"><div class="small fw-bold">4. Tara Payment</div></div>
-            <div class="col"><div class="small fw-bold">5. Verification</div></div>
+            <div class="col"><div class="small fw-bold">1. Client</div></div>
+            <div class="col"><div class="small fw-bold">2. Commande</div></div>
+            <div class="col"><div class="small fw-bold">3. Versements</div></div>
+            <div class="col"><div class="small fw-bold">4. Paiement Tara</div></div>
+            <div class="col"><div class="small fw-bold">5. Vérification</div></div>
             <div class="col"><div class="small fw-bold">6. Confirmation</div></div>
-            <div class="col"><div class="small fw-bold">7. Enrollment</div></div>
-            <div class="col"><div class="small fw-bold">8. Reconciliation</div></div>
+            <div class="col"><div class="small fw-bold">7. Inscription</div></div>
+            <div class="col"><div class="small fw-bold">8. Réconciliation</div></div>
         </div>
     </div>
 
@@ -28,7 +28,7 @@
             <a href="{% url 'operations:order_list' %}" class="text-decoration-none">
                 <div class="crm-card h-100 border-0">
                     <div class="stat-icon bg-primary bg-opacity-10 text-primary mb-3"><i class="fa-solid fa-file-invoice-dollar"></i></div>
-                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Pending Orders</h6>
+                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Commandes en attente</h6>
                     <h3 class="fw-bold mb-0 text-dark">{{ pending_orders }}</h3>
                 </div>
             </a>
@@ -37,7 +37,7 @@
             <a href="{% url 'operations:payment_attempt_list' %}?pending_unknown=1" class="text-decoration-none">
                 <div class="crm-card h-100 border-0">
                     <div class="stat-icon bg-info bg-opacity-10 text-info mb-3"><i class="fa-solid fa-clock"></i></div>
-                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Payments Awaiting Verification</h6>
+                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Paiements en attente de vérification</h6>
                     <h3 class="fw-bold mb-0 text-dark">{{ payments_awaiting_verification }}</h3>
                 </div>
             </a>
@@ -46,7 +46,7 @@
             <a href="{% url 'operations:installment_list' %}?overdue=1" class="text-decoration-none">
                 <div class="crm-card h-100 border-0">
                     <div class="stat-icon bg-warning bg-opacity-10 text-warning mb-3"><i class="fa-solid fa-calendar-day"></i></div>
-                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Due/Overdue Installments</h6>
+                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Versements dus/en retard</h6>
                     <h3 class="fw-bold mb-0 text-dark">{{ due_installments }}</h3>
                 </div>
             </a>
@@ -55,7 +55,7 @@
             <a href="{% url 'operations:confirmation_list' %}?status=PENDING" class="text-decoration-none">
                 <div class="crm-card h-100 border-0">
                     <div class="stat-icon bg-primary bg-opacity-10 text-primary mb-3"><i class="fa-solid fa-envelope"></i></div>
-                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Confirmations Awaiting Delivery</h6>
+                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Confirmations en attente d'envoi</h6>
                     <h3 class="fw-bold mb-0 text-dark">{{ confirmations_awaiting_delivery }}</h3>
                 </div>
             </a>
@@ -64,7 +64,7 @@
             <a href="{% url 'operations:provisioning_list' %}?status=PENDING" class="text-decoration-none">
                 <div class="crm-card h-100 border-0">
                     <div class="stat-icon bg-success bg-opacity-10 text-success mb-3"><i class="fa-solid fa-graduation-cap"></i></div>
-                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Enrollments Awaiting Processing</h6>
+                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Inscriptions en attente de traitement</h6>
                     <h3 class="fw-bold mb-0 text-dark">{{ enrollments_awaiting_processing }}</h3>
                 </div>
             </a>
@@ -73,7 +73,7 @@
             <a href="{% url 'operations:order_list' %}?needs_review=1" class="text-decoration-none">
                 <div class="crm-card h-100 border-start border-4 border-danger">
                     <div class="stat-icon bg-danger bg-opacity-10 text-danger mb-3"><i class="fa-solid fa-triangle-exclamation"></i></div>
-                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Manual Review Items</h6>
+                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Éléments à vérifier manuellement</h6>
                     <h3 class="fw-bold mb-0 text-danger">{{ manual_review_items }}</h3>
                 </div>
             </a>
@@ -82,7 +82,7 @@
             <a href="{% url 'operations:reconciliation_list' %}" class="text-decoration-none">
                 <div class="crm-card h-100 border-0 {% if failed_reconciliation_runs %}border-start border-4 border-danger{% endif %}">
                     <div class="stat-icon bg-danger bg-opacity-10 text-danger mb-3"><i class="fa-solid fa-rotate"></i></div>
-                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Failed Reconciliation Runs</h6>
+                    <h6 class="text-muted small fw-bold text-uppercase mb-1">Exécutions de réconciliation échouées</h6>
                     <h3 class="fw-bold mb-0 {% if failed_reconciliation_runs %}text-danger{% else %}text-dark{% endif %}">{{ failed_reconciliation_runs }}</h3>
                 </div>
             </a>
@@ -90,7 +90,7 @@
         <div class="col-md-6 col-lg-4 col-xl-3">
             <div class="crm-card h-100 border-0">
                 <div class="stat-icon bg-success bg-opacity-10 text-success mb-3"><i class="fa-solid fa-sliders"></i></div>
-                <h6 class="text-muted small fw-bold text-uppercase mb-1">Active Payment Plans</h6>
+                <h6 class="text-muted small fw-bold text-uppercase mb-1">Plans de paiement actifs</h6>
                 <h3 class="fw-bold mb-0 text-dark">{{ active_plans }}</h3>
             </div>
         </div>
@@ -98,33 +98,33 @@
 
     <!-- Browse all resources -->
     <div class="crm-card border-0 shadow-sm mb-4">
-        <h6 class="text-uppercase text-muted fw-bold small mb-3 letter-spacing-wider">Browse</h6>
+        <h6 class="text-uppercase text-muted fw-bold small mb-3 letter-spacing-wider">Parcourir</h6>
         <div class="d-flex flex-wrap gap-2">
-            <a href="{% url 'operations:order_list' %}" class="btn btn-crm-outline btn-sm">Orders</a>
-            <a href="{% url 'operations:installment_list' %}" class="btn btn-crm-outline btn-sm">Installments</a>
-            <a href="{% url 'operations:payment_attempt_list' %}" class="btn btn-crm-outline btn-sm">Payment Attempts</a>
-            <a href="{% url 'operations:webhook_event_list' %}" class="btn btn-crm-outline btn-sm">Webhook Events</a>
+            <a href="{% url 'operations:order_list' %}" class="btn btn-crm-outline btn-sm">Commandes</a>
+            <a href="{% url 'operations:installment_list' %}" class="btn btn-crm-outline btn-sm">Versements</a>
+            <a href="{% url 'operations:payment_attempt_list' %}" class="btn btn-crm-outline btn-sm">Tentatives de paiement</a>
+            <a href="{% url 'operations:webhook_event_list' %}" class="btn btn-crm-outline btn-sm">Événements Webhook</a>
             <a href="{% url 'operations:confirmation_list' %}" class="btn btn-crm-outline btn-sm">Confirmations</a>
-            <a href="{% url 'operations:provisioning_list' %}" class="btn btn-crm-outline btn-sm">Provisioning</a>
-            <a href="{% url 'operations:reconciliation_list' %}" class="btn btn-crm-outline btn-sm">Reconciliation</a>
-            <a href="{% url 'operations:audit_list' %}" class="btn btn-crm-outline btn-sm">Audit Log</a>
+            <a href="{% url 'operations:provisioning_list' %}" class="btn btn-crm-outline btn-sm">Provisionnement</a>
+            <a href="{% url 'operations:reconciliation_list' %}" class="btn btn-crm-outline btn-sm">Réconciliation</a>
+            <a href="{% url 'operations:audit_list' %}" class="btn btn-crm-outline btn-sm">Journal d'audit</a>
         </div>
     </div>
 
     <!-- Recent verified payments -->
     <div class="crm-card p-0 overflow-hidden border-0">
         <div class="p-4 border-bottom d-flex justify-content-between align-items-center bg-white">
-            <h5 class="fw-bold mb-0">Recent Verified Payments</h5>
-            <a href="{% url 'operations:order_list' %}" class="small text-decoration-none fw-bold">View All Orders</a>
+            <h5 class="fw-bold mb-0">Paiements récemment vérifiés</h5>
+            <a href="{% url 'operations:order_list' %}" class="small text-decoration-none fw-bold">Voir toutes les commandes</a>
         </div>
         <div class="table-responsive">
             <table class="table table-hover align-middle">
                 <thead>
                     <tr>
-                        <th class="ps-4">Customer</th>
-                        <th>Order</th>
-                        <th>Amount</th>
-                        <th class="text-end pe-4">Verified At</th>
+                        <th class="ps-4">Client</th>
+                        <th>Commande</th>
+                        <th>Montant</th>
+                        <th class="text-end pe-4">Vérifié le</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -135,11 +135,11 @@
                         </td>
                         <td><span class="small fw-medium text-muted">{{ attempt.installment.order.reference }}</span></td>
                         <td><span class="small fw-bold">{{ attempt.expected_amount }} {{ attempt.currency }}</span></td>
-                        <td class="text-end pe-4 text-muted small">{{ attempt.updated_at|date:"M d, H:i" }}</td>
+                        <td class="text-end pe-4 text-muted small">{{ attempt.updated_at|date:"d M, H:i" }}</td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="4" class="text-center py-5 text-muted small">No verified payments yet.</td>
+                        <td colspan="4" class="text-center py-5 text-muted small">Aucun paiement vérifié pour le moment.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

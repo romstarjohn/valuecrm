@@ -41,6 +41,11 @@ DB_USER=postgres
 DB_PASSWORD=postgres
 DB_HOST=localhost
 DB_PORT=5432
+
+# Branding (see AGENT.md) — BRAND_NAME is this tool's own identity (staff
+# portal/login); BUSINESS_NAME is the storefront customers see on checkout.
+BRAND_NAME=Valued Haircare
+BUSINESS_NAME=Monafrolibre
 ```
 
 ### Generate Encryption Key

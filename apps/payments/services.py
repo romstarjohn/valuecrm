@@ -68,6 +68,11 @@ class PaymentIdConflictError(PaymentCreditError):
     pass
 
 
+class DuplicatePaymentError(PaymentCreditError):
+    """A verified Tara success arrived for an installment already PAID via a different attempt — money received twice, needs a manual refund decision."""
+    pass
+
+
 class WebhookRejectedError(Exception):
     """Raised only for structurally invalid webhook bodies (malformed JSON, non-object, oversized) — nothing was or could be durably recorded."""
     pass
@@ -175,7 +180,7 @@ _INSTALLMENT_TRANSITIONS = {
     },
     Installment.Status.PAID: set(),  # terminal — a verified payment can never become cancelled/failed/waived
     Installment.Status.FAILED: {
-        Installment.Status.DUE, Installment.Status.PENDING,
+        Installment.Status.DUE, Installment.Status.PENDING, Installment.Status.PAID,
         Installment.Status.WAIVED, Installment.Status.CANCELLED,
     },
     Installment.Status.WAIVED: set(),  # terminal, operator decision
@@ -502,6 +507,41 @@ class CheckoutService:
             raise CheckoutError("This checkout link is invalid.")
         return order
 
+    def request_status_refresh(self, order: Order) -> None:
+        """
+        Customer-triggered recovery for the common "I paid but the status
+        page hasn't updated" case — the webhook may simply not have landed
+        yet. Asks Tara to redeliver its webhook for the order's current
+        attempt via TaraClient.resend_webhook(); the actual state change (if
+        any) still only ever happens through the normal
+        WebhookProcessingService path once/if that redelivery arrives.
+
+        Deliberately best-effort and silent: this is a "please check again"
+        nudge, not a status check, so a Tara-side failure here (misconfigured
+        client, timeout, 4xx/5xx) must never surface as an error to a
+        customer who is simply asking to be refreshed — it's logged and
+        swallowed. Only attempts genuinely waiting on a provider result
+        (a payment link was created, or an outcome is already indeterminate)
+        are eligible; anything else has nothing for Tara to redeliver.
+        """
+        installment = order.installments.order_by("sequence").first()
+        if installment is None:
+            return
+        attempt = installment.payment_attempts.order_by("-created_at").first()
+        if attempt is None or attempt.status not in (
+            PaymentAttempt.Status.LINK_CREATED, PaymentAttempt.Status.PENDING, PaymentAttempt.Status.UNKNOWN,
+        ):
+            return
+
+        try:
+            client = TaraConfigService().get_client()
+            client.resend_webhook(attempt.tara_product_id)
+        except (
+            TaraConfigurationError, TaraCredentialError, TaraTimeoutError, TaraConnectionError,
+            TaraServerError, TaraClientError, TaraMalformedResponseError, TaraInvalidRequestError,
+        ) as e:
+            log_service_failure(logger, "CheckoutService", "request_status_refresh", e, attempt_id=attempt.id)
+
     def start_checkout(self, customer: Contact, plan_id: int, idempotency_key: str) -> CheckoutResult:
         log_service_start(logger, "CheckoutService", "start_checkout")
         base_url = self._require_public_base_url()
@@ -754,6 +794,9 @@ class PaymentCreditService:
                     on_applied(attempt, False)
                 return attempt
 
+            if attempt.status in (PaymentAttempt.Status.FAILED, PaymentAttempt.Status.EXPIRED):
+                self._reopen_for_late_success(attempt, installment)
+
             if tara_payment_id:
                 conflict_exists = (
                     PaymentAttempt.objects.filter(tara_payment_id=tara_payment_id).exclude(pk=attempt.pk).exists()
@@ -770,10 +813,16 @@ class PaymentCreditService:
                     attempt.tara_payment_id = tara_payment_id
                     attempt.save(update_fields=["tara_payment_id", "updated_at"])
 
-            expected_amount = installment.expected_amount
+            # The real amount received, never the plan's theoretical amount
+            # (docs/PRODUCT_CADRAGE_PMI.md §6.1) — falls back to expected_amount
+            # only when the caller has no verified figure to offer (the webhook
+            # path never reaches here with a differing amount; see AMOUNT_MISMATCH
+            # in WebhookProcessingService._verify_and_apply, which rejects that
+            # case before calling this method).
+            credited_amount = verified_amount if verified_amount is not None else installment.expected_amount
 
             PaymentAttemptService().transition(attempt, PaymentAttempt.Status.SUCCEEDED)
-            InstallmentService().transition(installment, Installment.Status.PAID, paid_amount=expected_amount)
+            InstallmentService().transition(installment, Installment.Status.PAID, paid_amount=credited_amount)
             self._update_order_status(order)
 
             PaymentConfirmationService().create_confirmation(attempt, installment, order)
@@ -791,6 +840,43 @@ class PaymentCreditService:
             if on_applied is not None:
                 on_applied(attempt, True)
             return attempt
+
+    def _reopen_for_late_success(self, attempt: PaymentAttempt, installment: Installment) -> None:
+        """
+        A FAILED/EXPIRED attempt can still be paid afterwards on the same Tara
+        link (same productId) — e.g. a first declined Mobile Money try followed
+        by a successful retry on the same payment page. Tara's server-to-server
+        SUCCESS is the stronger fact, so the attempt is reopened via the
+        already-allowed FAILED/EXPIRED -> UNKNOWN hop, from which the caller's
+        UNKNOWN -> SUCCEEDED follows. Must run inside the caller's transaction,
+        with attempt/installment already row-locked.
+
+        one_active_payment_attempt_per_installment allows only one
+        active-or-SUCCEEDED attempt per installment, so any newer still-open
+        attempt the customer started meanwhile is EXPIRED first. If the
+        installment is already PAID through another attempt, the customer paid
+        twice — never credited automatically (DuplicatePaymentError).
+        """
+        if installment.status == Installment.Status.PAID:
+            raise DuplicatePaymentError(
+                f"Installment {installment.id} is already paid via another attempt (attempt {attempt.id} not credited)."
+            )
+        other_attempts = (
+            PaymentAttempt.objects.select_for_update()
+            .filter(installment_id=installment.id)
+            .exclude(pk=attempt.pk)
+            .filter(status__in=[
+                PaymentAttempt.Status.CREATED, PaymentAttempt.Status.LINK_CREATED, PaymentAttempt.Status.PENDING,
+                PaymentAttempt.Status.UNKNOWN, PaymentAttempt.Status.SUCCEEDED,
+            ])
+        )
+        for other in other_attempts:
+            if other.status == PaymentAttempt.Status.SUCCEEDED:
+                raise DuplicatePaymentError(
+                    f"Installment {installment.id} already has a succeeded attempt (attempt {attempt.id} not credited)."
+                )
+            PaymentAttemptService().transition(other, PaymentAttempt.Status.EXPIRED)
+        PaymentAttemptService().transition(attempt, PaymentAttempt.Status.UNKNOWN)
 
     def apply_verified_failure(
         self, attempt_id: int, on_applied: Optional[Callable[[PaymentAttempt], None]] = None,
@@ -1013,6 +1099,8 @@ class PaymentConfirmationDeliveryService:
         )
         customer_name = f"{contact.first_name} {contact.last_name}".strip()
         context = {
+            "brand_name": settings.BRAND_NAME,
+            "business_name": settings.BUSINESS_NAME,
             "customer_name": customer_name,
             "amount_received": installment.paid_amount or installment.expected_amount,
             "currency": installment.currency,
@@ -1023,9 +1111,12 @@ class PaymentConfirmationDeliveryService:
             "remaining_balance": remaining,
             "remaining_balance_positive": remaining > 0,
             "next_installment_due_date": next_due_date,
-            "course_access_status": "now accessible" if order.is_access_eligible else "not yet accessible",
+            "course_access_status": "accès ouvert" if order.is_access_eligible else "accès pas encore ouvert",
         }
-        subject = f"Payment received — installment {installment.sequence} of {order.installment_count}"
+        subject = (
+            f"{settings.BUSINESS_NAME} — Paiement reçu (versement "
+            f"{installment.sequence}/{order.installment_count})"
+        )
         body = render_to_string("payments/email/payment_confirmation.txt", context)
         return subject, body
 
@@ -1061,6 +1152,7 @@ class WebhookProcessingService:
                 "tara_product_id": payload.product_id or "",
                 "tara_payment_id": payload.payment_id or "",
                 "raw_provider_status": payload.status[:50],
+                "amount": payload.amount,
                 "payload_digest": payload_digest,
                 "provider_creation_date": payload.creation_date,
                 "provider_change_date": payload.change_date,
@@ -1184,6 +1276,20 @@ class WebhookProcessingService:
                 event.verification_result = TaraWebhookEvent.VerificationResult.SUCCESS
                 event.processing_status = TaraWebhookEvent.ProcessingStatus.FAILED
                 event.failure_category = TaraWebhookEvent.FailureCategory.PAYMENT_ID_CONFLICT
+            except DuplicatePaymentError as e:
+                log_service_failure(logger, "WebhookProcessingService", "_verify_and_apply", e, product_id=attempt.tara_product_id)
+                event.verification_result = TaraWebhookEvent.VerificationResult.SUCCESS
+                event.processing_status = TaraWebhookEvent.ProcessingStatus.FAILED
+                event.failure_category = TaraWebhookEvent.FailureCategory.DUPLICATE_PAYMENT
+            except InvalidStateTransitionError as e:
+                # e.g. money received for a CANCELLED/WAIVED installment. Must be
+                # recorded as a visible FAILED event, never a 500 — Tara's
+                # identical redelivery would otherwise be swallowed by dedup
+                # and the verified payment silently lost.
+                log_service_failure(logger, "WebhookProcessingService", "_verify_and_apply", e, product_id=attempt.tara_product_id)
+                event.verification_result = TaraWebhookEvent.VerificationResult.SUCCESS
+                event.processing_status = TaraWebhookEvent.ProcessingStatus.FAILED
+                event.failure_category = TaraWebhookEvent.FailureCategory.INVALID_STATE_TRANSITION
         elif normalized == TaraTransactionStatus.FAILURE:
             PaymentCreditService().apply_verified_failure(attempt.id)
             event.verification_result = TaraWebhookEvent.VerificationResult.FAILURE

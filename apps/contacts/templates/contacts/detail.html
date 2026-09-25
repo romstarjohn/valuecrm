@@ -1,90 +1,215 @@
 {% extends "base.html" %}
 
-{% block title %}{{ contact.email }} | ValuedCRM{% endblock %}
+{% block title %}{{ contact.email }} | {{ BRAND_NAME }}{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title=contact.email subtitle="Comprehensive contact profile and enrollment history." action_label="Edit Profile" action_url="/contacts/"|add:contact.id|add:"/edit/" action_icon="fa-solid fa-user-edit" %}
+{% include "components/page_header.html" with title=contact.email subtitle="Retrouver le client et traiter son dossier de bout en bout, en une seule vue." action_label="Modifier le profil" action_url="/contacts/"|add:contact.id|add:"/edit/" action_icon="fa-solid fa-user-edit" %}
 
-<div class="container-fluid px-4 fade-in">
-    <div class="row">
-        <!-- Sidebar Profile -->
-        <div class="col-lg-4">
-            <div class="crm-card border-0 shadow-sm text-center">
-                <div class="avatar-circle avatar-circle-xl avatar-circle-primary mx-auto mb-4 shadow-sm">
-                    {{ contact.first_name|slice:":1"|upper }}{{ contact.last_name|slice:":1"|upper }}
-                </div>
-                <h4 class="fw-bold mb-1 text-dark">{{ contact.first_name }} {{ contact.last_name }}</h4>
-                <p class="text-muted small mb-4">{{ contact.email }}</p>
-                <div class="mb-4">
-                    {% include "components/status_badge.html" with status=contact.status %}
-                </div>
+<div class="container-fluid px-4 fade-in pb-5">
 
-                <div class="text-start border-top pt-4">
-                    <h6 class="text-uppercase text-muted fw-bold small mb-3 letter-spacing-wide">Information</h6>
-                    <div class="mb-3 d-flex justify-content-between align-items-center">
-                        <span class="text-muted small">Source</span>
-                        <span class="badge bg-light text-dark fw-medium">{{ contact.source|default:"Direct" }}</span>
-                    </div>
-                    <div class="mb-3 d-flex justify-content-between align-items-center">
-                        <span class="text-muted small">Phone</span>
-                        <span class="fw-bold small text-dark">{{ contact.phone|default:"--" }}</span>
-                    </div>
-                    <div class="mb-0 d-flex justify-content-between align-items-center">
-                        <span class="text-muted small">CF ID</span>
-                        <code class="small">{{ contact.cf_contact_id|default:"N/A" }}</code>
-                    </div>
-                </div>
+    <!-- Identity strip — persistent across every tab -->
+    <div class="crm-card border-0 shadow-sm">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <div class="avatar-circle avatar-circle-lg avatar-circle-primary">
+                {{ contact.first_name|slice:":1"|upper }}{{ contact.last_name|slice:":1"|upper }}
             </div>
+            <div class="flex-grow-1">
+                <h4 class="fw-bold mb-1 text-dark">{{ contact.first_name }} {{ contact.last_name }}</h4>
+                <p class="text-muted small mb-0">{{ contact.email }}{% if contact.phone %} · {{ contact.phone }}{% endif %}</p>
+            </div>
+            {% include "components/status_badge.html" with status=contact.status %}
+            {% for tag in contact.tags %}<span class="pill accent">{{ tag }}</span>{% endfor %}
+        </div>
+    </div>
 
-            <div class="crm-card border-0 shadow-sm mt-4">
-                <h6 class="text-uppercase text-muted fw-bold small mb-3 letter-spacing-wide">Assigned Tags</h6>
-                <div class="d-flex flex-wrap gap-2">
-                    {% for tag in contact.tags %}
-                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-10 rounded-pill px-3">{{ tag }}</span>
-                    {% empty %}
-                        <p class="text-muted small fst-italic mb-0">No tags assigned to this contact.</p>
-                    {% endfor %}
+    <div data-tabs>
+        <div class="tabs">
+            <button type="button" class="tab active" data-tab-target="#tab-overview">Aperçu</button>
+            <button type="button" class="tab" data-tab-target="#tab-activity">Activité</button>
+            <button type="button" class="tab" data-tab-target="#tab-orders">Commandes</button>
+            <button type="button" class="tab" data-tab-target="#tab-enrollments">Inscriptions</button>
+        </div>
+
+        <!-- Aperçu: every detail the fiche holds on this contact -->
+        <div id="tab-overview" data-tab-pane>
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="crm-card border-0 shadow-sm">
+                        <h6 class="text-uppercase text-muted fw-bold small mb-3">Coordonnées &amp; suivi</h6>
+                        <div class="kv">
+                            <div class="kv-row"><span>Prénom</span><span>{{ contact.first_name|default:"—" }}</span></div>
+                            <div class="kv-row"><span>Nom</span><span>{{ contact.last_name|default:"—" }}</span></div>
+                            <div class="kv-row"><span>E-mail</span><span>{{ contact.email }}</span></div>
+                            <div class="kv-row"><span>Téléphone</span><span>{{ contact.phone|default:"—" }}</span></div>
+                            <div class="kv-row"><span>Fuseau horaire</span><span>{{ contact.time_zone|default:"—" }}</span></div>
+                            <div class="kv-row"><span>Source</span><span>{{ contact.source|default:"Direct" }}</span></div>
+                            <div class="kv-row"><span>Statut</span><span>{{ contact.status|default:"—" }}</span></div>
+                            <div class="kv-row"><span>ID ClickFunnels</span><span>{{ contact.cf_contact_id|default:"—" }}</span></div>
+                            <div class="kv-row"><span>Client depuis</span><span>{{ contact.created_at|date:"d/m/Y H:i" }}</span></div>
+                            <div class="kv-row"><span>Dernière mise à jour</span><span>{{ contact.updated_at|date:"d/m/Y H:i" }}</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="crm-card border-0 shadow-sm">
+                        <h6 class="text-uppercase text-muted fw-bold small mb-3">Tags</h6>
+                        <div class="d-flex flex-wrap gap-2">
+                            {% for tag in contact.tags %}
+                                <span class="pill accent">{{ tag }}</span>
+                            {% empty %}
+                                <p class="text-muted small fst-italic mb-0">Aucun tag associé à ce contact.</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="crm-card border-0 shadow-sm">
+                        <h6 class="text-uppercase text-muted fw-bold small mb-3">Adresses</h6>
+                        <label class="text-muted text-xs fw-bold text-uppercase d-block mb-2">Livraison</label>
+                        <div class="bg-light p-3 rounded-3 font-monospace small data-block mb-3">{{ contact.shipping_address|default:"{}" }}</div>
+                        <label class="text-muted text-xs fw-bold text-uppercase d-block mb-2">Facturation</label>
+                        <div class="bg-light p-3 rounded-3 font-monospace small data-block">{{ contact.billing_address|default:"{}" }}</div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Main Content -->
-        <div class="col-lg-8">
+        <!-- Activité: every recorded trace — audit trail, e-mails, tentatives d'inscription -->
+        <div id="tab-activity" data-tab-pane hidden>
+            <div class="crm-card border-0 shadow-sm">
+                {% if activity %}
+                    {% for event in activity %}
+                    <div class="activity-item">
+                        <div class="activity-icon"><i class="fa-solid {{ event.icon }}" aria-hidden="true"></i></div>
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <span class="cell-title" style="font-size:13px;">{{ event.label }}</span>
+                                <span class="pill {{ event.pill }}">{{ event.pill_label }}</span>
+                            </div>
+                            {% if event.detail %}<div class="cell-sub">{{ event.detail }}</div>{% endif %}
+                            <div class="cell-sub">{{ event.date|date:"d M Y, H:i" }} · {{ event.actor }}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted small fst-italic mb-0">Aucune activité enregistrée pour ce contact.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Commandes: l'achat (Order) et le paiement reçu (Installment) sont deux
+             notions distinctes (docs/PRODUCT_CADRAGE_PMI.md §4) — jamais fusionnées. -->
+        <div id="tab-orders" data-tab-pane hidden>
+            <div class="crm-card p-0 overflow-hidden border-0 shadow-sm">
+                <div class="p-4 border-bottom bg-white">
+                    <h5 class="fw-bold mb-1">Commandes</h5>
+                    <p class="small text-muted mb-0">Un achat envers un produit et un plan donné.</p>
+                </div>
+                {% if orders %}
+                    <div class="table-wrap" style="border:none;border-radius:0;">
+                        <table>
+                            <thead>
+                                <tr><th>Commande</th><th>Formation / plan</th><th class="num">Reçu / attendu</th><th>Statut</th><th>Accès</th></tr>
+                            </thead>
+                            <tbody>
+                                {% for order in orders %}
+                                <tr {% if can_view_order %}class="clickable" onclick="window.location='{% url 'operations:order_detail' order.reference %}'"{% endif %}>
+                                    <td>{{ order.reference }}</td>
+                                    <td>
+                                        <div class="cell-title">{{ order.course_name }}</div>
+                                        <div class="cell-sub">{{ order.plan_name }}</div>
+                                    </td>
+                                    <td class="num">{{ order.total_paid_amount }} / {{ order.total_expected_amount }} {{ order.currency }}</td>
+                                    <td>{% include "components/status_badge.html" with status=order.status %}</td>
+                                    <td>
+                                        {% if order.is_access_eligible %}<span class="pill good"><span class="dot"></span>Ouvert</span>
+                                        {% else %}<span class="pill warn"><span class="dot"></span>En attente</span>{% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center px-4 py-5">
+                        <i class="fa-solid fa-file-invoice text-muted opacity-25 fs-1 mb-3" aria-hidden="true"></i>
+                        <p class="text-muted small mb-0">Aucune commande pour ce contact.</p>
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="crm-card p-0 overflow-hidden border-0 shadow-sm">
+                <div class="p-4 border-bottom bg-white">
+                    <h5 class="fw-bold mb-1">Paiements</h5>
+                    <p class="small text-muted mb-0">Chaque versement individuellement reçu et confirmé par Tara — le montant réel, jamais celui attendu du plan.</p>
+                </div>
+                {% if payments %}
+                    <div class="table-wrap" style="border:none;border-radius:0;">
+                        <table>
+                            <thead>
+                                <tr><th>Date</th><th>Commande</th><th>Versement</th><th class="num">Montant reçu</th></tr>
+                            </thead>
+                            <tbody>
+                                {% for installment in payments %}
+                                <tr>
+                                    <td class="cell-sub">{{ installment.paid_at|date:"d M Y, H:i" }}</td>
+                                    <td>{{ installment.order.reference }}</td>
+                                    <td class="cell-sub">n°{{ installment.sequence }} / {{ installment.order.installment_count }}</td>
+                                    <td class="num">{{ installment.paid_amount }} {{ installment.currency }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center px-4 py-5">
+                        <i class="fa-solid fa-sack-dollar text-muted opacity-25 fs-1 mb-3" aria-hidden="true"></i>
+                        <p class="text-muted small mb-0">Aucun paiement reçu pour ce contact.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Inscriptions: accès par cours + option d'inscrire -->
+        <div id="tab-enrollments" data-tab-pane hidden>
             <div class="crm-card p-0 overflow-hidden border-0 shadow-sm">
                 <div class="p-4 border-bottom bg-white d-flex justify-content-between align-items-center">
-                    <h5 class="fw-bold mb-0">Enrollment History</h5>
-                    <a href="{% url 'enrollments:new' %}?email={{ contact.email }}" class="btn-crm btn-crm-primary btn-crm-sm">
-                        <i class="fa-solid fa-plus me-1 small" aria-hidden="true"></i> New Enrollment
-                    </a>
+                    <div>
+                        <h5 class="fw-bold mb-1">Cours inscrits</h5>
+                        <p class="small text-muted mb-0">Statut d'accès réel dans ClickFunnels pour chaque cours.</p>
+                    </div>
+                    <button type="button" class="btn-crm btn-crm-primary btn-crm-sm" data-panel-url="{% url 'contacts:enroll_panel' contact.pk %}" data-panel-title="Inscrire à un cours">
+                        <i class="fa-solid fa-plus me-1 small" aria-hidden="true"></i>Inscrire à un cours
+                    </button>
                 </div>
 
                 {% if enrollments %}
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
+                    <div class="table-wrap" style="border:none;border-radius:0;">
+                        <table>
                             <thead>
-                                <tr>
-                                    <th class="ps-4">Course</th>
-                                    <th>Status</th>
-                                    <th>Date</th>
-                                    <th class="text-end pe-4">Actions</th>
-                                </tr>
+                                <tr><th>Formation</th><th>Statut</th><th>Date</th><th class="text-end">Actions</th></tr>
                             </thead>
                             <tbody>
                                 {% for enr in enrollments %}
                                 <tr>
-                                    <td class="ps-4 fw-bold text-dark">{{ enr.course.name }}</td>
-                                    <td>{% include "components/status_badge.html" with status=enr.status %}</td>
-                                    <td class="small text-muted">{{ enr.created_at|date:"M d, Y" }}</td>
-                                    <td class="text-end pe-4">
-                                        <a href="{% url 'enrollments:detail' enr.id %}" class="btn-crm btn-crm-outline btn-crm-sm">View</a>
+                                    <td><div class="cell-title">{{ enr.course.name }}</div></td>
+                                    <td>
+                                        {% if enr.status == "SUCCESS" %}
+                                            {% if enr.cf_suspended %}<span class="pill critical"><span class="dot"></span>Suspendu</span>
+                                            {% else %}<span class="pill good"><span class="dot"></span>Actif</span>{% endif %}
+                                        {% else %}
+                                            <span class="pill warn"><span class="dot"></span>Échec</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="cell-sub">{{ enr.created_at|date:"d M Y" }}</td>
+                                    <td class="text-end">
+                                        <a href="{% url 'enrollments:detail' enr.id %}" class="btn-crm btn-crm-outline btn-crm-sm">Voir</a>
                                         {% if enr.status == "SUCCESS" and enr.cf_enrollment_id %}
                                             {% if enr.cf_suspended %}
                                                 {% if can_resume_enrollment %}
-                                                    <a href="{% url 'enrollments:resume' enr.id %}" class="btn-crm btn-crm-outline btn-crm-sm text-success">Resume</a>
+                                                    <a href="{% url 'enrollments:resume' enr.id %}" class="btn-crm btn-crm-outline btn-crm-sm text-success">Reprendre</a>
                                                 {% endif %}
                                             {% else %}
                                                 {% if can_freeze_enrollment %}
-                                                    <a href="{% url 'enrollments:freeze' enr.id %}" class="btn-crm btn-crm-outline btn-crm-sm text-warning">Freeze</a>
+                                                    <a href="{% url 'enrollments:freeze' enr.id %}" class="btn-crm btn-crm-outline btn-crm-sm text-warning">Geler</a>
                                                 {% endif %}
                                             {% endif %}
                                         {% endif %}
@@ -97,43 +222,10 @@
                 {% else %}
                     <div class="text-center px-4 py-5">
                         <i class="fa-solid fa-graduation-cap text-muted opacity-25 fs-1 mb-3" aria-hidden="true"></i>
-                        <p class="text-muted small">This student has no recorded enrollment attempts.</p>
+                        <p class="text-muted small mb-3">Cet étudiant n'a aucune tentative d'inscription enregistrée.</p>
+                        <button type="button" class="btn-crm btn-crm-primary btn-crm-sm" data-panel-url="{% url 'contacts:enroll_panel' contact.pk %}" data-panel-title="Inscrire à un cours">Inscrire à un cours</button>
                     </div>
                 {% endif %}
-            </div>
-
-            <!-- Address Data -->
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="crm-card border-0 shadow-sm">
-                        <h6 class="text-uppercase text-muted fw-bold small mb-3">Shipping</h6>
-                        <div class="bg-light p-3 rounded-3 font-monospace small data-block">
-                            {{ contact.shipping_address|default:"{}" }}
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="crm-card border-0 shadow-sm">
-                        <h6 class="text-uppercase text-muted fw-bold small mb-3">Billing</h6>
-                        <div class="bg-light p-3 rounded-3 font-monospace small data-block">
-                            {{ contact.billing_address|default:"{}" }}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="crm-card border-0 shadow-sm">
-                <h6 class="text-uppercase text-muted fw-bold small mb-4">Metadata Tracking</h6>
-                <div class="row g-4">
-                    <div class="col-md-6 border-end">
-                        <label class="text-muted text-xs fw-bold text-uppercase d-block mb-2">Payment Placeholder</label>
-                        <div class="fw-medium text-dark">{{ contact.payment_method_placeholder|default:"None Specified" }}</div>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="text-muted text-xs fw-bold text-uppercase d-block mb-2">Order Info Placeholder</label>
-                        <div class="fw-medium text-dark">{{ contact.order_information_placeholder|default:"None Specified" }}</div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>

@@ -1,9 +1,10 @@
+{% load status_labels %}
 {% if status == "ACTIVE" or status == "PAID" or status == "SUCCEEDED" or status == "SUCCESS" or status == "VALID" or status == "COMPLETED" or status == "SENT" or status == "PROCESSED" or status == "APPROVED_FOR_RETRY" %}
-    <span class="badge-status badge-success">{{ status|upper }}</span>
+    <span class="badge-status badge-success">{{ status|status_label }}</span>
 {% elif status == "FAILED" or status == "FAILURE" or status == "CANCELLED" or status == "EXPIRED" or status == "INVALID" or status == "REJECTED" or status == "DENIED_BY_ADMIN" or status == "DISPUTED" or status == "CUSTOMER_CANCELLED" or status == "REJECTED_INVALID_STATE" or status == "REJECTED_PERMISSION" %}
-    <span class="badge-status badge-danger">{{ status|upper }}</span>
+    <span class="badge-status badge-danger">{{ status|status_label }}</span>
 {% elif status == "PENDING" or status == "DUE" or status == "PAST_DUE" or status == "SUSPENDED" or status == "WAIVED" or status == "MANUAL_REVIEW" or status == "AWAITING_APPROVAL" or status == "NEEDS_REVIEW" or status == "PARTIAL_FAILURE" or status == "UNCORRELATED" or status == "PROVIDER_NON_FINAL" or status == "UNKNOWN" or status == "SKIPPED" or status == "SKIPPED_OVERLAPPING" %}
-    <span class="badge-status badge-warning">{{ status|upper }}</span>
+    <span class="badge-status badge-warning">{{ status|status_label }}</span>
 {% else %}
-    <span class="badge-status badge-info">{{ status|upper }}</span>
+    <span class="badge-status badge-info">{{ status|status_label }}</span>
 {% endif %}

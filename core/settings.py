@@ -21,6 +21,14 @@ CSRF_TRUSTED_ORIGINS = [
 # ValuedCRM Security
 FIELD_ENCRYPTION_KEY = os.getenv("FIELD_ENCRYPTION_KEY")
 
+# Branding — configurable per deployment, never hardcoded in templates (see AGENT.md).
+# BRAND_NAME: this tool's own identity, shown on staff-facing surfaces (portal chrome,
+# login page, page titles). BUSINESS_NAME: the storefront/tenant name customers
+# recognize, shown on the public guest checkout (templates/public_base.html and its
+# children) — this deployment sells courses for Monafrolibre, not for "this CRM tool".
+BRAND_NAME = os.getenv("BRAND_NAME", "Valued Haircare")
+BUSINESS_NAME = os.getenv("BUSINESS_NAME", "Monafrolibre")
+
 # Canonical public HTTPS base URL for this application (no trailing slash),
 # e.g. "https://checkout.example.com". Required by apps.payments checkout
 # (Phase 5) to construct Tara's application-owned webHookUrl/returnUrl safely
@@ -30,13 +38,14 @@ FIELD_ENCRYPTION_KEY = os.getenv("FIELD_ENCRYPTION_KEY")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
 
 INSTALLED_APPS = [
-    "django.contrib.admin",
+    "core.apps.RestrictedAdminConfig",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django_extensions",
+    "shared",
     "apps.configuration",
     "apps.contacts",
     "apps.courses",
@@ -70,6 +79,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "shared.context_processors.branding",
             ],
         },
     },
@@ -104,7 +114,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-LANGUAGE_CODE = "en-us"
+LANGUAGE_CODE = "fr"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
@@ -113,7 +123,11 @@ STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-LOGIN_URL = "/admin/login/"
+# /login/ — the portal's own sign-in, used by every @login_required staff
+# view. /admin/login/ still exists separately for superusers only (see
+# shared/admin_site.py, AGENT.md) — never the default for team members.
+LOGIN_URL = "/connexion/"
+LOGIN_REDIRECT_URL = "/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

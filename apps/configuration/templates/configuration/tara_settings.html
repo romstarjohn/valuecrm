@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}Tara Configuration | ValuedCRM{% endblock %}
+{% block title %}Configuration Tara | {{ BRAND_NAME }}{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title="Tara Configuration" subtitle="Configure the secure bridge to Tara Money for payment collection." %}
+{% include "components/page_header.html" with title="Configuration Tara" subtitle="Configurez la passerelle sécurisée vers Tara Money pour l’encaissement des paiements." %}
 
 <div class="container-fluid px-4 fade-in pb-5">
     <div class="row g-4">
@@ -11,9 +11,9 @@
 
             <div class="crm-card border-0 shadow-sm mb-4">
                 <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h5 class="fw-bold mb-0">Tara Credentials</h5>
+                    <h5 class="fw-bold mb-0">Identifiants Tara</h5>
                     {% if config.validation_status == 'VALID' %}
-                        <span class="badge bg-success rounded-pill px-3"><i class="fa-solid fa-check me-1"></i> Authorized</span>
+                        <span class="badge bg-success rounded-pill px-3"><i class="fa-solid fa-check me-1"></i> Autorisé</span>
                     {% endif %}
                 </div>
 
@@ -22,33 +22,33 @@
 
                     <div class="row g-4">
                         <div class="col-md-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ form.name.id_for_label }}">Friendly Name</label>
+                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ form.name.id_for_label }}">Nom convivial</label>
                             {{ form.name }}
                             {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors|join:", " }}</div>{% endif %}
                         </div>
 
                         <div class="col-md-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ form.business_id.id_for_label }}">Business ID</label>
+                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ form.business_id.id_for_label }}">ID d’entreprise</label>
                             {{ form.business_id }}
                             {% if form.business_id.errors %}<div class="text-danger small mt-1">{{ form.business_id.errors|join:", " }}</div>{% endif %}
                         </div>
 
                         <div class="col-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ form.api_key.id_for_label }}">API Key</label>
+                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ form.api_key.id_for_label }}">Clé API</label>
                             {{ form.api_key }}
                             <div class="form-text small mt-2">
                                 <i class="fa-solid fa-shield-halved me-1 text-success"></i>
-                                Encrypted with Fernet AES-256. Leave blank to keep the current key.
+                                Chiffrée avec Fernet AES-256. Laissez vide pour conserver la clé actuelle.
                             </div>
                             {% if form.api_key.errors %}<div class="text-danger small mt-1">{{ form.api_key.errors|join:", " }}</div>{% endif %}
                         </div>
 
                         <div class="col-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ form.webhook_secret.id_for_label }}">Webhook Secret</label>
+                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ form.webhook_secret.id_for_label }}">Secret du webhook</label>
                             {{ form.webhook_secret }}
                             <div class="form-text small mt-2">
                                 <i class="fa-solid fa-shield-halved me-1 text-success"></i>
-                                Encrypted with Fernet AES-256. Leave blank to keep the current secret.
+                                Chiffré avec Fernet AES-256. Laissez vide pour conserver le secret actuel.
                             </div>
                             {% if form.webhook_secret.errors %}<div class="text-danger small mt-1">{{ form.webhook_secret.errors|join:", " }}</div>{% endif %}
                         </div>
@@ -57,40 +57,40 @@
                             <div class="form-check form-switch p-3 bg-light rounded-3 border border-dashed">
                                 <div class="ms-1">
                                     {{ form.is_active }}
-                                    <label class="form-check-label fw-bold ms-2" for="{{ form.is_active.id_for_label }}">Set as Active Configuration</label>
+                                    <label class="form-check-label fw-bold ms-2" for="{{ form.is_active.id_for_label }}">Définir comme configuration active</label>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <div class="mt-4 d-flex gap-2">
-                        <button type="submit" class="btn btn-crm btn-crm-primary px-4 shadow-sm">Save Settings</button>
+                        <button type="submit" class="btn btn-crm btn-crm-primary px-4 shadow-sm">Enregistrer les paramètres</button>
                     </div>
                 </form>
             </div>
 
             <div class="crm-card border-0 shadow-sm bg-light">
-                <h6 class="text-uppercase text-muted fw-bold small mb-4 letter-spacing-wider">Webhook Delivery</h6>
-                <label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Application Webhook URL</label>
+                <h6 class="text-uppercase text-muted fw-bold small mb-4 letter-spacing-wider">Livraison du webhook</h6>
+                <label class="text-muted x-small fw-bold text-uppercase d-block mb-1">URL du webhook de l’application</label>
                 <code class="small text-primary fw-bold">{{ webhook_url|default:"--" }}</code>
                 <div class="form-text small mt-2">
-                    Configure this exact URL in your Tara dashboard. Generated server-side from
-                    <code>PUBLIC_BASE_URL</code> — never derived from the browser request, and not editable here.
+                    Configurez cette URL exacte dans votre tableau de bord Tara. Générée côté serveur à partir de
+                    <code>PUBLIC_BASE_URL</code> — jamais déduite de la requête du navigateur, et non modifiable ici.
                 </div>
             </div>
         </div>
 
         <div class="col-lg-4">
             <div class="crm-card bg-dark text-white border-0 shadow-lg p-4 sticky-top" style="top: 100px;">
-                <h5 class="fw-bold mb-4 text-white">Bridge Readiness</h5>
+                <h5 class="fw-bold mb-4 text-white">État de la passerelle</h5>
 
                 <div class="mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="small fw-bold text-uppercase opacity-50">API Key</span>
+                        <span class="small fw-bold text-uppercase opacity-50">Clé API</span>
                         {% if api_key_configured %}
-                            <span class="text-success small fw-bold">CONFIGURED</span>
+                            <span class="text-success small fw-bold">CONFIGURÉE</span>
                         {% else %}
-                            <span class="text-warning small fw-bold">MISSING</span>
+                            <span class="text-warning small fw-bold">MANQUANTE</span>
                         {% endif %}
                     </div>
                     <div class="progress" style="height: 6px; background-color: rgba(255,255,255,0.1);">
@@ -100,11 +100,11 @@
 
                 <div class="mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="small fw-bold text-uppercase opacity-50">Webhook Secret</span>
+                        <span class="small fw-bold text-uppercase opacity-50">Secret du webhook</span>
                         {% if webhook_secret_configured %}
-                            <span class="text-success small fw-bold">CONFIGURED</span>
+                            <span class="text-success small fw-bold">CONFIGURÉ</span>
                         {% else %}
-                            <span class="text-warning small fw-bold">MISSING</span>
+                            <span class="text-warning small fw-bold">MANQUANT</span>
                         {% endif %}
                     </div>
                     <div class="progress" style="height: 6px; background-color: rgba(255,255,255,0.1);">
@@ -114,18 +114,18 @@
 
                 <div class="mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="small fw-bold text-uppercase opacity-50">Validation Status</span>
+                        <span class="small fw-bold text-uppercase opacity-50">Statut de validation</span>
                         <span class="text-white small fw-bold">{{ config.validation_status|default:"--" }}</span>
                     </div>
                 </div>
 
                 {% if api_key_configured and webhook_secret_configured %}
                     <div class="alert alert-success border-0 bg-white bg-opacity-10 text-white small mb-0 mt-4">
-                        <i class="fa-solid fa-check-circle me-2"></i> Bridge is ready for transactions.
+                        <i class="fa-solid fa-check-circle me-2"></i> La passerelle est prête pour les transactions.
                     </div>
                 {% else %}
                     <div class="alert alert-warning border-0 bg-white bg-opacity-10 text-white small mb-0 mt-4">
-                        <i class="fa-solid fa-circle-exclamation me-2"></i> Set both credentials to finish.
+                        <i class="fa-solid fa-circle-exclamation me-2"></i> Renseignez les deux identifiants pour terminer.
                     </div>
                 {% endif %}
             </div>

@@ -31,7 +31,15 @@ def test_checkout_start_is_rate_limited_per_ip(client, settings):
         code="rl-plan", name="RL Plan", course=course,
         installment_count=1, installment_amount=Decimal("1.00"), is_active=True,
     )
-    url = reverse("payments:checkout_start")
+    url = reverse("payments:checkout_start", args=[course.slug])
+
+    statuses = [client.get(url).status_code for _ in range(25)]
+    assert 429 in statuses or 403 in statuses, "expected at least one rate-limited response among 25 rapid requests"
+
+
+def test_shop_index_is_rate_limited_per_ip(client, settings):
+    settings.RATELIMIT_ENABLE = True
+    url = reverse("payments:shop_index")
 
     statuses = [client.get(url).status_code for _ in range(25)]
     assert 429 in statuses or 403 in statuses, "expected at least one rate-limited response among 25 rapid requests"

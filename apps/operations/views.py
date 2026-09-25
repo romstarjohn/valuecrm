@@ -15,7 +15,9 @@ apps/payments/admin.py::OrderAdmin (Phase 8) — computed from prefetched
 querysets, not by re-deriving new rules.
 """
 from datetime import date, timedelta
+from decimal import Decimal, InvalidOperation
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
@@ -25,10 +27,12 @@ from django.urls import reverse
 from django.utils.dateparse import parse_date
 
 from apps.payments.admin_services import (
+    AdminActionError,
     EnrollmentAdministrationService,
     OrderAdministrationService,
     PaymentAttemptAdministrationService,
     PaymentConfirmationAdministrationService,
+    ReconciliationAdministrationService,
 )
 from apps.payments.models import (
     AdminAuditLog,
@@ -58,13 +62,13 @@ def _querystring_without_page(request) -> str:
 
 
 _ORDER_HEADERS = [
-    {"label": "Order", "sortable": False},
-    {"label": "Customer", "sortable": False},
-    {"label": "Plan / Course", "sortable": False},
-    {"label": "Financials", "sortable": False},
-    {"label": "Progress", "sortable": False},
-    {"label": "Status", "sortable": True},
-    {"label": "Created", "sortable": True},
+    {"label": "Commande", "sortable": False},
+    {"label": "Client", "sortable": False},
+    {"label": "Plan / Formation", "sortable": False},
+    {"label": "Finances", "sortable": False},
+    {"label": "Progression", "sortable": False},
+    {"label": "Statut", "sortable": True},
+    {"label": "Créée le", "sortable": True},
 ]
 
 
@@ -325,10 +329,10 @@ def order_detail(request, reference):
 # --- Installment list ---
 
 _INSTALLMENT_HEADERS = [
-    {"label": "Order", "sortable": False}, {"label": "Customer", "sortable": False},
-    {"label": "Seq", "sortable": False}, {"label": "Due Date", "sortable": True},
-    {"label": "Expected", "sortable": False}, {"label": "Paid", "sortable": False},
-    {"label": "Status", "sortable": True}, {"label": "Review", "sortable": False},
+    {"label": "Commande", "sortable": False}, {"label": "Client", "sortable": False},
+    {"label": "N°", "sortable": False}, {"label": "Échéance", "sortable": True},
+    {"label": "Attendu", "sortable": False}, {"label": "Payé", "sortable": False},
+    {"label": "Statut", "sortable": True}, {"label": "Vérification", "sortable": False},
 ]
 
 
@@ -388,10 +392,10 @@ def installment_list(request):
 # --- Payment attempt list ---
 
 _ATTEMPT_HEADERS = [
-    {"label": "Internal Status", "sortable": True}, {"label": "Provider Status", "sortable": False},
+    {"label": "Statut interne", "sortable": True}, {"label": "Statut fournisseur", "sortable": False},
     {"label": "Tara Product ID", "sortable": False}, {"label": "Tara Payment ID", "sortable": False},
-    {"label": "Expected", "sortable": False}, {"label": "Order / Installment", "sortable": False},
-    {"label": "Updated", "sortable": True},
+    {"label": "Attendu", "sortable": False}, {"label": "Commande / Versement", "sortable": False},
+    {"label": "Mis à jour", "sortable": True},
 ]
 
 
@@ -447,9 +451,10 @@ def payment_attempt_list(request):
 # --- Webhook events (read-only) ---
 
 _WEBHOOK_HEADERS = [
-    {"label": "Reference", "sortable": False}, {"label": "Correlation", "sortable": False},
-    {"label": "Verification", "sortable": False}, {"label": "Processing", "sortable": True},
-    {"label": "Failure Category", "sortable": False}, {"label": "Received", "sortable": True},
+    {"label": "Référence", "sortable": False}, {"label": "Montant", "sortable": False},
+    {"label": "Corrélation", "sortable": False},
+    {"label": "Vérification", "sortable": False}, {"label": "Traitement", "sortable": True},
+    {"label": "Catégorie d'échec", "sortable": False}, {"label": "Reçu", "sortable": True},
 ]
 
 
@@ -486,18 +491,93 @@ def webhook_event_list(request):
         "date_from": date_from, "date_to": date_to,
         "processing_status_options": TaraWebhookEvent.ProcessingStatus.choices,
         "verification_result_options": TaraWebhookEvent.VerificationResult.choices,
+        "can_attribute_payment": request.user.has_perm("payments.attribute_webhook_payment"),
         "querystring": _querystring_without_page(request),
     }
     return render(request, "operations/webhook_event_list.html", context)
 
 
+_ATTRIBUTION_ELIGIBLE_INSTALLMENT_STATUSES = [
+    Installment.Status.SCHEDULED, Installment.Status.DUE, Installment.Status.PENDING, Installment.Status.FAILED,
+]
+
+
+@login_required
+def webhook_event_attribute(request, pk):
+    """
+    Administrator-only: manually associate a payment Tara confirmed but that
+    could not be matched to a PaymentAttempt (UNCORRELATED — most often a
+    payment made directly in the Tara app, not through our checkout link) to
+    the correct order's installment. Reserved to the administrator role per
+    docs/PRODUCT_CADRAGE_PMI.md §3 — never extended to gestionnaires.
+    """
+    if not request.user.has_perm("payments.attribute_webhook_payment"):
+        raise PermissionDenied
+
+    event = get_object_or_404(TaraWebhookEvent, pk=pk)
+    if event.processing_status != TaraWebhookEvent.ProcessingStatus.UNCORRELATED:
+        messages.error(request, "Cet événement n'est plus en attente de rapprochement.")
+        return redirect("operations:webhook_event_list")
+
+    query = request.GET.get("q", "").strip()
+    candidates = []
+    if query:
+        candidates = list(
+            Installment.objects.filter(status__in=_ATTRIBUTION_ELIGIBLE_INSTALLMENT_STATUSES)
+            .filter(
+                Q(order__reference__icontains=query)
+                | Q(order__customer__first_name__icontains=query)
+                | Q(order__customer__last_name__icontains=query)
+                | Q(order__customer__email__icontains=query)
+                | Q(order__customer__phone__icontains=query)
+            )
+            .select_related("order", "order__customer")
+            .order_by("due_date")[:20]
+        )
+
+    if request.method == "POST":
+        installment_id = request.POST.get("installment_id", "")
+        reason = request.POST.get("reason", "").strip()
+        confirmed_amount_raw = request.POST.get("confirmed_amount", "").strip()
+
+        error = None
+        confirmed_amount = None
+        if not installment_id.isdigit():
+            error = "Sélectionnez le versement concerné."
+        elif not reason:
+            error = "Un motif est requis pour cette action."
+        else:
+            try:
+                confirmed_amount = Decimal(confirmed_amount_raw)
+                if confirmed_amount <= 0:
+                    raise InvalidOperation("must be positive")
+            except InvalidOperation:
+                error = "Montant confirmé invalide."
+
+        if error:
+            messages.error(request, error)
+        else:
+            try:
+                ReconciliationAdministrationService().attribute_webhook_event(
+                    event.pk, int(installment_id), confirmed_amount, reason, request.user, request,
+                )
+            except AdminActionError as e:
+                messages.error(request, str(e))
+            else:
+                messages.success(request, "Paiement associé — le versement a été crédité du montant confirmé.")
+                return redirect("operations:webhook_event_list")
+
+    context = {"event": event, "query": query, "candidates": candidates}
+    return render(request, "operations/webhook_event_attribute.html", context)
+
+
 # --- Payment confirmations ---
 
 _CONFIRMATION_HEADERS = [
-    {"label": "Order / Customer", "sortable": False}, {"label": "Installment", "sortable": False},
-    {"label": "Channel", "sortable": False}, {"label": "Status", "sortable": True},
-    {"label": "Attempts", "sortable": False}, {"label": "Next Retry", "sortable": False},
-    {"label": "Sent", "sortable": True},
+    {"label": "Commande / Client", "sortable": False}, {"label": "Versement", "sortable": False},
+    {"label": "Canal", "sortable": False}, {"label": "Statut", "sortable": True},
+    {"label": "Tentatives", "sortable": False}, {"label": "Prochain essai", "sortable": False},
+    {"label": "Envoyé", "sortable": True},
 ]
 
 
@@ -534,10 +614,10 @@ def confirmation_list(request):
 # --- Provisioning / enrollment ---
 
 _PROVISIONING_HEADERS = [
-    {"label": "Customer", "sortable": False}, {"label": "Order", "sortable": False},
-    {"label": "Course", "sortable": False}, {"label": "Status", "sortable": True},
-    {"label": "Attempts", "sortable": False}, {"label": "Failure Category", "sortable": False},
-    {"label": "Updated", "sortable": True},
+    {"label": "Client", "sortable": False}, {"label": "Commande", "sortable": False},
+    {"label": "Formation", "sortable": False}, {"label": "Statut", "sortable": True},
+    {"label": "Tentatives", "sortable": False}, {"label": "Catégorie d'échec", "sortable": False},
+    {"label": "Mis à jour", "sortable": True},
 ]
 
 
@@ -570,11 +650,11 @@ def provisioning_list(request):
 # --- Reconciliation runs (read-only) ---
 
 _RECONCILIATION_HEADERS = [
-    {"label": "Started", "sortable": True}, {"label": "Status", "sortable": True},
-    {"label": "Examined", "sortable": False}, {"label": "Verified S/F", "sortable": False},
-    {"label": "Pending/Unknown", "sortable": False}, {"label": "Confirmations", "sortable": False},
-    {"label": "Provisioning", "sortable": False}, {"label": "Repaired", "sortable": False},
-    {"label": "Uncorrelated", "sortable": False}, {"label": "Errors", "sortable": False},
+    {"label": "Démarrée", "sortable": True}, {"label": "Statut", "sortable": True},
+    {"label": "Examinées", "sortable": False}, {"label": "Vérifiées R/É", "sortable": False},
+    {"label": "En attente/inconnu", "sortable": False}, {"label": "Confirmations", "sortable": False},
+    {"label": "Provisionnement", "sortable": False}, {"label": "Réparées", "sortable": False},
+    {"label": "Non corrélées", "sortable": False}, {"label": "Erreurs", "sortable": False},
 ]
 
 
@@ -605,10 +685,10 @@ def reconciliation_list(request):
 # --- Administrative audit (read-only) ---
 
 _AUDIT_HEADERS = [
-    {"label": "When", "sortable": True}, {"label": "Administrator", "sortable": False},
+    {"label": "Quand", "sortable": True}, {"label": "Administrateur", "sortable": False},
     {"label": "Action", "sortable": True}, {"label": "Target", "sortable": False},
-    {"label": "Previous → Resulting", "sortable": False}, {"label": "Outcome", "sortable": False},
-    {"label": "Reason", "sortable": False},
+    {"label": "Précédent → Résultant", "sortable": False}, {"label": "Résultat", "sortable": False},
+    {"label": "Motif", "sortable": False},
 ]
 
 
@@ -658,15 +738,15 @@ def order_cancel(request, reference):
 
     def do_cancel(reason):
         OrderAdministrationService().cancel_order(order.pk, reason, request.user, request)
-        return f"Order {order.reference} cancelled."
+        return f"Commande {order.reference} annulée."
 
     context = {
-        "title": "Cancel Order", "description": "Cancel this order — payment history is preserved, no refund is issued.",
+        "title": "Annuler la commande", "description": "Annule cette commande — l'historique de paiement est conservé, aucun remboursement n'est émis.",
         "target_label": f"{order.reference} — {order.customer.email}",
         "back_url": reverse("operations:order_detail", args=[order.reference]),
         "warning": (
-            f"This order has verified payments (total paid so far). Cancellation does not refund money "
-            f"or revoke existing payment history." if order.total_paid_amount else ""
+            f"Cette commande a des paiements vérifiés (total payé jusqu'ici). L'annulation ne rembourse pas "
+            f"l'argent et n'annule pas l'historique de paiement existant." if order.total_paid_amount else ""
         ),
     }
     response = render_confirmation_or_process(
@@ -686,10 +766,10 @@ def order_disposition(request, reference):
 
     def do_apply(reason):
         OrderAdministrationService().apply_manual_disposition(order.pk, disposition, reason, request.user, request)
-        return f"Disposition set to {disposition} for order {order.reference}."
+        return f"Disposition définie sur {disposition} pour la commande {order.reference}."
 
     context = {
-        "title": "Apply Manual Disposition", "description": "Sets an internal business annotation only — never changes payment status.",
+        "title": "Appliquer une disposition manuelle", "description": "Ne fait que poser une annotation métier interne — ne modifie jamais le statut de paiement.",
         "target_label": f"{order.reference} — {order.customer.email} → {disposition}",
         "back_url": reverse("operations:order_detail", args=[order.reference]),
     }
@@ -707,11 +787,11 @@ def order_freeze_enrollment(request, reference):
 
     def do_freeze(reason):
         EnrollmentAdministrationService().freeze_order_enrollment(order.pk, reason, request.user, request)
-        return f"Enrollment frozen for order {order.reference}."
+        return f"Inscription suspendue pour la commande {order.reference}."
 
     context = {
-        "title": "Freeze Enrollment",
-        "description": "Suspends this customer's ClickFunnels course access. They keep seeing the course but cannot complete lessons until resumed. Fully reversible.",
+        "title": "Suspendre l'inscription",
+        "description": "Suspend l'accès de ce client à la formation ClickFunnels. Il continue de voir la formation mais ne peut plus terminer de leçons tant que ce n'est pas repris. Entièrement réversible.",
         "target_label": f"{order.reference} — {order.customer.email}",
         "back_url": reverse("operations:order_detail", args=[order.reference]),
     }
@@ -729,11 +809,11 @@ def order_resume_enrollment(request, reference):
 
     def do_resume(reason):
         EnrollmentAdministrationService().resume_order_enrollment(order.pk, reason, request.user, request)
-        return f"Enrollment resumed for order {order.reference}."
+        return f"Inscription reprise pour la commande {order.reference}."
 
     context = {
-        "title": "Resume Enrollment",
-        "description": "Restores this customer's ClickFunnels course access after a freeze.",
+        "title": "Reprendre l'inscription",
+        "description": "Restaure l'accès de ce client à la formation ClickFunnels après une suspension.",
         "target_label": f"{order.reference} — {order.customer.email}",
         "back_url": reverse("operations:order_detail", args=[order.reference]),
     }
@@ -751,11 +831,11 @@ def installment_cancel(request, pk):
 
     def do_cancel(reason):
         OrderAdministrationService().cancel_installment(installment.pk, reason, request.user, request)
-        return f"Installment #{installment.sequence} cancelled."
+        return f"Versement n°{installment.sequence} annulé."
 
     context = {
-        "title": "Cancel Installment", "description": "Only eligible unpaid installments can be cancelled.",
-        "target_label": f"Order {installment.order.reference} — installment #{installment.sequence}",
+        "title": "Annuler le versement", "description": "Seuls les versements non payés éligibles peuvent être annulés.",
+        "target_label": f"Commande {installment.order.reference} — versement n°{installment.sequence}",
         "back_url": reverse("operations:order_detail", args=[installment.order.reference]),
     }
     response = render_confirmation_or_process(
@@ -772,11 +852,11 @@ def installment_waive(request, pk):
 
     def do_waive(reason):
         OrderAdministrationService().waive_installment(installment.pk, reason, request.user, request)
-        return f"Installment #{installment.sequence} waived."
+        return f"Versement n°{installment.sequence} exonéré."
 
     context = {
-        "title": "Waive Installment", "description": "An internal business decision — not a provider payment. No confirmation email is sent.",
-        "target_label": f"Order {installment.order.reference} — installment #{installment.sequence}",
+        "title": "Exonérer le versement", "description": "Une décision métier interne — pas un paiement du fournisseur. Aucun e-mail de confirmation n'est envoyé.",
+        "target_label": f"Commande {installment.order.reference} — versement n°{installment.sequence}",
         "back_url": reverse("operations:order_detail", args=[installment.order.reference]),
     }
     response = render_confirmation_or_process(
@@ -793,10 +873,10 @@ def payment_attempt_check_status(request, pk):
 
     def do_check(reason):
         updated = PaymentAttemptAdministrationService().check_tara_status(attempt.pk, reason, request.user, request)
-        return f"Tara status checked for {updated.tara_product_id}: attempt is now {updated.status}."
+        return f"Statut Tara vérifié pour {updated.tara_product_id} : la tentative est maintenant {updated.status}."
 
     context = {
-        "title": "Check Tara Status", "description": "Synchronously re-verifies this attempt with Tara — only PENDING/UNKNOWN attempts are eligible.",
+        "title": "Vérifier le statut Tara", "description": "Revérifie cette tentative auprès de Tara de manière synchrone — seules les tentatives EN ATTENTE/INCONNU sont éligibles.",
         "target_label": f"{attempt.tara_product_id} (order {attempt.installment.order.reference})",
         "back_url": reverse("operations:order_detail", args=[attempt.installment.order.reference]),
     }
@@ -814,10 +894,10 @@ def confirmation_retry(request, pk):
 
     def do_retry(reason):
         PaymentConfirmationAdministrationService().retry_confirmation(confirmation.pk, reason, request.user, request)
-        return f"Confirmation {confirmation.reference} queued for retry."
+        return f"Confirmation {confirmation.reference} mise en file pour nouvel essai."
 
     context = {
-        "title": "Retry Confirmation", "description": "Returns this confirmation to a claimable state — the worker sends it, not this page.",
+        "title": "Relancer la confirmation", "description": "Remet cette confirmation dans un état prêt à être traité — c'est le worker qui l'envoie, pas cette page.",
         "target_label": str(confirmation.reference),
         "back_url": reverse("operations:order_detail", args=[confirmation.order.reference]),
     }
@@ -835,15 +915,15 @@ def provisioning_retry(request, pk):
 
     def do_retry(reason):
         ProvisioningService().retry_request(provisioning_request.pk, reason, request.user, request)
-        return f"Provisioning request #{provisioning_request.pk} queued for retry."
+        return f"Demande de provisionnement n°{provisioning_request.pk} mise en file pour nouvel essai."
 
     back_url = (
         reverse("operations:order_detail", args=[provisioning_request.order.reference])
         if provisioning_request.order_id else reverse("operations:provisioning_list")
     )
     context = {
-        "title": "Retry Provisioning", "description": "Returns this enrollment request to a claimable state — no ClickFunnels call happens on this page.",
-        "target_label": f"Provisioning request #{provisioning_request.pk}",
+        "title": "Relancer le provisionnement", "description": "Remet cette demande d'inscription dans un état prêt à être traitée — aucun appel ClickFunnels n'a lieu sur cette page.",
+        "target_label": f"Demande de provisionnement n°{provisioning_request.pk}",
         "back_url": back_url,
     }
     response = render_confirmation_or_process(

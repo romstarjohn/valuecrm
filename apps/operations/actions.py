@@ -35,7 +35,7 @@ def render_confirmation_or_process(request, *, permission, context, service_call
     if request.method == "POST" and "confirm_apply" in request.POST:
         reason = request.POST.get("reason", "").strip()
         if not reason:
-            messages.error(request, "A reason is required for this action.")
+            messages.error(request, "Un motif est requis pour cette action.")
             return render(request, CONFIRM_TEMPLATE, {**context, "reason": ""})
 
         from apps.payments.admin_services import AdminActionError

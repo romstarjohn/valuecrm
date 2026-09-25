@@ -129,8 +129,8 @@ class PaymentPlan(TimeStampedModel):
     """
 
     class Currency(models.TextChoices):
+        # Pilot is XAF-only (docs/PRODUCT_CADRAGE_PMI.md §5 "Exclusions confirmées").
         XAF = "XAF", "XAF — Central Africa CFA Franc"
-        XOF = "XOF", "XOF — West Africa CFA Franc"
 
     class AccessPolicy(models.TextChoices):
         FIRST_INSTALLMENT = "FIRST_INSTALLMENT", "After first verified installment"
@@ -532,6 +532,8 @@ class TaraWebhookEvent(TimeStampedModel):
         UNCORRELATED = "UNCORRELATED", "No safe correlation available"
         AMOUNT_MISMATCH = "AMOUNT_MISMATCH", "Webhook amount does not match the expected installment amount"
         PAYMENT_ID_CONFLICT = "PAYMENT_ID_CONFLICT", "Tara paymentId already linked to a different attempt"
+        DUPLICATE_PAYMENT = "DUPLICATE_PAYMENT", "Verified payment for an installment already paid via another attempt"
+        INVALID_STATE_TRANSITION = "INVALID_STATE_TRANSITION", "Verified payment could not be applied in the current state"
         PROVIDER_LOOKUP_INDETERMINATE = "PROVIDER_LOOKUP_INDETERMINATE", "Server-to-server status lookup was indeterminate"
         MALFORMED = "MALFORMED", "Malformed or inconsistent provider response"
 
@@ -552,6 +554,13 @@ class TaraWebhookEvent(TimeStampedModel):
     provider_creation_date = models.DateTimeField(null=True, blank=True)
     provider_change_date = models.DateTimeField(null=True, blank=True)
 
+    amount = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text="Amount as reported in the webhook payload, when present — uninterpreted, like raw_provider_status. "
+                   "Never used to auto-credit a payment (see FailureCategory.AMOUNT_MISMATCH); stored only so an "
+                   "UNCORRELATED event carries enough information for an administrator to manually attribute it "
+                   "(see ReconciliationAdministrationService.attribute_webhook_event in admin_services.py).",
+    )
     payload_digest = models.CharField(max_length=64, db_index=True, help_text="SHA-256 hex digest of the raw request body. The body itself is never stored.")
     dedup_key = models.CharField(
         max_length=64, unique=True, db_index=True,
@@ -572,6 +581,9 @@ class TaraWebhookEvent(TimeStampedModel):
                 condition=models.Q(processing_status__in=["RECEIVED", "PROCESSED", "UNCORRELATED", "REJECTED", "FAILED"]),
                 name="webhook_event_processing_status_valid",
             ),
+        ]
+        permissions = [
+            ("attribute_webhook_payment", "Can manually attribute an unattributed Tara webhook payment to an order's installment"),
         ]
 
     def __str__(self):
@@ -694,6 +706,7 @@ class AdminAuditLog(TimeStampedModel):
         APPLY_MANUAL_DISPOSITION = "APPLY_MANUAL_DISPOSITION", "Apply Manual Disposition"
         FREEZE_ENROLLMENT = "FREEZE_ENROLLMENT", "Freeze Enrollment"
         RESUME_ENROLLMENT = "RESUME_ENROLLMENT", "Resume Enrollment"
+        ATTRIBUTE_PAYMENT = "ATTRIBUTE_PAYMENT", "Attribute Payment"
 
     class TargetType(models.TextChoices):
         ORDER = "ORDER", "Order"
@@ -702,6 +715,7 @@ class AdminAuditLog(TimeStampedModel):
         PAYMENT_CONFIRMATION = "PAYMENT_CONFIRMATION", "PaymentConfirmation"
         PROVISIONING_REQUEST = "PROVISIONING_REQUEST", "ProvisioningRequest"
         ENROLLMENT_ATTEMPT = "ENROLLMENT_ATTEMPT", "EnrollmentAttempt"
+        TARA_WEBHOOK_EVENT = "TARA_WEBHOOK_EVENT", "TaraWebhookEvent"
 
     class OutcomeCategory(models.TextChoices):
         SUCCESS = "SUCCESS", "Success"
@@ -728,6 +742,7 @@ class AdminAuditLog(TimeStampedModel):
     order = models.ForeignKey(Order, null=True, blank=True, on_delete=models.SET_NULL, related_name="admin_audit_logs")
     installment = models.ForeignKey(Installment, null=True, blank=True, on_delete=models.SET_NULL, related_name="admin_audit_logs")
     payment_attempt = models.ForeignKey(PaymentAttempt, null=True, blank=True, on_delete=models.SET_NULL, related_name="admin_audit_logs")
+    webhook_event = models.ForeignKey(TaraWebhookEvent, null=True, blank=True, on_delete=models.SET_NULL, related_name="admin_audit_logs")
 
     previous_state = models.CharField(max_length=255, blank=True)
     resulting_state = models.CharField(max_length=255, blank=True)

@@ -44,7 +44,7 @@ def test_anonymous_user_cannot_create_config(client):
 @pytest.mark.django_db
 def test_staff_without_permissions_cannot_create_config(staff_client):
     response = staff_client.post(ADD_URL, data=valid_payload())
-    assert response.status_code == 403
+    assert response.status_code == 302
     assert not TaraConfig.objects.exists()
 
 

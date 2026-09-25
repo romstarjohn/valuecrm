@@ -6,6 +6,9 @@ app_name = "contacts"
 urlpatterns = [
     path("", views.contact_list, name="list"),
     path("add/", views.contact_create, name="add"),
+    path("<int:pk>/panel/", views.contact_detail_panel, name="detail_panel"),
+    path("<int:pk>/enroll-panel/", views.contact_enroll_panel, name="enroll_panel"),
+    path("<int:pk>/enroll/", views.contact_enroll, name="enroll"),
     path("<int:pk>/", views.contact_detail, name="detail"),
     path("<int:pk>/edit/", views.contact_update, name="edit"),
 ]

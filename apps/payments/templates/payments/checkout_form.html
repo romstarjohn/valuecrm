@@ -1,192 +1,120 @@
 {% extends "public_base.html" %}
+{% load static %}
 
-{% block title %}Checkout | ValuedCRM{% endblock %}
-
+{% block title %}{{ checkout_title }} | {{ BRAND_NAME }} &amp; {{ BUSINESS_NAME }}{% endblock %}
 {% block shell_modifier %} checkout-shell--wide{% endblock %}
 
 {% block content %}
+<div class="checkout-intro">
+    <a href="{% url 'payments:shop_index' %}" class="checkout-back-link">&larr; Toutes nos formations</a>
+    <h1>{{ checkout_title }}</h1>
+    <p class="checkout-course-name">Finalisez votre inscription</p>
+</div>
+
 {% if plans %}
 <form method="post" id="checkout-form" class="checkout-layout">
     {% csrf_token %}
+    {{ form.idempotency_key }}
+    <div class="checkout-details">
+        <section class="checkout-panel checkout-plans-panel" aria-labelledby="plan-heading">
+            <div class="checkout-section-heading">
 
-    <div class="checkout-intro">
-        <div class="checkout-intro-icon" aria-hidden="true">
-            <i class="fa-solid fa-graduation-cap"></i>
-        </div>
-        <div>
-            <h1 class="checkout-intro-title">Choose your plan</h1>
-            <div class="checkout-intro-course">Pick a plan below, then complete your details to continue to payment.</div>
-        </div>
-    </div>
-
-    <div class="checkout-description-col">
-        <fieldset class="checkout-plan-fieldset">
-            <legend class="visually-hidden">Available payment plans</legend>
-            {% if form.plan_id.errors %}
-                <div class="form-error mb-3" role="alert">{{ form.plan_id.errors|striptags }}</div>
-            {% endif %}
-            {% for plan in plans %}
-            <label class="crm-card checkout-plan-option" for="plan-{{ plan.id }}">
-                <input
-                    type="radio" name="plan_id" value="{{ plan.id }}" id="plan-{{ plan.id }}"
-                    class="checkout-plan-option-input"
-                    {% if plan.id|stringformat:"s" == selected_plan_id %}checked{% endif %}
-                    data-name="{{ plan.name }}"
-                    data-course="{{ plan.course.name }}"
-                    data-price="{{ plan.computed_total|floatformat:2 }} {{ plan.currency }}"
-                    data-installment-note="{% if plan.installment_count > 1 %}{{ plan.installment_count }} installments of {{ plan.installment_amount|floatformat:2 }} {{ plan.currency }}{% else %}One-time payment{% endif %}"
-                    data-access="{{ plan.get_access_policy_display }}"
-                >
-                <div class="checkout-plan-option-body">
-                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                        <div>
-                            <div class="fw-bold">{{ plan.name }}</div>
-                            <div class="text-muted small mb-2">
-                                <i class="fa-solid fa-graduation-cap me-1" aria-hidden="true"></i>{{ plan.course.name }}
-                            </div>
-                            {% if plan.description %}
-                                <p class="checkout-body-text mb-2">{{ plan.description|linebreaksbr }}</p>
-                            {% endif %}
-                            <span class="badge-status badge-info">{{ plan.get_access_policy_display }}</span>
-                        </div>
-                        <div class="text-end">
-                            <div class="fs-4 fw-bold">{{ plan.computed_total|floatformat:2 }} {{ plan.currency }}</div>
-                            {% if plan.installment_count > 1 %}
-                                <div class="text-muted small">{{ plan.installment_count }} installments of {{ plan.installment_amount|floatformat:2 }} {{ plan.currency }}</div>
-                            {% else %}
-                                <div class="text-muted small">One-time payment</div>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </label>
-            {% endfor %}
-        </fieldset>
-    </div>
-
-    <div class="checkout-card-col">
-        <div class="crm-card checkout-card">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-                <h2 class="checkout-section-title mb-0">Order summary</h2>
-                <span class="badge-status badge-info" id="summary-access"></span>
+                <div><h2 id="plan-heading">Choisir mon paiement</h2></div>
             </div>
+            <fieldset class="checkout-plan-fieldset">
+                <legend class="visually-hidden">Formations et plans de paiement disponibles</legend>
+                {% if form.plan_id.errors %}
+                    <div class="form-error checkout-alert-error" id="plan-error" role="alert">{{ form.plan_id.errors|striptags }}</div>
+                {% endif %}
+                {% for plan in plans %}
+                <label class="checkout-plan-option" for="plan-{{ plan.id }}">
+                    <input type="radio" name="plan_id" value="{{ plan.id }}" id="plan-{{ plan.id }}"
+                        class="checkout-plan-option-input" required
+                        {% if plan.id|stringformat:"s" == selected_plan_id %}checked{% endif %}
+                        {% if form.plan_id.errors %}aria-invalid="true" aria-describedby="plan-error"{% endif %}
+                        data-name="Paiement en {{ plan.installment_count }} fois"
+                        data-total="{{ plan.computed_total|floatformat:'2g' }} {{ plan.currency }}"
+                        data-due="{{ plan.installment_amount|floatformat:'2g' }} {{ plan.currency }}"
+                        data-schedule="{% if plan.installment_count > 1 %}{{ plan.installment_count }} versements de {{ plan.installment_amount|floatformat:'2g' }} {{ plan.currency }}, tous les {{ plan.installment_interval_days }} jours.{% else %}Un seul paiement. Aucun autre versement à prévoir.{% endif %}"
+                        data-access="{% if plan.access_policy == 'FIRST_INSTALLMENT' %}Accès à la formation après confirmation du premier paiement.{% else %}Accès à la formation après confirmation du paiement intégral.{% endif %}">
+                    <span class="checkout-plan-content">
+                        <span class="checkout-plan-main">
+                            <span class="checkout-plan-title">En {{ plan.installment_count }} fois</span>
+                        </span>
+                        <span class="checkout-plan-pricing"><span><strong>{{ plan.installment_amount|floatformat:'2g' }}</strong> <span class="checkout-currency">{{ plan.currency }}</span></span></span>
+                        <span class="checkout-plan-meta">{% if plan.installment_count > 1 %}{{ plan.installment_count }} × {{ plan.installment_amount|floatformat:'2g' }} {{ plan.currency }} · {{ plan.computed_total|floatformat:'2g' }} {{ plan.currency }} au total<br>Tous les {{ plan.installment_interval_days }} jours{% else %}Un seul versement{% endif %}</span>
+                        {% if plan.description %}<span class="checkout-plan-description">{{ plan.description|linebreaksbr }}</span>{% endif %}
+                    </span>
+                </label>
+                {% endfor %}
+            </fieldset>
+        </section>
 
-            <div class="fw-bold" id="summary-name"></div>
-            <div class="text-muted small mb-2" id="summary-course"></div>
+        <section class="checkout-panel" aria-labelledby="details-heading">
+            <div class="checkout-section-heading">
 
-            <div class="checkout-price-row">
-                <span class="checkout-price-label">Total</span>
-                <span class="checkout-price-value" id="summary-price"></span>
+                <div><h2 id="details-heading">Vos coordonnées</h2><p>Tous les champs sont obligatoires.</p></div>
             </div>
-            <div class="checkout-installment-note" id="summary-installment-note"></div>
-
-            <h2 class="checkout-section-title checkout-card-divider">Your information</h2>
-            <p class="checkout-section-hint">We'll use this to confirm your order and send your receipt.</p>
-
-            {{ form.idempotency_key }}
-
-            {% if form.non_field_errors %}
-                <div class="form-error mb-3" role="alert">{{ form.non_field_errors|striptags }}</div>
-            {% endif %}
-
+            {% if form.non_field_errors %}<div class="form-error checkout-alert-error" role="alert">{{ form.non_field_errors|striptags }}</div>{% endif %}
+            {% if form.idempotency_key.errors %}<div class="form-error checkout-alert-error" role="alert">Votre session de commande n’est plus valide. <a href="{% url 'payments:checkout_start' course.slug %}">Rechargez la page</a> pour continuer.</div>{% endif %}
             <div class="checkout-field">
-                <label class="form-label" for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+                <label for="{{ form.email.id_for_label }}">Adresse e-mail</label>
                 {{ form.email }}
-                {% if form.email.errors %}<div class="form-error" role="alert">{{ form.email.errors|striptags }}</div>{% endif %}
+                <p id="{{ form.email.auto_id }}_helptext" class="checkout-help">{{ form.email.help_text }}</p>
+                {% if form.email.errors %}<div id="{{ form.email.auto_id }}_error" class="form-error" role="alert">{{ form.email.errors|striptags }}</div>{% endif %}
             </div>
-
-            <div class="checkout-field">
-                <label class="form-label" for="{{ form.phone.id_for_label }}">{{ form.phone.label }}</label>
-                {{ form.phone }}
-                <p class="checkout-help">Optional — used only if we need to reach you about this order.</p>
-                {% if form.phone.errors %}<div class="form-error" role="alert">{{ form.phone.errors|striptags }}</div>{% endif %}
-            </div>
-
             <div class="checkout-field-row">
                 <div class="checkout-field">
-                    <label class="form-label" for="{{ form.first_name.id_for_label }}">{{ form.first_name.label }}</label>
+                    <label for="{{ form.first_name.id_for_label }}">Prénom</label>
                     {{ form.first_name }}
-                    {% if form.first_name.errors %}<div class="form-error" role="alert">{{ form.first_name.errors|striptags }}</div>{% endif %}
+                    {% if form.first_name.errors %}<div id="{{ form.first_name.auto_id }}_error" class="form-error" role="alert">{{ form.first_name.errors|striptags }}</div>{% endif %}
                 </div>
                 <div class="checkout-field">
-                    <label class="form-label" for="{{ form.last_name.id_for_label }}">{{ form.last_name.label }}</label>
+                    <label for="{{ form.last_name.id_for_label }}">Nom</label>
                     {{ form.last_name }}
-                    {% if form.last_name.errors %}<div class="form-error" role="alert">{{ form.last_name.errors|striptags }}</div>{% endif %}
+                    {% if form.last_name.errors %}<div id="{{ form.last_name.auto_id }}_error" class="form-error" role="alert">{{ form.last_name.errors|striptags }}</div>{% endif %}
                 </div>
             </div>
-
-            <div class="checkout-payment-section">
-                <h2 class="checkout-section-title">Payment</h2>
-                <p class="checkout-section-hint">You'll be taken to our secure payment provider to complete this purchase.</p>
-
-                <div class="checkout-total-recap">
-                    <span>Total due today</span>
-                    <strong id="summary-total-due"></strong>
-                </div>
-
-                <button type="submit" class="btn btn-crm btn-crm-primary checkout-submit" id="checkout-submit">
-                    Continue to Payment <i class="fa-solid fa-lock ms-2" aria-hidden="true"></i>
-                </button>
-
-                <p class="checkout-reassurance">
-                    <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
-                    <span>Your payment is processed securely. We never store your card details.</span>
-                </p>
-
-                <p class="checkout-consent">
-                    By continuing, you'll be redirected to our payment provider to complete this purchase securely.
-                </p>
+            <div class="checkout-field checkout-field--last">
+                <label for="{{ form.phone.id_for_label }}">Téléphone</label>
+                {{ form.phone }}
+                <p id="phone-help" class="checkout-help">Pour vous joindre au sujet de votre commande.</p>
+                {% if form.phone.errors %}<div id="{{ form.phone.auto_id }}_error" class="form-error" role="alert">{{ form.phone.errors|striptags }}</div>{% endif %}
             </div>
+        </section>
+    <section class="checkout-summary" aria-label="Récapitulatif de commande">
+        <div class="checkout-summary-content">
+            <h2 class="checkout-summary-heading">Récapitulatif</h2>
+            <div id="checkout-summary-live" aria-live="polite" aria-atomic="true">
+                <span id="summary-course" class="visually-hidden">{{ checkout_title }}</span>
+                <span class="visually-hidden" id="summary-name">Paiement en {{ selected_plan.installment_count }} fois</span>
+                <dl class="checkout-totals">
+                    <div><dt>Coût total</dt><dd id="summary-price">{% if selected_plan %}{{ selected_plan.computed_total|floatformat:'2g' }} {{ selected_plan.currency }}{% else %}—{% endif %}</dd></div>
+                    <div class="checkout-due-row"><dt>À payer aujourd’hui</dt><dd id="summary-total-due">{% if selected_plan %}{{ selected_plan.installment_amount|floatformat:'2g' }} <span>{{ selected_plan.currency }}</span>{% else %}—{% endif %}</dd></div>
+                </dl>
+                <p class="checkout-schedule" id="summary-installment-note">{% if selected_plan %}{% if selected_plan.installment_count > 1 %}{{ selected_plan.installment_count }} versements de {{ selected_plan.installment_amount|floatformat:'2g' }} {{ selected_plan.currency }}, tous les {{ selected_plan.installment_interval_days }} jours.{% else %}Un seul paiement. Aucun autre versement à prévoir.{% endif %}{% endif %}</p>
+                <div class="checkout-access-note"><i class="fa-solid fa-unlock-keyhole" aria-hidden="true"></i><span id="summary-access">{% if selected_plan %}{% if selected_plan.access_policy == 'FIRST_INSTALLMENT' %}Accès à la formation après confirmation du premier paiement.{% else %}Accès à la formation après confirmation du paiement intégral.{% endif %}{% else %}Sélectionnez un plan pour connaître les conditions d’accès.{% endif %}</span></div>
+            </div>
+            <button type="submit" class="checkout-submit" id="checkout-submit"><span>Passer au paiement sécurisé</span><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></button>
+            <p class="checkout-payment-hint"><i class="fa-solid fa-lock" aria-hidden="true"></i> Paiement sécurisé sur Tara. Formation 100 % en ligne.</p>
+
+            <noscript><p class="checkout-help">Si vous changez de plan, référez-vous au prix du plan sélectionné ci-dessus. Le montant final sera confirmé sur la page de paiement.</p></noscript>
         </div>
+    </section>
     </div>
+    <aside class="course-offers" id="course-offers" aria-label="Le contenu de votre formation">
+        {% for presentation in course_presentations %}
+            {% include "payments/components/course_offer.html" %}
+        {% endfor %}
+    </aside>
 </form>
+
 {% else %}
-    {% include "components/empty_state.html" with title="No plans available" message="There are no payment plans available for purchase right now. Please check back later." icon="fa-solid fa-basket-shopping" %}
+<section class="checkout-state-card">
+    <span class="checkout-state-icon"><i class="fa-solid fa-seedling" aria-hidden="true"></i></span>
+    <h2>Aucun plan disponible</h2><p>De nouvelles formations se préparent. Revenez bientôt pour découvrir les plans disponibles.</p>
+</section>
 {% endif %}
 {% endblock %}
 
-{% block extra_js %}
-<script>
-    (function () {
-        const radios = document.querySelectorAll(".checkout-plan-option-input");
-        if (!radios.length) return;
-
-        const summaryName = document.getElementById("summary-name");
-        const summaryCourse = document.getElementById("summary-course");
-        const summaryPrice = document.getElementById("summary-price");
-        const summaryInstallmentNote = document.getElementById("summary-installment-note");
-        const summaryAccess = document.getElementById("summary-access");
-        const summaryTotalDue = document.getElementById("summary-total-due");
-
-        function applySelection(radio) {
-            summaryName.textContent = radio.dataset.name;
-            summaryCourse.innerHTML = '<i class="fa-solid fa-graduation-cap me-1" aria-hidden="true"></i>' + radio.dataset.course;
-            summaryPrice.textContent = radio.dataset.price;
-            summaryInstallmentNote.textContent = radio.dataset.installmentNote;
-            summaryAccess.textContent = radio.dataset.access;
-            summaryTotalDue.textContent = radio.dataset.price;
-
-            radios.forEach(function (r) {
-                r.closest(".checkout-plan-option").classList.toggle("checkout-plan-option--selected", r === radio);
-            });
-        }
-
-        radios.forEach(function (radio) {
-            radio.addEventListener("change", function () { applySelection(radio); });
-        });
-
-        const initial = document.querySelector(".checkout-plan-option-input:checked") || radios[0];
-        applySelection(initial);
-    })();
-
-    // Prevent duplicate submission from a double-click/impatient customer —
-    // the server-side idempotency_key already makes a genuine resubmit safe,
-    // this is purely a UX affordance.
-    document.getElementById("checkout-form").addEventListener("submit", function () {
-        const btn = document.getElementById("checkout-submit");
-        btn.disabled = true;
-        btn.setAttribute("aria-busy", "true");
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Processing…';
-    });
-</script>
-{% endblock %}
+{% block extra_js %}<script src="{% static 'js/checkout.js' %}" defer></script>{% endblock %}

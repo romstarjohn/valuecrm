@@ -8,8 +8,10 @@ from apps.contacts.models import Contact
 from apps.courses.models import Course
 from apps.payments.models import Installment, Order, PaymentAttempt, PaymentPlan, TaraConfig
 from apps.payments.services import (
+    InstallmentService,
     OrderService,
     PaymentAttemptService,
+    PaymentCreditService,
     WebhookProcessingService,
     WebhookRejectedError,
 )
@@ -363,3 +365,64 @@ def test_correlated_success_never_calls_clickfunnels_directly(active_config, att
     mock_execute.assert_not_called()
     request = ProvisioningRequest.objects.get(order=attempt.installment.order)
     assert request.status == ProvisioningRequest.Status.PENDING
+
+
+# --- FAILURE webhook, then a SUCCESS webhook for the same productId ---
+
+def test_success_webhook_after_failure_webhook_credits_payment(active_config, attempt, mocker):
+    """Regression: previously raised InvalidStateTransitionError (500) and the verified payment was lost."""
+    mock_client = Mock()
+    mocker.patch("apps.payments.services.TaraConfigService.get_client", return_value=mock_client)
+
+    mock_client.check_transaction_status.return_value = status_response(attempt.tara_product_id, "FAILURE")
+    WebhookProcessingService().process_webhook(body(productId=attempt.tara_product_id, status="FAILURE"))
+    attempt.refresh_from_db()
+    assert attempt.status == PaymentAttempt.Status.FAILED
+
+    mock_client.check_transaction_status.return_value = status_response(attempt.tara_product_id, "SUCCESS")
+    event = WebhookProcessingService().process_webhook(
+        body(productId=attempt.tara_product_id, paymentId="pay-late", status="SUCCESS"),
+    )
+
+    attempt.refresh_from_db()
+    installment = Installment.objects.get(pk=attempt.installment_id)
+    assert event.processing_status == event.ProcessingStatus.PROCESSED
+    assert event.verification_result == event.VerificationResult.SUCCESS
+    assert attempt.status == PaymentAttempt.Status.SUCCEEDED
+    assert installment.status == Installment.Status.PAID
+
+
+def test_success_webhook_for_already_paid_installment_is_flagged(active_config, attempt, mocker):
+    installment = attempt.installment
+    PaymentCreditService().apply_verified_failure(attempt.id)
+    newer = PaymentAttemptService().create_attempt(installment)
+    PaymentAttemptService().transition(newer, PaymentAttempt.Status.LINK_CREATED)
+    PaymentCreditService().apply_verified_success(newer.id)
+
+    mock_client = Mock()
+    mock_client.check_transaction_status.return_value = status_response(attempt.tara_product_id, "SUCCESS")
+    mocker.patch("apps.payments.services.TaraConfigService.get_client", return_value=mock_client)
+
+    event = WebhookProcessingService().process_webhook(body(productId=attempt.tara_product_id, paymentId="pay-dup"))
+
+    attempt.refresh_from_db()
+    assert event.processing_status == event.ProcessingStatus.FAILED
+    assert event.failure_category == event.FailureCategory.DUPLICATE_PAYMENT
+    assert attempt.status == PaymentAttempt.Status.FAILED
+
+
+def test_success_webhook_for_cancelled_installment_is_recorded_not_raised(active_config, attempt, mocker):
+    installment = attempt.installment
+    PaymentAttemptService().transition(attempt, PaymentAttempt.Status.EXPIRED)
+    InstallmentService().transition(installment, Installment.Status.CANCELLED)
+
+    mock_client = Mock()
+    mock_client.check_transaction_status.return_value = status_response(attempt.tara_product_id, "SUCCESS")
+    mocker.patch("apps.payments.services.TaraConfigService.get_client", return_value=mock_client)
+
+    event = WebhookProcessingService().process_webhook(body(productId=attempt.tara_product_id))
+
+    attempt.refresh_from_db()
+    assert event.processing_status == event.ProcessingStatus.FAILED
+    assert event.failure_category == event.FailureCategory.INVALID_STATE_TRANSITION
+    assert attempt.status == PaymentAttempt.Status.EXPIRED  # rolled back, untouched

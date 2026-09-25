@@ -1,53 +1,53 @@
 {% extends "base.html" %}
 
-{% block title %}Orders | ValuedCRM{% endblock %}
+{% block title %}Commandes | {{ BRAND_NAME }}{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title="Orders" subtitle="Search, filter, and open any customer order." %}
+{% include "components/page_header.html" with title="Commandes" subtitle="Recherchez, filtrez et ouvrez n'importe quelle commande client." %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="table-container mb-4 shadow-sm border-0">
         <div class="table-toolbar flex-wrap gap-3">
             <form method="get" class="d-flex flex-wrap align-items-center gap-2 flex-grow-1">
-                {% include "components/search_bar.html" with placeholder="Search reference, customer, plan, course..." %}
+                {% include "components/search_bar.html" with placeholder="Rechercher référence, client, plan, formation..." %}
 
                 <select name="status" class="form-select form-select-sm w-auto">
-                    <option value="">All Statuses</option>
+                    <option value="">Tous les statuts</option>
                     {% for value, label in status_options %}
                         <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                 </select>
 
                 <select name="plan" class="form-select form-select-sm w-auto">
-                    <option value="">All Plans</option>
+                    <option value="">Tous les plans</option>
                     {% for plan_id, plan_name in plan_options %}
                         <option value="{{ plan_id }}" {% if plan_filter == plan_id|stringformat:"s" %}selected{% endif %}>{{ plan_name }}</option>
                     {% endfor %}
                 </select>
 
                 <select name="access" class="form-select form-select-sm w-auto">
-                    <option value="">Any Access State</option>
-                    <option value="eligible" {% if access_filter == "eligible" %}selected{% endif %}>Access Eligible</option>
-                    <option value="not_eligible" {% if access_filter == "not_eligible" %}selected{% endif %}>Not Yet Eligible</option>
+                    <option value="">Tout état d'accès</option>
+                    <option value="eligible" {% if access_filter == "eligible" %}selected{% endif %}>Accès éligible</option>
+                    <option value="not_eligible" {% if access_filter == "not_eligible" %}selected{% endif %}>Pas encore éligible</option>
                 </select>
 
                 <select name="disposition" class="form-select form-select-sm w-auto">
-                    <option value="">Any Disposition</option>
+                    <option value="">Toute disposition</option>
                     {% for value, label in disposition_options %}
                         <option value="{{ value }}" {% if disposition_filter == value %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                 </select>
 
-                <input type="date" name="date_from" class="form-control form-control-sm w-auto" value="{{ date_from }}" placeholder="From">
-                <input type="date" name="date_to" class="form-control form-control-sm w-auto" value="{{ date_to }}" placeholder="To">
+                <input type="date" name="date_from" class="form-control form-control-sm w-auto" value="{{ date_from }}" placeholder="Du">
+                <input type="date" name="date_to" class="form-control form-control-sm w-auto" value="{{ date_to }}" placeholder="Au">
 
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" name="needs_review" value="1" id="needsReview" {% if needs_review == "1" %}checked{% endif %}>
-                    <label class="form-check-label small" for="needsReview">Needs Review</label>
+                    <label class="form-check-label small" for="needsReview">À vérifier</label>
                 </div>
 
-                <button type="submit" class="btn btn-crm btn-crm-primary btn-sm">Apply</button>
-                <a href="{% url 'operations:order_list' %}" class="btn btn-crm-outline btn-sm">Reset</a>
+                <button type="submit" class="btn btn-crm btn-crm-primary btn-sm">Appliquer</button>
+                <a href="{% url 'operations:order_list' %}" class="btn btn-crm-outline btn-sm">Réinitialiser</a>
             </form>
         </div>
 
@@ -67,23 +67,23 @@
                         <div class="text-muted small">{{ order.course_name }}</div>
                     </td>
                     <td>
-                        <div class="small">Expected: <strong>{{ order.total_expected_amount }} {{ order.currency }}</strong></div>
-                        <div class="small text-success">Paid: {{ order.display_total_paid }}</div>
-                        <div class="small text-muted">Remaining: {{ order.display_remaining_balance }}</div>
+                        <div class="small">Attendu : <strong>{{ order.total_expected_amount }} {{ order.currency }}</strong></div>
+                        <div class="small text-success">Payé : {{ order.display_total_paid }}</div>
+                        <div class="small text-muted">Restant : {{ order.display_remaining_balance }}</div>
                     </td>
                     <td>
                         <span class="small fw-medium">{{ order.display_paid_count }}/{{ order.installment_count }}</span>
                         {% if order.display_access_eligible %}
-                            <span class="badge-status badge-success ms-1">ELIGIBLE</span>
+                            <span class="badge-status badge-success ms-1">ÉLIGIBLE</span>
                         {% endif %}
                     </td>
                     <td>{% include "components/status_badge.html" with status=order.status %}</td>
-                    <td class="text-muted small">{{ order.created_at|date:"M d, Y" }}</td>
+                    <td class="text-muted small">{{ order.created_at|date:"d M Y" }}</td>
                 </tr>
                 {% endfor %}
             {% include "components/table_end.html" %}
         {% else %}
-            {% include "components/table_empty_state.html" with title="No orders found" description="Adjust your filters — no orders match the current criteria." %}
+            {% include "components/table_empty_state.html" with title="Aucune commande trouvée" description="Ajustez vos filtres — aucune commande ne correspond aux critères actuels." %}
         {% endif %}
     </div>
 

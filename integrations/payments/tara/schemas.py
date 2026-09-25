@@ -230,6 +230,15 @@ class TaraTransactionListItem(BaseModel):
             return None
 
 
+class TaraResendWebhookRequest(BaseModel):
+    """Internal request for POST /tara/resend-webhook. Same apiKey/businessId-injection contract as the other Tara request DTOs."""
+    model_config = ConfigDict(populate_by_name=True, str_strip_whitespace=True)
+
+    api_key: str = Field(alias="apiKey", min_length=1)
+    business_id: str = Field(alias="businessId", min_length=1)
+    product_id: str = Field(alias="productId", min_length=1, max_length=_MAX_PRODUCT_ID_LENGTH)
+
+
 _MAX_WEBHOOK_FIELD_LENGTH = 255
 _MAX_WEBHOOK_STATUS_LENGTH = 50
 

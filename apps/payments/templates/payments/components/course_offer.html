@@ -1,0 +1,41 @@
+{% with offer=presentation.offer course=presentation.course %}
+<section class="course-offer" data-course-offer="{{ course.id }}" aria-labelledby="offer-title-{{ course.id }}" {% if offer %}lang="{{ offer.language }}"{% endif %}>
+    <div class="course-offer-visual">
+        {% if offer %}
+        <div class="course-offer-art">
+            <img src="{{ offer.image_url }}" alt="{{ offer.mockup_alt }}" width="1536" height="1024" {% if course.id == selected_plan.course_id %}fetchpriority="high"{% else %}loading="lazy"{% endif %}>
+            <span class="course-offer-format"><i class="fa-solid fa-circle-play" aria-hidden="true"></i> FORMATION EN LIGNE</span>
+        </div>
+
+        {% if offer.highlight_list %}
+        <ul class="course-offer-highlights" aria-label="Votre formation en bref">
+            {% for highlight in offer.highlight_list %}<li><i class="fa-solid fa-check" aria-hidden="true"></i>{{ highlight }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+
+        {% else %}
+        <div class="course-offer-placeholder"><i class="fa-solid fa-book-open" aria-hidden="true"></i><span>{{ course.name }}</span></div>
+        {% endif %}
+    </div>
+    <div class="course-offer-details">
+        
+        <h2 class="visually-hidden" id="offer-title-{{ course.id }}">{% if offer %}{{ offer.title }}{% else %}{{ course.name }}{% endif %}</h2>
+
+        {% if offer.benefits.all %}
+        <h3>Votre formation comprend</h3>
+        <ul class="course-benefits">
+            {% for benefit in offer.benefits.all %}
+            <li{% if benefit.is_bonus %} class="course-benefit--bonus"{% endif %}>
+                <span class="course-benefit-icon" aria-hidden="true"><i class="fa-solid {% if benefit.is_bonus %}fa-gift{% else %}fa-check{% endif %}"></i></span>
+                <div class="course-benefit-detail">
+                    {% if benefit.is_bonus %}<span class="course-bonus-label">BONUS OFFERT</span>{% endif %}
+                    <h4>{{ benefit.title }}</h4>
+                    <p>{{ benefit.description }}</p>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+</section>
+{% endwith %}

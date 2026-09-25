@@ -1,11 +1,24 @@
 {% extends "public_base.html" %}
 
-{% block title %}Checkout Error | ValuedCRM{% endblock %}
+{% block title %}Reprenons votre inscription | {{ BRAND_NAME }} &amp; {{ BUSINESS_NAME }}{% endblock %}
 
 {% block content %}
-<div class="crm-card text-center py-5">
-    <i class="fa-solid fa-triangle-exclamation text-danger mb-3" style="font-size: 3rem;"></i>
-    <h4 class="fw-bold">Something Went Wrong</h4>
-    <p class="text-muted">{{ message }}</p>
-</div>
+<section class="checkout-state-card" aria-labelledby="error-heading">
+    <span class="checkout-state-icon checkout-state-icon--warning"><i class="fa-solid fa-leaf" aria-hidden="true"></i></span>
+    <h1 id="error-heading">Reprenons votre inscription.</h1>
+    <p>{{ message }}</p>
+    <p>Revenez à votre commande pour vérifier vos coordonnées et réessayer.</p>
+    <button type="button" class="checkout-submit" id="checkout-back" hidden><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Revenir à ma commande</button>
+    <noscript><p>Utilisez le bouton Retour de votre navigateur pour revenir à votre commande.</p></noscript>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    if (window.history.length > 1) {
+        const back = document.getElementById('checkout-back');
+        back.hidden = false;
+        back.addEventListener('click', function () { window.history.back(); });
+    }
+</script>
 {% endblock %}

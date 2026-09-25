@@ -14,7 +14,7 @@
 
 {% block content %}
 <h1>{{ description }}</h1>
-<p>Confirm the following action. This cannot be undone from this page.</p>
+<p>Confirmez l'action suivante. Elle ne peut pas être annulée depuis cette page.</p>
 
 <h2>{% translate "Targets" %}</h2>
 <ul>
@@ -23,8 +23,8 @@
         {{ obj }}
         {% if obj.total_paid_amount and obj.total_paid_amount > 0 %}
             <br><strong style="color:#a94442;">
-                Warning: this order has verified payments (total paid: {{ obj.total_paid_amount }}).
-                This action does not refund money or revoke existing payment history.
+                Attention : cette commande a des paiements vérifiés (total payé : {{ obj.total_paid_amount }}).
+                Cette action ne rembourse pas l'argent et n'annule pas l'historique de paiement existant.
             </strong>
         {% endif %}
     </li>
@@ -43,7 +43,7 @@
     <div class="form-row">
         <label for="id_reason" class="required">{% translate "Reason" %}</label>
         <textarea id="id_reason" name="reason" rows="3" cols="60" required>{{ reason }}</textarea>
-        <p class="help">Mandatory — recorded on the immutable administrative audit trail.</p>
+        <p class="help">Obligatoire — enregistré dans le journal d'audit administratif immuable.</p>
     </div>
 </fieldset>
 

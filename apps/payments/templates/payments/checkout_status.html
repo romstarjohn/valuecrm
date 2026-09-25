@@ -1,40 +1,65 @@
 {% extends "public_base.html" %}
 
-{% block title %}Order Status | ValuedCRM{% endblock %}
+{% block title %}Votre inscription | {{ BRAND_NAME }} &amp; {{ BUSINESS_NAME }}{% endblock %}
+
+{% block extra_head %}
+{% if display_status == "link_ready" or display_status == "verification_pending" %}
+    <meta http-equiv="refresh" content="15">
+{% endif %}
+{% endblock %}
 
 {% block content %}
-<div class="crm-card text-center py-5">
+<section class="checkout-state-card" aria-labelledby="status-heading">
     {% if error %}
-        <i class="fa-solid fa-triangle-exclamation text-danger mb-3" style="font-size: 3rem;"></i>
-        <h4 class="fw-bold">We couldn't find this order</h4>
-        <p class="text-muted">{{ error }}</p>
+        <span class="checkout-state-icon checkout-state-icon--error"><i class="fa-solid fa-link-slash" aria-hidden="true"></i></span>
+        <h1 id="status-heading">Commande introuvable</h1>
+        <p>{{ error }}</p>
+        <p>Si vous avez déjà payé, contactez votre organisme de formation avec votre référence de paiement pour retrouver votre inscription.</p>
     {% else %}
         {% if display_status == "payment_confirmed" %}
-            <i class="fa-solid fa-circle-check text-success mb-3" style="font-size: 3rem;"></i>
-            <h4 class="fw-bold">Payment Confirmed</h4>
-            <p class="text-muted">Your payment has been verified. Thank you!</p>
+            <span class="checkout-state-icon checkout-state-icon--success"><i class="fa-solid fa-check" aria-hidden="true"></i></span>
+            <h1 id="status-heading">Paiement confirmé</h1>
+            <p>Votre inscription avance !<br>Votre paiement a été vérifié. Merci pour votre confiance.</p>
         {% elif display_status == "link_ready" %}
-            <i class="fa-solid fa-link text-primary mb-3" style="font-size: 3rem;"></i>
-            <h4 class="fw-bold">Payment Link Ready</h4>
-            <p class="text-muted">A payment link has been generated for this order.</p>
+            <span class="checkout-state-icon"><i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></span>
+            <h1 id="status-heading">Poursuivez votre paiement</h1>
+            <p>Finalisez votre paiement sur la page Tara. Si vous avez déjà payé, cette page se mettra à jour automatiquement dès sa confirmation.</p>
         {% elif display_status == "verification_pending" %}
-            <i class="fa-solid fa-hourglass-half text-warning mb-3" style="font-size: 3rem;"></i>
-            <h4 class="fw-bold">Verification Pending</h4>
-            <p class="text-muted">We're still verifying your payment. This page will update once it's confirmed — no action is needed from you right now.</p>
+            <span class="checkout-state-icon checkout-state-icon--warning"><i class="fa-solid fa-hourglass-half" aria-hidden="true"></i></span>
+            <h1 id="status-heading">Vérification en cours</h1>
+            <p>Nous vérifions votre paiement. Cette page se met à jour automatiquement ; aucune autre action n’est nécessaire pour le moment.</p>
         {% elif display_status == "failed" %}
-            <i class="fa-solid fa-circle-xmark text-danger mb-3" style="font-size: 3rem;"></i>
-            <h4 class="fw-bold">Payment Failed</h4>
-            <p class="text-muted">This payment could not be completed. Please contact support if you believe this is an error.</p>
+            <span class="checkout-state-icon checkout-state-icon--error"><i class="fa-solid fa-xmark" aria-hidden="true"></i></span>
+            <h1 id="status-heading">Paiement non abouti</h1>
+            <p>Ce paiement n’a pas pu être finalisé. Contactez votre organisme de formation avec la référence ci-dessous pour poursuivre votre inscription.</p>
         {% elif display_status == "awaiting_payment" %}
-            <i class="fa-solid fa-clock text-muted mb-3" style="font-size: 3rem;"></i>
-            <h4 class="fw-bold">Awaiting Payment</h4>
-            <p class="text-muted">Your order has been created and is awaiting payment.</p>
+            <span class="checkout-state-icon"><i class="fa-regular fa-clock" aria-hidden="true"></i></span>
+            <h1 id="status-heading">En attente de paiement</h1>
+            <p>Votre inscription a bien été enregistrée.<br>Nous attendons la confirmation de votre paiement avant de valider votre achat.</p>
         {% else %}
-            <i class="fa-solid fa-circle-info text-muted mb-3" style="font-size: 3rem;"></i>
-            <h4 class="fw-bold">Status Unavailable</h4>
-            <p class="text-muted">We couldn't determine the status of this order. Please contact support.</p>
+            <span class="checkout-state-icon checkout-state-icon--warning"><i class="fa-solid fa-circle-info" aria-hidden="true"></i></span>
+            <h1 id="status-heading">Statut indisponible</h1>
+            <p>Nous ne pouvons pas déterminer le statut de votre paiement. Contactez votre organisme de formation avec la référence ci-dessous.</p>
         {% endif %}
-        <div class="text-muted small mt-3">Order reference: {{ order.reference }}</div>
+
+        <dl class="checkout-state-details">
+            <div><dt>Formation</dt><dd>{{ order.course_name }}</dd></div>
+            <div><dt>Plan de paiement</dt><dd>{{ order.plan_name }}</dd></div>
+            <div><dt>Coût total</dt><dd>{{ order.total_expected_amount|floatformat:'2g' }} {{ order.currency }}</dd></div>
+            <div><dt>Versements</dt><dd>{{ order.installment_count }} × {{ order.installment_amount|floatformat:'2g' }} {{ order.currency }}</dd></div>
+            {% if order.installment_count > 1 %}<div><dt>Échéancier</dt><dd>Tous les {{ order.installment_interval_days }} jours</dd></div>{% endif %}
+        </dl>
+        <div class="checkout-access-note"><i class="fa-solid fa-unlock-keyhole" aria-hidden="true"></i><span>{% if order.access_policy == 'FIRST_INSTALLMENT' %}L’accès à la formation sera ouvert après confirmation du premier paiement.{% else %}L’accès à la formation sera ouvert après confirmation du paiement intégral.{% endif %}</span></div>
+
+        {% if display_status == "link_ready" or display_status == "verification_pending" %}
+            <form method="post" action="{% url 'payments:checkout_status_refresh' token %}" class="checkout-state-refresh">
+                {% csrf_token %}
+                <p>Vous avez déjà payé et attendez toujours ?</p>
+                <button type="submit"><i class="fa-solid fa-rotate me-1" aria-hidden="true"></i>Vérifier mon paiement</button>
+            </form>
+        {% endif %}
+        <p class="checkout-state-reference">Référence de commande : {{ order.reference }}</p>
     {% endif %}
-</div>
+</section>
+<p class="checkout-closing"><i class="fa-solid fa-leaf" aria-hidden="true"></i> Un nouveau départ pour votre apprentissage.</p>
 {% endblock %}

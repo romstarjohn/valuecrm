@@ -1,35 +1,38 @@
-/* tokens.css - ValuedCRM design tokens. Variables only, no rules. */
+/* tokens.css - ValuedCRM design tokens. Variables only, no rules.
+   Palette: "Le Comptoir" — indigo-ledger. Accent (indigo) is deliberately
+   distinct from the semantic status colors below (good/warn/critical),
+   per the internal-ops dashboard design (docs/PRODUCT_CADRAGE_PMI.md). */
 
 :root {
-    /* Color - brand/shell (existing, kept for compatibility) */
-    --sidebar-bg: #1a1d21;
-    --sidebar-hover: #2c3034;
-    --sidebar-text: #adb5bd;
-    --primary-blue: #0d6efd;
-    --primary-blue-hover: #0b5ed7;
-    --content-bg: #f8fafc;
-    --border-color: #e2e8f0;
-    --card-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-    --table-header-bg: #f1f5f9;
+    /* Color - brand/shell */
+    --sidebar-bg: #FFFFFF;
+    --sidebar-hover: #E9ECE7;
+    --sidebar-text: #585C6B;
+    --primary-blue: #3E4FA0;
+    --primary-blue-hover: #333F82;
+    --content-bg: #F1F3F1;
+    --border-color: #DCE0DA;
+    --card-shadow: 0 1px 2px rgba(26, 29, 39, 0.05);
+    --table-header-bg: #FBFBFA;
 
     /* Color - semantic text/surface */
-    --color-text-primary: #1e293b;
-    --color-text-secondary: #475569;
-    --color-text-muted: #64748b;
+    --color-text-primary: #1A1D27;
+    --color-text-secondary: #585C6B;
+    --color-text-muted: #8B8F9C;
     --color-text-inverse: #ffffff;
-    --color-surface: #ffffff;
-    --color-border-strong: #cbd5e1;
-    --color-focus-ring: rgba(13, 110, 253, 0.5);
+    --color-surface: #FFFFFF;
+    --color-border-strong: #C7CCEC;
+    --color-focus-ring: rgba(62, 79, 160, 0.45);
 
     /* Color - status (background / text / border trio, shared by badges and alerts) */
-    --color-success-bg: #dcfce7; --color-success-text: #15803d; --color-success-border: #bbf7d0;
-    --color-danger-bg: #fee2e2;  --color-danger-text: #b91c1c;  --color-danger-border: #fecaca;
-    --color-warning-bg: #fef3c7; --color-warning-text: #b45309; --color-warning-border: #fde68a;
-    --color-info-bg: #e0f2fe;    --color-info-text: #0369a1;    --color-info-border: #bae6fd;
+    --color-success-bg: #E3F1E9; --color-success-text: #2E7D52; --color-success-border: #BFE0CD;
+    --color-danger-bg: #F8E4E0;  --color-danger-text: #B23A28;  --color-danger-border: #E8B7AC;
+    --color-warning-bg: #F7EDDA; --color-warning-text: #A6690E; --color-warning-border: #E9CE9C;
+    --color-info-bg: #E7E9F6;    --color-info-text: #3E4FA0;    --color-info-border: #C7CCEC;
 
     /* Color - solid action variants (buttons that aren't primary/outline) */
-    --color-danger-solid: #dc2626;
-    --color-danger-solid-hover: #b91c1c;
+    --color-danger-solid: #B23A28;
+    --color-danger-solid-hover: #942E20;
 
     /* Spacing scale (4px base unit) */
     --space-1: 0.25rem;
@@ -42,8 +45,13 @@
     --space-10: 2.5rem;
     --space-12: 3rem;
 
-    /* Typography */
-    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    /* Typography — IBM Plex Sans (UI/labels) + IBM Plex Mono (amounts, dates,
+       references — tabular figures read as counted, not just typeset). */
+    --font-brand-sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+    --font-display: var(--font-brand-sans);
+    --font-accent: var(--font-brand-sans);
+    --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, "SF Mono", monospace;
     --text-xs: 0.75rem;
     --text-sm: 0.8125rem;
     --text-base: 0.875rem;
@@ -63,9 +71,9 @@
     --radius-md: 0.5rem;
     --radius-lg: 0.75rem;
     --radius-pill: 9999px;
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
     --shadow-md: var(--card-shadow);
-    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+    --shadow-lg: 0 8px 24px rgba(26, 29, 39, 0.1);
     --transition-fast: 120ms ease;
     --transition-base: 180ms ease;
 
@@ -74,4 +82,49 @@
     --z-sticky: 1020;
     --z-modal: 1050;
     --z-toast: 1080;
+
+    /* "Le Comptoir" aliases — lets ported component CSS (comptoir-components.css)
+       use the mockup's own variable names verbatim, screen by screen, without
+       duplicating the palette declared above. */
+    --paper: var(--content-bg);
+    --surface: var(--color-surface);
+    --surface-raised: var(--table-header-bg);
+    --ink: var(--color-text-primary);
+    --ink-soft: var(--color-text-secondary);
+    --ink-faint: var(--color-text-muted);
+    --border: var(--border-color);
+    --border-soft: #E9ECE7;
+    --accent: var(--primary-blue);
+    --accent-ink: var(--color-text-inverse);
+    --accent-soft: var(--color-info-bg);
+    --accent-soft-border: var(--color-info-border);
+    --good: var(--color-success-text);
+    --good-soft: var(--color-success-bg);
+    --good-border: var(--color-success-border);
+    --warn: var(--color-warning-text);
+    --warn-soft: var(--color-warning-bg);
+    --warn-border: var(--color-warning-border);
+    --critical: var(--color-danger-text);
+    --critical-soft: var(--color-danger-bg);
+    --critical-border: var(--color-danger-border);
+
+    /* Bootstrap's own theme variables — loaded before this file, so this
+       redefinition wins. Without it, raw Bootstrap utilities (bg-primary,
+       text-danger, btn-primary, border-warning, …) still render Bootstrap's
+       default blue/red/etc. instead of the palette above, even though every
+       custom component (crm-card, pill, badge-status) already matches it. */
+    --bs-primary: #3E4FA0;
+    --bs-primary-rgb: 62, 79, 160;
+    --bs-success: #2E7D52;
+    --bs-success-rgb: 46, 125, 82;
+    --bs-danger: #B23A28;
+    --bs-danger-rgb: 178, 58, 40;
+    --bs-warning: #A6690E;
+    --bs-warning-rgb: 166, 105, 14;
+    --bs-info: #3E4FA0;
+    --bs-info-rgb: 62, 79, 160;
+    --bs-link-color: #3E4FA0;
+    --bs-link-color-rgb: 62, 79, 160;
+    --bs-link-hover-color: #333F82;
+    --bs-link-hover-color-rgb: 51, 63, 130;
 }

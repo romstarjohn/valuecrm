@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} | {{ BRAND_NAME }}{% endblock %}
+
+{% block content %}
+{% include "components/page_header.html" with title=title subtitle="La page commerciale de ce cours — titre, visuel et bénéfices affichés sur le lien de paiement public." %}
+
+<div class="container-fluid px-4 fade-in pb-5">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="crm-card">
+                <form method="post" id="product-form">
+                    {% csrf_token %}
+
+                    <div class="mb-4 p-3 rounded-3" style="background:var(--accent-soft);border:1px solid var(--accent-soft-border);">
+                        <label class="form-label small fw-bold text-uppercase mb-1" for="{{ form.course.id_for_label }}">
+                            <i class="fa-solid fa-link me-1" aria-hidden="true"></i>Cours associé
+                        </label>
+                        {{ form.course }}
+                        <div class="form-text small mt-1">Un seul produit par cours — créer un second produit pour ce cours n'est pas permis.</div>
+                        {% if form.course.errors %}<div class="form-error">{{ form.course.errors|striptags }}</div>{% endif %}
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label small fw-bold text-uppercase text-muted letter-spacing-wide" for="{{ form.title.id_for_label }}">Titre</label>
+                            {{ form.title }}
+                            {% if form.title.errors %}<div class="form-error">{{ form.title.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-uppercase text-muted letter-spacing-wide" for="{{ form.language.id_for_label }}">Langue</label>
+                            {{ form.language }}
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-bold text-uppercase text-muted letter-spacing-wide" for="{{ form.subtitle.id_for_label }}">Sous-titre</label>
+                            {{ form.subtitle }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-uppercase text-muted letter-spacing-wide" for="{{ form.mockup_image.id_for_label }}">Visuel (URL ou chemin statique)</label>
+                            {{ form.mockup_image }}
+                            {% if form.mockup_image.errors %}<div class="form-error">{{ form.mockup_image.errors|striptags }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-uppercase text-muted letter-spacing-wide" for="{{ form.mockup_alt.id_for_label }}">Texte alternatif du visuel</label>
+                            {{ form.mockup_alt }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-uppercase text-muted letter-spacing-wide" for="{{ form.slug.id_for_label }}">Identifiant interne</label>
+                            {{ form.slug }}
+                            <div class="form-text small">{{ form.slug.help_text }}</div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-bold text-uppercase text-muted letter-spacing-wide" for="{{ form.highlights.id_for_label }}">Points forts</label>
+                            {{ form.highlights }}
+                            <div class="form-text small">{{ form.highlights.help_text }}</div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-bold text-uppercase text-muted letter-spacing-wide" for="{{ form.closing_note.id_for_label }}">Note de clôture</label>
+                            {{ form.closing_note }}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <h5 class="fw-bold mb-1">Bénéfices affichés</h5>
+                    <p class="small text-muted mb-3">Un bonus est mis en avant visuellement sur la page de paiement.</p>
+                    {{ formset.management_form }}
+                    <div class="table-wrap mb-3">
+                        <table>
+                            <thead>
+                                <tr><th>Titre</th><th>Description</th><th>Ordre</th><th>Bonus</th><th></th></tr>
+                            </thead>
+                            <tbody>
+                                {% for bf in formset %}
+                                <tr>
+                                    <td>{{ bf.id }}{{ bf.title }}{% if bf.title.errors %}<div class="form-error">{{ bf.title.errors|striptags }}</div>{% endif %}</td>
+                                    <td>{{ bf.description }}</td>
+                                    <td style="width:90px;">{{ bf.display_order }}</td>
+                                    <td class="text-center" style="width:70px;">{{ bf.is_bonus }}</td>
+                                    <td class="text-center" style="width:70px;">
+                                        {% if bf.instance.pk %}<label class="small text-danger">{{ bf.DELETE }} Suppr.</label>{% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="mt-5 d-flex gap-2 justify-content-end">
+                        <a href="{% url 'courses:product_list' %}" class="btn-crm btn-crm-outline">Annuler</a>
+                        <button type="submit" class="btn-crm btn-crm-primary px-5" id="product-form-submit">Enregistrer le produit</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            {% if offer %}
+            <div class="crm-card border-0 shadow-sm">
+                <h6 class="text-uppercase text-muted fw-bold small mb-3 letter-spacing-wide">Lien de paiement</h6>
+                <div class="link-field" style="width:100%;">
+                    <span id="product-checkout-link" style="flex:1;">{{ checkout_url }}</span>
+                    <button type="button" class="btn-crm btn-crm-outline btn-crm-sm js-copy" data-copy-target="product-checkout-link">Copier</button>
+                </div>
+                <div class="helper">Utilisable directement depuis un site externe — ouvre ce produit et ses plans actifs.</div>
+            </div>
+
+            <div class="crm-card border-0 shadow-sm">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="text-uppercase text-muted fw-bold small mb-0 letter-spacing-wide">Plans de paiement</h6>
+                    {% if can_add_plan %}
+                        <a href="{% url 'plans:add' %}?course_id={{ offer.course.pk }}" class="btn-crm btn-crm-outline btn-crm-sm">
+                            <i class="fa-solid fa-plus small" aria-hidden="true"></i>
+                        </a>
+                    {% endif %}
+                </div>
+                {% if plans %}
+                    <div class="d-flex flex-column gap-2">
+                        {% for plan in plans %}
+                        <div class="plan-row">
+                            <div>
+                                <div class="plan-name">{{ plan.name }} {% if not plan.is_active %}<span class="pill neutral">Inactif</span>{% endif %}</div>
+                                <div class="plan-terms">
+                                    {% if plan.installment_count == 1 %}Paiement unique · {{ plan.installment_amount }} {{ plan.currency }}
+                                    {% else %}{{ plan.installment_count }} × {{ plan.installment_amount }} {{ plan.currency }}{% endif %}
+                                </div>
+                            </div>
+                            {% if can_edit_plan %}<a href="{% url 'plans:edit' plan.pk %}" class="btn-crm btn-crm-outline btn-crm-sm">Modifier</a>{% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted small fst-italic mb-2">Aucun plan pour ce cours.</p>
+                    {% if can_add_plan %}
+                        <a href="{% url 'plans:add' %}?course_id={{ offer.course.pk }}" class="btn-crm btn-crm-primary btn-crm-sm w-100">Créer un plan</a>
+                    {% endif %}
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="p-3 rounded-3" style="background:var(--accent-soft);border:1px solid var(--accent-soft-border);">
+                <h6 class="fw-bold mb-1"><i class="fa-solid fa-circle-info me-2" aria-hidden="true"></i>Remarque</h6>
+                <p class="small mb-0">Enregistrez d'abord le produit — vous pourrez ensuite lui associer un ou plusieurs plans de paiement, et retrouver ici son lien de paiement, depuis cette même page.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.getElementById("product-form").addEventListener("submit", function () {
+        var btn = document.getElementById("product-form-submit");
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Enregistrement…';
+    });
+</script>
+{% endblock %}

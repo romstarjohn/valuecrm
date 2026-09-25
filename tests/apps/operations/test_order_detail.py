@@ -78,7 +78,9 @@ def test_provider_facts_shown_read_only_separate_from_internal_status(ops_client
     content = response.content.decode()
     attempt = order.installments.get().payment_attempts.get()
     assert attempt.tara_product_id in content
-    assert "SUCCEEDED" in content.upper()
+    # status_badge.html now renders French labels (shared/templatetags/status_labels.py,
+    # AGENT.md) — SUCCEEDED -> "Réussi", not the raw English enum code.
+    assert "RÉUSSI" in content.upper()
 
 
 def test_no_secrets_or_raw_payloads_exposed(ops_client):

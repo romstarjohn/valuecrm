@@ -1,14 +1,16 @@
-{% if customer_name %}Hello {{ customer_name }},{% else %}Hello,{% endif %}
+{% if customer_name %}Bonjour {{ customer_name }},{% else %}Bonjour,{% endif %}
 
-We've received your payment. Here are the details:
+Nous avons bien reçu votre paiement pour {{ business_name }}. Voici le détail :
 
-Amount received: {{ amount_received }} {{ currency }}
-Order reference: {{ order_reference }}
-Plan / course: {{ plan_or_course_name }}
-Installment: {{ installment_number }} of {{ installment_count }}
-{% if remaining_balance_positive %}Remaining balance: {{ remaining_balance }} {{ currency }}{% else %}This order is now fully paid.{% endif %}
-{% if next_installment_due_date %}Next installment due: {{ next_installment_due_date }}{% endif %}
+Montant reçu : {{ amount_received }} {{ currency }}
+Référence de commande : {{ order_reference }}
+Formation / plan : {{ plan_or_course_name }}
+Versement : {{ installment_number }} sur {{ installment_count }}
+{% if remaining_balance_positive %}Solde restant : {{ remaining_balance }} {{ currency }}{% else %}Cette commande est désormais soldée.{% endif %}
+{% if next_installment_due_date %}Prochaine échéance : {{ next_installment_due_date }}{% endif %}
 
-Course access status: {{ course_access_status }}
+Statut de l'accès à la formation : {{ course_access_status }}
 
-Thank you.
+Merci pour votre confiance.
+
+L'équipe {{ business_name }}

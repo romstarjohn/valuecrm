@@ -39,7 +39,7 @@ def test_tampered_reference_rejected(client, order):
     tampered = token[:-2] + ("zz" if not token.endswith("zz") else "aa")
     response = client.get(status_url(tampered))
     assert response.status_code == 400
-    assert b"couldn't find this order" in response.content or b"invalid" in response.content.lower()
+    assert b"Commande introuvable" in response.content or b"invalid" in response.content.lower()
 
 
 def test_expired_reference_rejected(client, order, mocker):
@@ -62,7 +62,7 @@ def test_expired_reference_rejected(client, order, mocker):
     )
     response = client.get(status_url(token))
     assert response.status_code == 400
-    assert b"expired" in response.content.lower()
+    assert "expiré".encode() in response.content.lower()
 
 
 def test_query_string_success_ignored(client, order):
@@ -70,7 +70,7 @@ def test_query_string_success_ignored(client, order):
     token = CheckoutService().build_signed_reference(order.reference)
     response = client.get(status_url(token) + "?status=success&amount=0&paid=true&course=Bootcamp")
     assert response.status_code == 200
-    assert b"Payment Confirmed" not in response.content  # nothing was actually paid; query string must not cause this
+    assert "Paiement confirmé".encode() not in response.content  # nothing was actually paid; query string must not cause this
 
 
 def test_another_customers_order_rejected_via_wrong_token(client, order):
@@ -126,7 +126,7 @@ def test_payment_confirmed_shown_only_after_succeeded_attempt(client, order):
 
     token = CheckoutService().build_signed_reference(order.reference)
     response = client.get(status_url(token))
-    assert b"Payment Confirmed" in response.content
+    assert "Paiement confirmé".encode() in response.content
 
 
 def test_failed_attempt_shows_failed_status(client, order):
@@ -137,4 +137,109 @@ def test_failed_attempt_shows_failed_status(client, order):
 
     token = CheckoutService().build_signed_reference(order.reference)
     response = client.get(status_url(token))
-    assert b"Payment Failed" in response.content
+    assert b"Paiement non abouti" in response.content
+
+
+# --- link_ready / verification_pending: customer-facing copy + manual refresh CTA ---
+
+def refresh_url(token):
+    return reverse("payments:checkout_status_refresh", args=[token])
+
+
+def test_link_ready_shows_redirected_copy_not_technical_jargon(client, order):
+    installment = order.installments.get()
+    attempt = PaymentAttemptService().create_attempt(installment)
+    PaymentAttemptService().transition(attempt, PaymentAttempt.Status.LINK_CREATED)
+
+    token = CheckoutService().build_signed_reference(order.reference)
+    response = client.get(status_url(token))
+    content = response.content.decode()
+    assert "Poursuivez votre paiement" in content
+    assert "Payment Link Ready" not in content  # old, confusing copy is gone
+    assert "Vérifier mon paiement" in content
+    assert f'action="{refresh_url(token)}"' in content
+
+
+def test_verification_pending_shows_refresh_cta(client, order):
+    installment = order.installments.get()
+    attempt = PaymentAttemptService().create_attempt(installment)
+    PaymentAttemptService().transition(attempt, PaymentAttempt.Status.LINK_CREATED)
+    PaymentAttemptService().transition(attempt, PaymentAttempt.Status.PENDING)
+
+    token = CheckoutService().build_signed_reference(order.reference)
+    response = client.get(status_url(token))
+    assert "Vérifier mon paiement".encode() in response.content
+
+
+def test_terminal_states_never_show_refresh_cta(client, order):
+    installment = order.installments.get()
+    attempt = PaymentAttemptService().create_attempt(installment)
+    PaymentAttemptService().transition(attempt, PaymentAttempt.Status.FAILED)
+
+    token = CheckoutService().build_signed_reference(order.reference)
+    response = client.get(status_url(token))
+    assert "Vérifier mon paiement".encode() not in response.content
+
+
+def test_link_ready_and_pending_pages_auto_refresh(client, order):
+    installment = order.installments.get()
+    attempt = PaymentAttemptService().create_attempt(installment)
+    PaymentAttemptService().transition(attempt, PaymentAttempt.Status.LINK_CREATED)
+
+    token = CheckoutService().build_signed_reference(order.reference)
+    response = client.get(status_url(token))
+    assert b'http-equiv="refresh"' in response.content
+
+
+def test_confirmed_page_does_not_auto_refresh(client, order):
+    installment = order.installments.get()
+    attempt = PaymentAttemptService().create_attempt(installment)
+    PaymentAttemptService().transition(attempt, PaymentAttempt.Status.LINK_CREATED)
+    PaymentAttemptService().transition(attempt, PaymentAttempt.Status.PENDING)
+    PaymentAttemptService().transition(attempt, PaymentAttempt.Status.SUCCEEDED)
+
+    token = CheckoutService().build_signed_reference(order.reference)
+    response = client.get(status_url(token))
+    assert b'http-equiv="refresh"' not in response.content
+
+
+# --- Manual refresh endpoint ---
+
+def test_refresh_requests_webhook_resend_and_redirects_back(client, order, mocker):
+    installment = order.installments.get()
+    attempt = PaymentAttemptService().create_attempt(installment)
+    PaymentAttemptService().transition(attempt, PaymentAttempt.Status.LINK_CREATED)
+
+    mock_resend = mocker.patch("apps.payments.services.CheckoutService.request_status_refresh")
+    token = CheckoutService().build_signed_reference(order.reference)
+
+    response = client.post(refresh_url(token))
+
+    assert response.status_code == 302
+    assert response.url == status_url(token)
+    mock_resend.assert_called_once()
+
+
+def test_refresh_get_not_allowed(client, order):
+    token = CheckoutService().build_signed_reference(order.reference)
+    response = client.get(refresh_url(token))
+    assert response.status_code == 405
+
+
+def test_refresh_invalid_token_rejected(client):
+    response = client.post(refresh_url("not-a-valid-token"))
+    assert response.status_code == 400
+
+
+def test_refresh_actually_calls_tara_resend_webhook(client, order, mocker):
+    installment = order.installments.get()
+    attempt = PaymentAttemptService().create_attempt(installment)
+    PaymentAttemptService().transition(attempt, PaymentAttempt.Status.LINK_CREATED)
+
+    mock_client = mocker.Mock()
+    mocker.patch("apps.payments.services.TaraConfigService.get_client", return_value=mock_client)
+    token = CheckoutService().build_signed_reference(order.reference)
+
+    client.post(refresh_url(token))
+
+    mock_client.resend_webhook.assert_called_once_with(attempt.tara_product_id)

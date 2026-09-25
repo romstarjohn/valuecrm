@@ -1,20 +1,20 @@
 {% extends "base.html" %}
-{% block title %}Provisioning / Enrollment | ValuedCRM{% endblock %}
+{% block title %}Provisionnement / Inscription | {{ BRAND_NAME }}{% endblock %}
 {% block content %}
-{% include "components/page_header.html" with title="Provisioning / Enrollment" subtitle="Course-access work — ClickFunnels calls happen out of transaction, via the existing worker." %}
+{% include "components/page_header.html" with title="Provisionnement / Inscription" subtitle="Attribution de l'accès à la formation — les appels ClickFunnels se font hors transaction, via le worker existant." %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="table-container mb-4 shadow-sm border-0">
         <div class="table-toolbar flex-wrap gap-3">
             <form method="get" class="d-flex flex-wrap align-items-center gap-2 flex-grow-1">
                 <select name="status" class="form-select form-select-sm w-auto">
-                    <option value="">All Statuses</option>
+                    <option value="">Tous les statuts</option>
                     {% for value, label in status_options %}
                         <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                 </select>
-                <button type="submit" class="btn btn-crm btn-crm-primary btn-sm">Apply</button>
-                <a href="{% url 'operations:provisioning_list' %}" class="btn btn-crm-outline btn-sm">Reset</a>
+                <button type="submit" class="btn btn-crm btn-crm-primary btn-sm">Appliquer</button>
+                <a href="{% url 'operations:provisioning_list' %}" class="btn btn-crm-outline btn-sm">Réinitialiser</a>
             </form>
         </div>
 
@@ -30,13 +30,13 @@
                     <td>{% include "components/status_badge.html" with status=req.status %}</td>
                     <td class="small text-muted">{{ req.attempt_count }}</td>
                     <td class="small text-muted">{{ req.failure_category|default:"--" }}</td>
-                    <td class="small text-muted">{{ req.updated_at|date:"M d, H:i" }}</td>
+                    <td class="small text-muted">{{ req.updated_at|date:"d M, H:i" }}</td>
                     <td class="text-end">
                         {% if can_retry_provisioning %}
                             {% if req.status == "FAILED" or req.status == "MANUAL_REVIEW" %}
                             {% include "components/action_menu.html" %}
                                 {% block menu_items %}
-                                    <li><a class="dropdown-item" href="{% url 'operations:provisioning_retry' req.pk %}"><i class="fa-solid fa-rotate-right me-2 small"></i>Retry Enrollment</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'operations:provisioning_retry' req.pk %}"><i class="fa-solid fa-rotate-right me-2 small"></i>Relancer l'inscription</a></li>
                                 {% endblock %}
                             {% endif %}
                         {% endif %}
@@ -45,7 +45,7 @@
                 {% endfor %}
             {% include "components/table_end.html" %}
         {% else %}
-            {% include "components/table_empty_state.html" with title="No provisioning requests found" description="Adjust your filters." %}
+            {% include "components/table_empty_state.html" with title="Aucune demande de provisionnement trouvée" description="Ajustez vos filtres." %}
         {% endif %}
     </div>
     {% if page_obj %}{% include "components/pagination.html" with page_obj=page_obj %}{% endif %}

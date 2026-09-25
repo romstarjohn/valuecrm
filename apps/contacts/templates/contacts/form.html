@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}{{ title }} | ValuedCRM{% endblock %}
+{% block title %}{{ title }} | {{ BRAND_NAME }}{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title=title subtitle=contact|yesno:"Update this contact's profile, address, and metadata.,Fill in the contact's details to add them to your workspace." %}
+{% include "components/page_header.html" with title=title subtitle=contact|yesno:"Mettez à jour le profil, l’adresse et les métadonnées de ce contact.,Renseignez les informations du contact pour l’ajouter à votre espace de travail." %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="row">
@@ -14,35 +14,35 @@
 
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted" for="{{ form.first_name.id_for_label }}">First Name</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.first_name.id_for_label }}">Prénom</label>
                             {{ form.first_name }}
                             {% if form.first_name.errors %}
                                 <div class="form-error">{{ form.first_name.errors|striptags }}</div>
                             {% endif %}
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted" for="{{ form.last_name.id_for_label }}">Last Name</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.last_name.id_for_label }}">Nom</label>
                             {{ form.last_name }}
                             {% if form.last_name.errors %}
                                 <div class="form-error">{{ form.last_name.errors|striptags }}</div>
                             {% endif %}
                         </div>
                         <div class="col-12">
-                            <label class="form-label small fw-bold text-muted" for="{{ form.email.id_for_label }}">Email Address</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.email.id_for_label }}">Adresse e-mail</label>
                             {{ form.email }}
                             {% if form.email.errors %}
                                 <div class="form-error">{{ form.email.errors|striptags }}</div>
                             {% endif %}
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted" for="{{ form.phone.id_for_label }}">Phone</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.phone.id_for_label }}">Téléphone</label>
                             {{ form.phone }}
                             {% if form.phone.errors %}
                                 <div class="form-error">{{ form.phone.errors|striptags }}</div>
                             {% endif %}
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label small fw-bold text-muted" for="{{ form.status.id_for_label }}">Status</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.status.id_for_label }}">Statut</label>
                             {{ form.status }}
                             {% if form.status.errors %}
                                 <div class="form-error">{{ form.status.errors|striptags }}</div>
@@ -56,7 +56,7 @@
                             {% endif %}
                         </div>
                         <div class="col-12">
-                            <label class="form-label small fw-bold text-muted" for="{{ form.time_zone.id_for_label }}">Time Zone</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.time_zone.id_for_label }}">Fuseau horaire</label>
                             {{ form.time_zone }}
                             {% if form.time_zone.errors %}
                                 <div class="form-error">{{ form.time_zone.errors|striptags }}</div>
@@ -65,7 +65,7 @@
                         <div class="col-12">
                             <label class="form-label small fw-bold text-muted" for="{{ form.tags.id_for_label }}">Tags (JSON)</label>
                             {{ form.tags }}
-                            <div class="form-text small">Provide tags as a JSON list, e.g., <code>["student", "active"]</code></div>
+                            <div class="form-text small">Indiquez les tags sous forme de liste JSON, par ex. <code>["étudiant", "actif"]</code></div>
                             {% if form.tags.errors %}
                                 <div class="form-error">{{ form.tags.errors|striptags }}</div>
                             {% endif %}
@@ -73,17 +73,17 @@
                     </div>
 
                     <hr class="my-4">
-                    <h5 class="fw-bold mb-3">Address Information</h5>
+                    <h5 class="fw-bold mb-3">Informations d’adresse</h5>
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted" for="{{ form.shipping_address.id_for_label }}">Shipping Address (JSON)</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.shipping_address.id_for_label }}">Adresse de livraison (JSON)</label>
                             {{ form.shipping_address }}
                             {% if form.shipping_address.errors %}
                                 <div class="form-error">{{ form.shipping_address.errors|striptags }}</div>
                             {% endif %}
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted" for="{{ form.billing_address.id_for_label }}">Billing Address (JSON)</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.billing_address.id_for_label }}">Adresse de facturation (JSON)</label>
                             {{ form.billing_address }}
                             {% if form.billing_address.errors %}
                                 <div class="form-error">{{ form.billing_address.errors|striptags }}</div>
@@ -92,17 +92,17 @@
                     </div>
 
                     <hr class="my-4">
-                    <h5 class="fw-bold mb-3">Placeholders</h5>
+                    <h5 class="fw-bold mb-3">Espaces réservés</h5>
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted" for="{{ form.payment_method_placeholder.id_for_label }}">Payment Method Placeholder</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.payment_method_placeholder.id_for_label }}">Espace moyen de paiement</label>
                             {{ form.payment_method_placeholder }}
                             {% if form.payment_method_placeholder.errors %}
                                 <div class="form-error">{{ form.payment_method_placeholder.errors|striptags }}</div>
                             {% endif %}
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted" for="{{ form.order_information_placeholder.id_for_label }}">Order Info Placeholder</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.order_information_placeholder.id_for_label }}">Espace infos commande</label>
                             {{ form.order_information_placeholder }}
                             {% if form.order_information_placeholder.errors %}
                                 <div class="form-error">{{ form.order_information_placeholder.errors|striptags }}</div>
@@ -111,8 +111,8 @@
                     </div>
 
                     <div class="mt-5 d-flex gap-2 justify-content-end">
-                        <a href="{% if contact %}{% url 'contacts:detail' contact.pk %}{% else %}{% url 'contacts:list' %}{% endif %}" class="btn-crm btn-crm-outline">Cancel</a>
-                        <button type="submit" class="btn-crm btn-crm-primary px-5" id="contact-form-submit">Save Contact</button>
+                        <a href="{% if contact %}{% url 'contacts:detail' contact.pk %}{% else %}{% url 'contacts:list' %}{% endif %}" class="btn-crm btn-crm-outline">Annuler</a>
+                        <button type="submit" class="btn-crm btn-crm-primary px-5" id="contact-form-submit">Enregistrer le contact</button>
                     </div>
                 </form>
             </div>
@@ -129,8 +129,8 @@
             </div>
             {% endif %}
             <div class="alert alert-info border-0 shadow-sm rounded-4">
-                <h6 class="fw-bold"><i class="fa-solid fa-circle-info me-2" aria-hidden="true"></i>Note</h6>
-                <p class="small mb-0">Changes made here are local. Use the <strong>Enroll</strong> action to sync or update data with ClickFunnels.</p>
+                <h6 class="fw-bold"><i class="fa-solid fa-circle-info me-2" aria-hidden="true"></i>Remarque</h6>
+                <p class="small mb-0">Les modifications faites ici sont locales. Utilisez l’action <strong>Inscrire</strong> pour synchroniser ou mettre à jour les données avec ClickFunnels.</p>
             </div>
         </div>
     </div>

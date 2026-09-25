@@ -33,7 +33,7 @@ def create_payable_attempt(installment):
 def test_anonymous_redirected(client):
     response = client.get(HUB_URL)
     assert response.status_code == 302
-    assert "/admin/login/" in response.url
+    assert "/connexion/" in response.url
 
 
 def test_authorized_access(staff_client):

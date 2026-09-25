@@ -1,20 +1,20 @@
 {% extends "base.html" %}
-{% block title %}Reconciliation Runs | ValuedCRM{% endblock %}
+{% block title %}Exécutions de réconciliation | {{ BRAND_NAME }}{% endblock %}
 {% block content %}
-{% include "components/page_header.html" with title="Reconciliation Runs" subtitle="Hourly reconciliation history — safe counters only, no raw provider responses." %}
+{% include "components/page_header.html" with title="Exécutions de réconciliation" subtitle="Historique de la réconciliation horaire — uniquement des compteurs sûrs, aucune réponse brute du fournisseur." %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="table-container mb-4 shadow-sm border-0">
         <div class="table-toolbar flex-wrap gap-3">
             <form method="get" class="d-flex flex-wrap align-items-center gap-2 flex-grow-1">
                 <select name="status" class="form-select form-select-sm w-auto">
-                    <option value="">All Statuses</option>
+                    <option value="">Tous les statuts</option>
                     {% for value, label in status_options %}
                         <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                 </select>
-                <button type="submit" class="btn btn-crm btn-crm-primary btn-sm">Apply</button>
-                <a href="{% url 'operations:reconciliation_list' %}" class="btn btn-crm-outline btn-sm">Reset</a>
+                <button type="submit" class="btn btn-crm btn-crm-primary btn-sm">Appliquer</button>
+                <a href="{% url 'operations:reconciliation_list' %}" class="btn btn-crm-outline btn-sm">Réinitialiser</a>
             </form>
         </div>
 
@@ -22,7 +22,7 @@
             {% include "components/table_start.html" with headers=headers %}
                 {% for run in page_obj %}
                 <tr>
-                    <td class="small text-muted">{{ run.started_at|date:"M d, H:i" }}</td>
+                    <td class="small text-muted">{{ run.started_at|date:"d M, H:i" }}</td>
                     <td>{% include "components/status_badge.html" with status=run.run_status %}</td>
                     <td class="small">{{ run.attempts_examined }}</td>
                     <td class="small">{{ run.verified_successes }} / {{ run.verified_failures }}</td>
@@ -36,7 +36,7 @@
                 {% endfor %}
             {% include "components/table_end.html" %}
         {% else %}
-            {% include "components/table_empty_state.html" with title="No reconciliation runs found" description="Adjust your filters." %}
+            {% include "components/table_empty_state.html" with title="Aucune exécution de réconciliation trouvée" description="Ajustez vos filtres." %}
         {% endif %}
     </div>
     {% if page_obj %}{% include "components/pagination.html" with page_obj=page_obj %}{% endif %}

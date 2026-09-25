@@ -42,17 +42,17 @@ body {
     min-height: 100vh;
     width: 260px;
     background-color: var(--sidebar-bg);
-    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    border-right: 1px solid var(--border-color);
     transition: margin-left var(--transition-base);
     z-index: var(--z-sticky);
 }
 
 .sidebar-heading {
-    padding: var(--space-8) var(--space-6);
-    font-size: var(--text-xl);
-    color: var(--color-text-inverse);
-    font-weight: 800;
-    letter-spacing: -0.025em;
+    padding: var(--space-6) var(--space-6) var(--space-4);
+    font-size: var(--text-md);
+    color: var(--color-text-primary);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: -0.01em;
     display: flex;
     align-items: center;
 }
@@ -61,8 +61,8 @@ body {
     background: transparent;
     border: none;
     color: var(--sidebar-text);
-    padding: var(--space-3) var(--space-6);
-    font-size: 0.95rem;
+    padding: var(--space-2) var(--space-3);
+    font-size: 0.8125rem;
     font-weight: var(--font-weight-medium);
     transition: background-color var(--transition-base), color var(--transition-base);
 }
@@ -70,19 +70,25 @@ body {
 #sidebar-wrapper .list-group-item:hover,
 #sidebar-wrapper .list-group-item:focus-visible {
     background-color: var(--sidebar-hover);
-    color: var(--color-text-inverse);
+    color: var(--color-text-primary);
 }
 
 #sidebar-wrapper .list-group-item.active {
-    background-color: rgba(13, 110, 253, 0.1);
+    background-color: var(--color-info-bg);
     color: var(--primary-blue);
-    border-left: 4px solid var(--primary-blue);
+    border-left: none;
+    border: 1px solid var(--color-border-strong);
 }
 
 #sidebar-wrapper .list-group-item i {
-    width: 20px;
-    margin-right: 12px;
-    font-size: 1.1rem;
+    width: 16px;
+    margin-right: 10px;
+    font-size: 0.9rem;
+    opacity: 0.85;
+}
+
+#sidebar-wrapper .list-group-item.active i {
+    opacity: 1;
 }
 
 #page-content-wrapper {
@@ -102,9 +108,9 @@ body {
 
 .page-title {
     font-weight: var(--font-weight-bold);
-    color: #0f172a;
+    color: var(--color-text-primary);
     margin-bottom: var(--space-1);
-    letter-spacing: -0.025em;
+    letter-spacing: -0.01em;
 }
 
 /* Animations */

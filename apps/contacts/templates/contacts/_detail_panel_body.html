@@ -1,0 +1,51 @@
+<div>
+    <div class="so-section-title">Coordonnées</div>
+    <div class="kv">
+        <div class="kv-row"><span>Téléphone</span><span>{{ contact.phone|default:"—" }}</span></div>
+        <div class="kv-row"><span>Statut</span><span>{{ contact.status|default:"—" }}</span></div>
+        <div class="kv-row"><span>Client depuis</span><span>{{ contact.created_at|date:"d/m/Y" }}</span></div>
+    </div>
+</div>
+
+<div>
+    <div class="so-section-title">Commandes &amp; paiements</div>
+    {% if orders %}
+        <div class="kv">
+            {% for order in orders %}
+            <div class="kv-row">
+                <span>{{ order.course_name }}<br><span class="cell-sub">{{ order.plan_name }}</span></span>
+                <span>{{ order.total_paid_amount }} / {{ order.total_expected_amount }} {{ order.currency }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="helper mb-0">Aucune commande payée pour ce contact.</p>
+    {% endif %}
+</div>
+
+<div>
+    <div class="so-section-title">Accès par cours</div>
+    {% if enrollments %}
+        <div class="d-flex flex-column gap-2">
+            {% for enr in enrollments %}
+            <div class="d-flex align-items-center justify-content-between gap-2">
+                <span class="cell-title" style="font-size:13px;">{{ enr.course.name }}</span>
+                {% if enr.status == "SUCCESS" %}
+                    {% if enr.cf_suspended %}<span class="pill critical"><span class="dot"></span>Suspendu</span>
+                    {% else %}<span class="pill good"><span class="dot"></span>Actif</span>{% endif %}
+                {% else %}
+                    <span class="pill warn"><span class="dot"></span>Échec</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="helper mb-0">Aucune inscription enregistrée.</p>
+    {% endif %}
+</div>
+
+<div>
+    <a href="{% url 'contacts:detail' contact.pk %}" class="btn-crm btn-crm-outline btn-crm-sm w-100">
+        <i class="fa-solid fa-arrow-up-right-from-square me-2 small" aria-hidden="true"></i>Voir la fiche complète
+    </a>
+</div>

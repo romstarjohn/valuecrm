@@ -67,9 +67,9 @@ def test_anonymous_user_cannot_create_plan(client, course):
 
 @pytest.mark.django_db
 def test_staff_without_permissions_cannot_create_plan(staff_client, course):
-    """staff_client (tests/conftest.py) is is_staff=True with no model permissions — matches the repo's existing fixture, not a superuser."""
+    """staff_client (tests/conftest.py) is is_staff=True with no model permissions — matches the repo's existing fixture, not a superuser. Blocked at the admin-site level now (SuperuserOnlyAdminSite, AGENT.md), so a redirect rather than a per-model 403."""
     response = staff_client.post(ADD_URL, data=valid_payload(course))
-    assert response.status_code == 403
+    assert response.status_code == 302
     assert not PaymentPlan.objects.filter(code="bootcamp-3x").exists()
 
 

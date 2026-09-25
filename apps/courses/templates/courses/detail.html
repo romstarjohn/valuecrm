@@ -1,64 +1,103 @@
 {% extends "base.html" %}
 
-{% block title %}{{ course.name }} | ValuedCRM{% endblock %}
+{% block title %}{{ course.name }} | {{ BRAND_NAME }}{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title=course.name subtitle="Course catalog entry and synced product details." %}
+{% if can_edit %}
+    {% include "components/page_header.html" with title=course.name subtitle=course_subtitle action_label="Modifier" action_url=edit_url action_icon="fa-solid fa-pen" %}
+{% else %}
+    {% include "components/page_header.html" with title=course.name subtitle=course_subtitle %}
+{% endif %}
 
-<div class="container-fluid px-4 fade-in">
+<div class="container-fluid px-4 fade-in pb-5">
     <div class="row">
         <!-- Main Details -->
         <div class="col-lg-8">
             <div class="crm-card border-0 shadow-sm">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h5 class="fw-bold mb-0">Course Overview</h5>
-                    <span class="badge bg-light text-muted border px-3 py-2 rounded-pill small">
-                        <i class="fa-solid fa-sync me-1 opacity-50" aria-hidden="true"></i> Last Synced: {{ course.updated_at|date:"M d, H:i" }}
-                    </span>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold mb-0">Produit &amp; plans</h5>
+                    {% if can_add_plan and plans %}
+                        <a href="{{ add_plan_url }}" class="btn-crm btn-crm-outline btn-crm-sm">
+                            <i class="fa-solid fa-plus me-1 small" aria-hidden="true"></i>Nouveau plan
+                        </a>
+                    {% endif %}
                 </div>
+                {% if plans %}
+                    <div class="d-flex flex-column gap-2 mb-3">
+                        {% for plan in plans %}
+                        <div class="plan-row">
+                            <div>
+                                <div class="plan-name">{{ plan.name }}</div>
+                                <div class="plan-terms">
+                                    {% if plan.installment_count == 1 %}Paiement unique · {{ plan.installment_amount }} {{ plan.currency }}
+                                    {% else %}{{ plan.installment_count }} × {{ plan.installment_amount }} {{ plan.currency }} · tous les {{ plan.installment_interval_days }} jours{% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <label class="text-muted small fw-bold text-uppercase d-block mb-1">Lien de paiement</label>
+                    <div class="link-field" style="width:100%;">
+                        <span id="checkout-link" style="flex:1;">{{ checkout_url }}</span>
+                        <button type="button" class="btn-crm btn-crm-outline btn-crm-sm js-copy" data-copy-target="checkout-link">Copier</button>
+                    </div>
+                    <div class="form-text small mt-2">Utilisable directement depuis un site externe — ouvre ce produit et ses plans actifs.</div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fa-solid fa-sack-dollar text-muted opacity-25 fs-1 mb-3" aria-hidden="true"></i>
+                        <p class="text-muted small mb-3">Aucun plan de paiement actif pour ce cours — sans plan, aucun lien de paiement ne peut être partagé.</p>
+                        {% if can_add_plan %}
+                            <a href="{{ add_plan_url }}" class="btn-crm btn-crm-primary btn-crm-sm">
+                                <i class="fa-solid fa-plus me-2 small" aria-hidden="true"></i>Créer un plan de paiement
+                            </a>
+                        {% else %}
+                            <p class="text-muted small fst-italic mb-0">Vous n'avez pas la permission de créer un plan.</p>
+                        {% endif %}
+                    </div>
+                {% endif %}
+            </div>
 
-                <div class="row g-4">
-                    <div class="col-md-6">
-                        <label class="text-muted small fw-bold text-uppercase d-block mb-1">Course ID</label>
-                        <div class="fw-bold"><code>{{ course.cf_course_id }}</code></div>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="text-muted small fw-bold text-uppercase d-block mb-1">Workspace ID</label>
-                        <div class="text-muted small"><code>{{ course.workspace_id|default:"--" }}</code></div>
-                    </div>
-                    <div class="col-12">
-                        <label class="text-muted small fw-bold text-uppercase d-block mb-1">Description</label>
-                        <p class="text-dark mb-0">{{ course.description|default:"No description provided from ClickFunnels." }}</p>
-                    </div>
+            <div class="crm-card border-0 shadow-sm">
+                <h5 class="fw-bold mb-3">Aperçu du cours</h5>
+                <div class="kv">
+                    <div class="kv-row"><span>ID ClickFunnels</span><span>{{ course.cf_course_id }}</span></div>
+                    <div class="kv-row"><span>Espace de travail</span><span>{{ course.workspace_id|default:"—" }}</span></div>
+                    <div class="kv-row"><span>Lien produit (slug)</span><span>{{ course.slug }}</span></div>
                 </div>
+                {% if course.description %}
+                    <p class="text-dark small mt-3 mb-0">{{ course.description }}</p>
+                {% endif %}
             </div>
 
             <div class="crm-card p-0 overflow-hidden border-0 shadow-sm">
-                <div class="p-4 border-bottom bg-white"><h5 class="fw-bold mb-0">Recent Enrollment Activity</h5></div>
+                <div class="p-4 border-bottom bg-white d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0">Activité d'inscription récente</h5>
+                    <a href="{% url 'enrollments:new' %}?course_id={{ course.cf_course_id }}" class="btn-crm btn-crm-primary btn-crm-sm">
+                        <i class="fa-solid fa-user-plus me-1 small" aria-hidden="true"></i>Inscrire un étudiant
+                    </a>
+                </div>
                 {% if recent_enrollments %}
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
+                    <div class="table-wrap" style="border:none;border-radius:0;">
+                        <table>
                             <thead>
-                                <tr>
-                                    <th class="ps-4">Student</th>
-                                    <th>Status</th>
-                                    <th>Date</th>
-                                    <th class="text-end pe-4">Audit</th>
-                                </tr>
+                                <tr><th>Étudiant</th><th>Statut</th><th>Date</th></tr>
                             </thead>
                             <tbody>
                                 {% for enr in recent_enrollments %}
-                                <tr>
-                                    <td class="ps-4 fw-bold text-dark">
-                                        <a href="{% url 'contacts:detail' enr.contact.id %}" class="text-decoration-none text-dark">
-                                            {{ enr.contact.email }}
-                                        </a>
+                                <tr class="clickable" onclick="window.location='{% url 'enrollments:detail' enr.id %}'">
+                                    <td>
+                                        <div class="cell-title">{{ enr.contact.first_name }} {{ enr.contact.last_name }}</div>
+                                        <div class="cell-sub">{{ enr.contact.email }}</div>
                                     </td>
-                                    <td>{% include "components/status_badge.html" with status=enr.status %}</td>
-                                    <td class="small text-muted">{{ enr.created_at|date:"M d, Y" }}</td>
-                                    <td class="text-end pe-4">
-                                        <a href="{% url 'enrollments:detail' enr.id %}" class="btn-crm btn-crm-outline btn-crm-sm">View</a>
+                                    <td>
+                                        {% if enr.status == "SUCCESS" %}
+                                            {% if enr.cf_suspended %}<span class="pill critical"><span class="dot"></span>Suspendu</span>
+                                            {% else %}<span class="pill good"><span class="dot"></span>Actif</span>{% endif %}
+                                        {% else %}
+                                            <span class="pill warn"><span class="dot"></span>Échec</span>
+                                        {% endif %}
                                     </td>
+                                    <td class="cell-sub">{{ enr.created_at|date:"d M Y" }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -67,37 +106,36 @@
                 {% else %}
                     <div class="text-center px-4 py-5">
                         <i class="fa-solid fa-clipboard-list text-muted opacity-25 fs-1 mb-3" aria-hidden="true"></i>
-                        <p class="text-muted small">No enrollment activity found for this course catalog entry.</p>
-                        <a href="{% url 'enrollments:new' %}?course_id={{ course.cf_course_id }}" class="btn-crm btn-crm-primary btn-crm-sm">Enroll a Student</a>
+                        <p class="text-muted small mb-0">Aucune activité d'inscription trouvée pour cette formation.</p>
                     </div>
                 {% endif %}
             </div>
         </div>
 
-        <!-- Sidebar / Debug -->
+        <!-- Sidebar -->
         <div class="col-lg-4">
-            <div class="crm-card border-0 shadow-sm bg-primary text-white">
-                <h6 class="text-uppercase fw-bold small mb-4 opacity-75">Catalog Stats</h6>
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <span class="opacity-75">Total Enrollments</span>
-                    <span class="h4 fw-bold mb-0">{{ course.enrollment_attempts.count }}</span>
-                </div>
-                <div class="d-flex justify-content-between align-items-center mb-0">
-                    <span class="opacity-75">Success Rate</span>
-                    <span class="h4 fw-bold mb-0">100%</span>
+            <div class="crm-card border-0 shadow-sm">
+                <h6 class="text-uppercase text-muted fw-bold small mb-4">Statistiques</h6>
+                <div class="kv">
+                    <div class="kv-row"><span>Inscrits actifs</span><span class="fw-bold">{{ active_enrollment_count }}</span></div>
+                    <div class="kv-row"><span>Tentatives totales</span><span>{{ total_attempts }}</span></div>
+                    <div class="kv-row">
+                        <span>Taux de réussite</span>
+                        <span>{% if success_rate is not None %}{{ success_rate }}%{% else %}—{% endif %}</span>
+                    </div>
                 </div>
             </div>
 
             <!-- Debug Data: native <details> — expand/collapse works with no
                  JavaScript at all (not dependent on Bootstrap's collapse JS) -->
-            <details class="crm-card border-0 shadow-sm mt-4 p-0 overflow-hidden">
+            <details class="crm-card border-0 shadow-sm p-0 overflow-hidden">
                 <summary class="p-3 fw-bold small text-uppercase text-muted">
-                    <i class="fa-solid fa-bug me-2 opacity-50" aria-hidden="true"></i> Meta Metadata
+                    <i class="fa-solid fa-bug me-2 opacity-50" aria-hidden="true"></i> Métadonnées
                 </summary>
                 <div class="bg-light border-top p-3">
                     <pre class="small m-0 p-3 bg-dark text-success rounded-3 raw-payload-block">{{ course.raw_payload|json_script:"raw-data" }}</pre>
                     <div class="mt-3 text-center">
-                        <button type="button" class="btn-crm btn-crm-outline btn-crm-sm" onclick="copyRaw()">Copy JSON</button>
+                        <button type="button" class="btn-crm btn-crm-outline btn-crm-sm" onclick="copyRaw()">Copier le JSON</button>
                     </div>
                 </div>
             </details>
@@ -111,7 +149,7 @@
     function copyRaw() {
         const data = document.getElementById('raw-data').textContent;
         navigator.clipboard.writeText(data);
-        alert('Data copied to clipboard');
+        alert('Données copiées dans le presse-papiers');
     }
 </script>
 {% endblock %}

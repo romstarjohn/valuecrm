@@ -50,7 +50,7 @@ def test_cancel_requires_permission(installment):
         "action": "cancel_installment_action", "_selected_action": [str(installment.pk)],
         "confirm_apply": "1", "reason": "trying",
     })
-    assert resp.status_code == 403
+    assert resp.status_code == 302
     installment.refresh_from_db()
     assert installment.status == Installment.Status.SCHEDULED
 
@@ -75,7 +75,7 @@ def test_waive_requires_permission(installment):
         "action": "waive_installment_action", "_selected_action": [str(installment.pk)],
         "confirm_apply": "1", "reason": "trying",
     })
-    assert resp.status_code == 403
+    assert resp.status_code == 302
     installment.refresh_from_db()
     assert installment.status == Installment.Status.SCHEDULED
 

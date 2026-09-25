@@ -1,0 +1,34 @@
+{% extends "public_base.html" %}
+
+{% block title %}Nos formations | {{ BRAND_NAME }} &amp; {{ BUSINESS_NAME }}{% endblock %}
+{% block shell_modifier %} checkout-shell--wide{% endblock %}
+
+{% block content %}
+<div class="checkout-intro">
+    <h1>Nos formations</h1>
+    <p class="checkout-course-name">Choisissez une formation pour voir ses plans de paiement.</p>
+</div>
+
+{% if products %}
+<div class="shop-grid">
+    {% for product in products %}
+    <a class="shop-card" href="{% url 'payments:checkout_start' product.course.slug %}">
+        <div class="shop-card-art">
+            <img src="{{ product.offer.image_url }}" alt="{{ product.offer.mockup_alt }}" width="1536" height="1024" loading="lazy">
+        </div>
+        <div class="shop-card-body">
+            <h2>{{ product.offer.title }}</h2>
+            {% if product.offer.subtitle %}<p class="shop-card-subtitle">{{ product.offer.subtitle|truncatewords:22 }}</p>{% endif %}
+            {% if product.starting_at %}<p class="shop-card-price">À partir de <strong>{{ product.starting_at.installment_amount|floatformat:'2g' }} {{ product.starting_at.currency }}</strong></p>{% endif %}
+        </div>
+        <span class="shop-card-cta">Voir les plans de paiement <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></span>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<section class="checkout-state-card">
+    <span class="checkout-state-icon"><i class="fa-solid fa-seedling" aria-hidden="true"></i></span>
+    <h2>Aucune formation disponible</h2><p>De nouvelles formations se préparent. Revenez bientôt pour découvrir les plans disponibles.</p>
+</section>
+{% endif %}
+{% endblock %}

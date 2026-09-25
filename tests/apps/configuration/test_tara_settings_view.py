@@ -54,7 +54,7 @@ def test_navigation_exposes_tara_link(staff_client):
     response = staff_client.get(reverse("dashboard:index"))
     content = response.content.decode()
     assert reverse(TARA_URL_NAME) in content
-    assert "Tara Settings" in content
+    assert "Paramètres Tara" in content
 
 
 def _extract_anchor_tag(content: str, href: str) -> str:
@@ -90,7 +90,7 @@ def test_active_state_highlights_only_clickfunnels_on_clickfunnels_page(staff_cl
 def test_anonymous_get_redirects_to_login(client):
     response = client.get(reverse(TARA_URL_NAME))
     assert response.status_code == 302
-    assert "/admin/login/" in response.url
+    assert "/connexion/" in response.url
 
 
 @pytest.mark.django_db
@@ -100,7 +100,7 @@ def test_anonymous_post_produces_no_configuration_change(client, active_tara_con
         "api_key": "attacker-key", "webhook_secret": "attacker-secret",
     })
     assert response.status_code == 302
-    assert "/admin/login/" in response.url
+    assert "/connexion/" in response.url
     active_tara_config.refresh_from_db()
     assert active_tara_config.name == "Main"
     assert active_tara_config.business_id == "biz_123"

@@ -67,7 +67,12 @@ def test_unauthorized_users_cannot_modify_configuration(client, staff_client, ex
     staff_response = staff_client.post(change_url(existing_config), data={
         "name": "Hijacked", "is_active": "", "api_user_agent": "x", "api_access_token": "stolen-token",
     })
-    assert staff_response.status_code == 403
+    # Non-superuser staff no longer even reaches the object-permission check:
+    # shared/admin_site.py::SuperuserOnlyAdminSite.has_permission() now
+    # requires is_superuser, so admin_view() redirects to /admin/login/
+    # before the view runs, rather than a 403 from ModelAdmin permissions.
+    assert staff_response.status_code == 302
+    assert "/admin/login/" in staff_response.url
 
     existing_config.refresh_from_db()
     assert existing_config.name == "Main"

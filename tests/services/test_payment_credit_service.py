@@ -5,8 +5,9 @@ from django.db import IntegrityError, transaction
 
 from apps.contacts.models import Contact
 from apps.courses.models import Course
-from apps.payments.models import Installment, Order, PaymentAttempt, PaymentPlan
+from apps.payments.models import Installment, Order, PaymentAttempt, PaymentConfirmation, PaymentPlan
 from apps.payments.services import (
+    DuplicatePaymentError,
     OrderService,
     PaymentAttemptService,
     PaymentCreditService,
@@ -269,3 +270,78 @@ def test_verified_failure_does_not_cancel_order(service):
 
     order.refresh_from_db()
     assert order.status == Order.Status.PENDING  # untouched
+
+
+# --- Late verified success on a FAILED/EXPIRED attempt (same Tara productId) ---
+
+@pytest.mark.parametrize("terminal_status", [PaymentAttempt.Status.FAILED, PaymentAttempt.Status.EXPIRED])
+def test_late_success_reopens_failed_or_expired_attempt(service, terminal_status):
+    """Declined first try, then a successful retry on the same Tara link — the verified success must win."""
+    order = make_order(email=f"late-success-{terminal_status.lower()}@example.com")
+    installment = order.installments.get()
+    attempt = create_payable_attempt(installment)
+    if terminal_status == PaymentAttempt.Status.FAILED:
+        service.apply_verified_failure(attempt.id)
+    else:
+        PaymentAttemptService().transition(attempt, PaymentAttempt.Status.EXPIRED)
+
+    updated = service.apply_verified_success(attempt.id, tara_payment_id="pay-late-1")
+
+    installment.refresh_from_db()
+    order.refresh_from_db()
+    assert updated.status == PaymentAttempt.Status.SUCCEEDED
+    assert updated.tara_payment_id == "pay-late-1"
+    assert installment.status == Installment.Status.PAID
+    assert order.status == Order.Status.COMPLETED
+    assert PaymentConfirmation.objects.filter(payment_attempt=attempt).count() == 1
+
+
+def test_late_success_expires_newer_open_attempt(service):
+    order = make_order(email="late-success-newer@example.com")
+    installment = order.installments.get()
+    old_attempt = create_payable_attempt(installment)
+    service.apply_verified_failure(old_attempt.id)
+    newer_attempt = create_payable_attempt(installment)  # customer restarted checkout
+
+    service.apply_verified_success(old_attempt.id)
+
+    old_attempt.refresh_from_db()
+    newer_attempt.refresh_from_db()
+    installment.refresh_from_db()
+    assert old_attempt.status == PaymentAttempt.Status.SUCCEEDED
+    assert newer_attempt.status == PaymentAttempt.Status.EXPIRED
+    assert installment.status == Installment.Status.PAID
+
+
+def test_late_success_on_already_paid_installment_is_flagged_not_credited(service):
+    """Customer paid twice (old link + new link) — never credited twice, never silently dropped."""
+    order = make_order(email="late-success-duplicate@example.com")
+    installment = order.installments.get()
+    old_attempt = create_payable_attempt(installment)
+    service.apply_verified_failure(old_attempt.id)
+    newer_attempt = create_payable_attempt(installment)
+    service.apply_verified_success(newer_attempt.id)
+
+    with pytest.raises(DuplicatePaymentError):
+        service.apply_verified_success(old_attempt.id)
+
+    old_attempt.refresh_from_db()
+    installment.refresh_from_db()
+    assert old_attempt.status == PaymentAttempt.Status.FAILED
+    assert installment.paid_amount == installment.expected_amount
+    assert PaymentConfirmation.objects.filter(installment=installment).count() == 1
+
+
+def test_failure_after_late_success_never_overwrites_it(service):
+    order = make_order(email="late-success-then-failure@example.com")
+    installment = order.installments.get()
+    attempt = create_payable_attempt(installment)
+    service.apply_verified_failure(attempt.id)
+    service.apply_verified_success(attempt.id)
+
+    service.apply_verified_failure(attempt.id)
+
+    attempt.refresh_from_db()
+    installment.refresh_from_db()
+    assert attempt.status == PaymentAttempt.Status.SUCCEEDED
+    assert installment.status == Installment.Status.PAID

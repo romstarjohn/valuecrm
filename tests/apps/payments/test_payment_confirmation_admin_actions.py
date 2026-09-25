@@ -53,7 +53,7 @@ def test_staff_without_permission_gets_403(failed_confirmation):
         "action": "retry_confirmation_action", "_selected_action": [str(failed_confirmation.pk)],
         "confirm_apply": "1", "reason": "trying",
     })
-    assert resp.status_code == 403
+    assert resp.status_code == 302
     failed_confirmation.refresh_from_db()
     assert failed_confirmation.status == PaymentConfirmation.Status.FAILED
 

@@ -1,50 +1,68 @@
 <nav id="sidebar-wrapper" class="d-flex flex-column shadow" aria-label="Main navigation">
     <div class="sidebar-heading">
         <i class="fa-solid fa-bridge text-primary me-2"></i>
-        <span>ValuedCRM</span>
+        <span>{{ BRAND_NAME }}</span>
     </div>
     
     <div class="list-group list-group-flush flex-grow-1 px-2">
-        <div class="text-uppercase text-muted small fw-bold px-3 mb-2 mt-4" style="font-size: 0.65rem; letter-spacing: 0.1em;">Main Menu</div>
-        
+        <div class="text-uppercase text-muted small fw-bold px-3 mb-2 mt-4" style="font-size: 0.65rem; letter-spacing: 0.1em;">Menu principal</div>
+
         <a href="{% url 'dashboard:index' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.app_name == 'dashboard' %}active{% endif %}">
-            <i class="fa-solid fa-gauge-high"></i>Dashboard
-        </a>
-        
-        <a href="{% url 'contacts:list' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.app_name == 'contacts' %}active{% endif %}">
-            <i class="fa-solid fa-users"></i>Contacts
-        </a>
-        
-        <a href="{% url 'courses:list' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.app_name == 'courses' %}active{% endif %}">
-            <i class="fa-solid fa-graduation-cap"></i>Courses
-        </a>
-        
-        <a href="{% url 'enrollments:list' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.app_name == 'enrollments' %}active{% endif %}">
-            <i class="fa-solid fa-clipboard-list"></i>Enrollments
+            <i class="fa-solid fa-gauge-high"></i>Vue d'ensemble
         </a>
 
-        <a href="{% url 'operations:hub' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.app_name == 'operations' %}active{% endif %}">
-            <i class="fa-solid fa-list-check"></i>Payment Operations
+        <a href="{% url 'operations:installment_list' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.url_name == 'installment_list' %}active{% endif %}">
+            <i class="fa-solid fa-sack-dollar"></i>Paiements &amp; Échéances
+        </a>
+
+        <a href="{% url 'operations:webhook_event_list' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.url_name == 'webhook_event_list' or request.resolver_match.url_name == 'webhook_event_attribute' %}active{% endif %}">
+            <i class="fa-solid fa-arrows-turn-to-dots"></i>Rapprochement
+        </a>
+
+        <a href="{% url 'enrollments:list' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.app_name == 'enrollments' or request.resolver_match.url_name == 'provisioning_list' %}active{% endif %}">
+            <i class="fa-solid fa-clipboard-list"></i>Inscriptions &amp; Accès
+        </a>
+
+        <a href="{% url 'contacts:list' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.app_name == 'contacts' %}active{% endif %}">
+            <i class="fa-solid fa-address-book"></i>Contacts
+        </a>
+
+        <a href="{% url 'courses:list' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.app_name == 'courses' and 'product' not in request.resolver_match.url_name %}active{% endif %}">
+            <i class="fa-solid fa-graduation-cap"></i>Cours
+        </a>
+
+        <a href="{% url 'courses:product_list' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.app_name == 'plans' or 'product' in request.resolver_match.url_name %}active{% endif %}">
+            <i class="fa-solid fa-tags"></i>Produits
+        </a>
+
+        <a href="{% url 'operations:audit_list' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.url_name == 'audit_list' %}active{% endif %}">
+            <i class="fa-solid fa-clock-rotate-left"></i>Journal d'audit
+        </a>
+
+        <a href="{% url 'operations:hub' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.url_name == 'hub' or request.resolver_match.url_name == 'order_list' or request.resolver_match.url_name == 'order_detail' or request.resolver_match.url_name == 'payment_attempt_list' or request.resolver_match.url_name == 'confirmation_list' or request.resolver_match.url_name == 'reconciliation_list' %}active{% endif %}">
+            <i class="fa-solid fa-list-check"></i>Autres opérations
         </a>
 
         <div class="text-uppercase text-muted small fw-bold px-3 mb-2 mt-4" style="font-size: 0.65rem; letter-spacing: 0.1em;">Configuration</div>
 
         <a href="{% url 'configuration:settings' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
-            <i class="fa-solid fa-sliders"></i>API Settings
+            <i class="fa-solid fa-sliders"></i>Paramètres API
         </a>
 
         <a href="{% url 'configuration:tara_settings' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if request.resolver_match.url_name == 'tara_settings' %}active{% endif %}">
-            <i class="fa-solid fa-money-bill-transfer"></i>Tara Settings
+            <i class="fa-solid fa-money-bill-transfer"></i>Paramètres Tara
         </a>
     </div>
 
     <div class="px-3 pb-4">
+        {% if user.is_superuser %}
         <div class="crm-card bg-white bg-opacity-5 border-0 p-3 mb-3">
-            <div class="small text-muted mb-2">Advanced</div>
+            <div class="small text-muted mb-2">Avancé</div>
             <a href="/admin/" class="btn btn-sm btn-outline-secondary w-100 text-start border-0 px-2 opacity-75" target="_blank">
-                <i class="fa-solid fa-user-shield me-2"></i>Django Admin
+                <i class="fa-solid fa-user-shield me-2"></i>Administration Django
             </a>
         </div>
+        {% endif %}
         <div class="text-muted small text-center opacity-50" style="font-size: 0.7rem;">
             v1.0.0-MVP
         </div>

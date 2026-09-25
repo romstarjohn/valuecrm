@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ title }} | ValuedCRM{% endblock %}
+{% block title %}{{ title }} | {{ BRAND_NAME }}{% endblock %}
 
 {% block content %}
 {% include "components/page_header.html" with title=title subtitle=description %}
@@ -9,7 +9,7 @@
     <div class="row justify-content-center">
         <div class="col-lg-7">
             <div class="crm-card border-0 shadow-sm">
-                <h6 class="text-uppercase text-muted fw-bold small mb-3">Target</h6>
+                <h6 class="text-uppercase text-muted fw-bold small mb-3">Cible</h6>
                 <p class="fw-bold">{{ target_label }}</p>
 
                 {% if warning %}
@@ -22,13 +22,13 @@
                     {% csrf_token %}
                     <input type="hidden" name="confirm_apply" value="1">
                     <div class="mb-4">
-                        <label class="form-label small text-uppercase fw-bold text-muted" for="id_reason">Reason</label>
+                        <label class="form-label small text-uppercase fw-bold text-muted" for="id_reason">Motif</label>
                         <textarea id="id_reason" name="reason" class="form-control" rows="3" required>{{ reason }}</textarea>
-                        <div class="form-text small mt-2">Mandatory — recorded on the immutable administrative audit trail.</div>
+                        <div class="form-text small mt-2">Obligatoire — enregistré dans le journal d'audit administratif immuable.</div>
                     </div>
                     <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-crm btn-crm-primary px-4 shadow-sm">Confirm</button>
-                        <a href="{{ back_url }}" class="btn btn-crm-outline px-4">Cancel</a>
+                        <button type="submit" class="btn btn-crm btn-crm-primary px-4 shadow-sm">Confirmer</button>
+                        <a href="{{ back_url }}" class="btn btn-crm-outline px-4">Annuler</a>
                     </div>
                 </form>
             </div>

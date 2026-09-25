@@ -26,7 +26,7 @@ def test_anonymous_cannot_view(client, log_entry):
 
 def test_staff_without_permissions_cannot_view(staff_client, log_entry):
     resp = staff_client.get(CHANGELIST_URL)
-    assert resp.status_code == 403
+    assert resp.status_code == 302
 
 
 def test_superuser_can_view_read_only(superuser_client, log_entry):

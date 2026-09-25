@@ -51,7 +51,7 @@ def test_staff_without_permission_gets_403(pending_attempt):
         "action": "check_tara_status_action", "_selected_action": [str(pending_attempt.pk)],
         "confirm_apply": "1", "reason": "trying",
     })
-    assert resp.status_code == 403
+    assert resp.status_code == 302
     pending_attempt.refresh_from_db()
     assert pending_attempt.status == PaymentAttempt.Status.PENDING
     assert AdminAuditLog.objects.count() == 0

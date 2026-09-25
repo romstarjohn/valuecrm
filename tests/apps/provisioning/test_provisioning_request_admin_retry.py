@@ -53,7 +53,7 @@ def test_retry_requires_permission(failed_request):
         "action": "retry_action", "_selected_action": [str(failed_request.pk)],
         "confirm_apply": "1", "reason": "trying",
     })
-    assert resp.status_code == 403
+    assert resp.status_code == 302
     failed_request.refresh_from_db()
     assert failed_request.status == ProvisioningRequest.Status.FAILED
 

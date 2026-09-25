@@ -2,8 +2,8 @@
     <div class="mb-4">
         <i class="{% if icon %}{{ icon }}{% else %}fa-solid fa-inbox{% endif %} text-muted opacity-25" style="font-size: 4rem;"></i>
     </div>
-    <h4 class="fw-bold">{{ title|default:"No results found" }}</h4>
-    <p class="text-muted mx-auto mb-4" style="max-width: 400px;">{{ description|default:"We couldn't find any results matching your search or filters." }}</p>
+    <h4 class="fw-bold">{{ title|default:"Aucun résultat" }}</h4>
+    <p class="text-muted mx-auto mb-4" style="max-width: 400px;">{{ description|default:"Aucun résultat ne correspond à votre recherche ou à vos filtres." }}</p>
     {% if action_url %}
         <a href="{{ action_url }}" class="btn btn-crm btn-crm-primary">
             {% if action_icon %}<i class="{{ action_icon }} me-2 small"></i>{% endif %}

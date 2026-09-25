@@ -60,21 +60,21 @@ def settings_view(request):
                 token = form.cleaned_data.pop("api_access_token", None)
                 instance = form.save(commit=False)
                 service.update_credentials(instance, token)
-                messages.success(request, "Basic settings saved.")
+                messages.success(request, "Paramètres de base enregistrés.")
                 return redirect("configuration:settings")
         
         elif action == "verify_token":
             if not config:
-                messages.error(request, "Save configuration first.")
+                messages.error(request, "Enregistrez d’abord la configuration.")
             else:
                 try:
                     client = ClickFunnelsClient.from_configuration(config)
                     service.client = client
                     service.verify_token(config)
                     service.fetch_teams(config) # Auto-fetch teams on success
-                    messages.success(request, "Token verified and teams loaded.")
+                    messages.success(request, "Jeton vérifié et équipes chargées.")
                 except Exception as e:
-                    messages.error(request, f"The API access token is invalid or unauthorized. Error: {str(e)}")
+                    messages.error(request, f"Le jeton d’accès API est invalide ou non autorisé. Erreur : {str(e)}")
             return redirect("configuration:settings")
 
         elif action == "select_team":
@@ -90,7 +90,7 @@ def settings_view(request):
                     client = ClickFunnelsClient.from_configuration(config)
                     service.client = client
                     service.fetch_workspaces(config, team_id)
-                    messages.success(request, "Team selected and workspaces loaded.")
+                    messages.success(request, "Équipe sélectionnée et espaces de travail chargés.")
                 except Exception as e:
                     messages.error(request, str(e))
             return redirect("configuration:settings")
@@ -103,7 +103,7 @@ def settings_view(request):
             if form.is_valid():
                 try:
                     service.select_workspace(config, form.cleaned_data["workspace_id"])
-                    messages.success(request, f"Workspace '{config.workspace_name}' is now active.")
+                    messages.success(request, f"L’espace de travail « {config.workspace_name} » est maintenant actif.")
                 except Exception as e:
                     messages.error(request, str(e))
             return redirect("configuration:settings")
@@ -141,9 +141,9 @@ def tara_settings_view(request):
             instance = form.save(commit=False)
             service.update_credentials(instance, api_key, webhook_secret)
             instance.save()
-            messages.success(request, "Tara settings saved.")
+            messages.success(request, "Paramètres Tara enregistrés.")
             return redirect("configuration:tara_settings")
-        messages.error(request, "Please correct the errors below.")
+        messages.error(request, "Merci de corriger les erreurs ci-dessous.")
 
     webhook_url = f"{settings.PUBLIC_BASE_URL}/api/tara/webhook/" if settings.PUBLIC_BASE_URL else ""
 
@@ -171,7 +171,7 @@ def verify_connection(request):
                 service.fetch_teams(config)
                 if config.team_id:
                     service.fetch_workspaces(config, config.team_id)
-                messages.success(request, "Full integration bridge refreshed.")
+                messages.success(request, "Passerelle d’intégration entièrement actualisée.")
             except Exception as e:
                 messages.error(request, str(e))
     return redirect("configuration:settings")

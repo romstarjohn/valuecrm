@@ -14,12 +14,12 @@
 
 {% block content %}
 <h1>{{ description }}</h1>
-<p>This sets an internal business annotation only — it never changes payment status, provider facts, or paid amounts.</p>
+<p>Ceci ne fait que poser une annotation métier interne — cela ne modifie jamais le statut de paiement, les données du fournisseur ni les montants payés.</p>
 
 <h2>{% translate "Targets" %}</h2>
 <ul>
 {% for obj in objects %}
-    <li>{{ obj }} (current disposition: {{ obj.get_manual_disposition_display }})</li>
+    <li>{{ obj }} (disposition actuelle : {{ obj.get_manual_disposition_display }})</li>
 {% endfor %}
 </ul>
 
@@ -43,7 +43,7 @@
     <div class="form-row">
         <label for="id_reason" class="required">{% translate "Reason" %}</label>
         <textarea id="id_reason" name="reason" rows="3" cols="60" required></textarea>
-        <p class="help">Mandatory — recorded on the immutable administrative audit trail.</p>
+        <p class="help">Obligatoire — enregistré dans le journal d'audit administratif immuable.</p>
     </div>
 </fieldset>
 

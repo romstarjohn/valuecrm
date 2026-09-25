@@ -402,13 +402,101 @@ def test_check_tara_status_no_configuration(admin_user, mocker):
     assert attempt.status == PaymentAttempt.Status.PENDING
 
 
-def test_check_tara_status_rejects_non_pending_unknown_attempt(admin_user):
+def test_check_tara_status_rejects_ineligible_attempt(admin_user):
+    """CREATED (no payment link generated yet) has nothing for Tara to report on — not PENDING/UNKNOWN/LINK_CREATED."""
     order = make_order(email="check-status-wrong-state@example.com")
     installment = order.installments.get()
-    attempt = create_payable_attempt(installment)  # LINK_CREATED, not PENDING/UNKNOWN
+    attempt = PaymentAttemptService().create_attempt(installment)
 
     with pytest.raises(AdminActionError):
         PaymentAttemptAdministrationService().check_tara_status(attempt.id, "checking", admin_user)
+
+
+def test_check_tara_status_eligible_directly_from_link_created(admin_user, mocker):
+    """
+    A LINK_CREATED attempt (link generated, no webhook received yet) is
+    eligible for a direct check — the customer may already have paid on a
+    link whose webhook was lost or delayed, and PENDING is never guaranteed
+    to be an intermediate step Tara actually sends.
+    """
+    order = make_order(email="check-status-link-created@example.com")
+    installment = order.installments.get()
+    attempt = create_payable_attempt(installment)  # LINK_CREATED
+
+    mock_client = Mock()
+    mock_client.check_transaction_status.return_value = TaraTransactionStatusResponse.model_validate({
+        "productId": attempt.tara_product_id, "status": "SUCCESS", "message": "ok",
+    })
+    mocker.patch("apps.payments.admin_services.TaraConfigService.get_client", return_value=mock_client)
+
+    updated = PaymentAttemptAdministrationService().check_tara_status(attempt.id, "checking stuck payment", admin_user)
+
+    assert updated.status == PaymentAttempt.Status.SUCCEEDED
+    installment.refresh_from_db()
+    assert installment.status == Installment.Status.PAID
+
+
+def test_check_tara_status_recovers_success_on_failed_attempt(admin_user, mocker):
+    """A FAILED attempt Tara now reports as SUCCESS (customer retried on the same link) can be recovered by an admin."""
+    order = make_order(email="check-status-failed-recovery@example.com")
+    installment = order.installments.get()
+    attempt = create_payable_attempt(installment)
+    PaymentCreditService().apply_verified_failure(attempt.id)
+
+    mock_client = Mock()
+    mock_client.check_transaction_status.return_value = TaraTransactionStatusResponse.model_validate({
+        "productId": attempt.tara_product_id, "status": "SUCCESS", "message": "ok",
+    })
+    mocker.patch("apps.payments.admin_services.TaraConfigService.get_client", return_value=mock_client)
+
+    updated = PaymentAttemptAdministrationService().check_tara_status(attempt.id, "customer paid after failure", admin_user)
+
+    assert updated.status == PaymentAttempt.Status.SUCCEEDED
+    installment.refresh_from_db()
+    assert installment.status == Installment.Status.PAID
+    log = AdminAuditLog.objects.get(payment_attempt=attempt)
+    assert log.previous_state == PaymentAttempt.Status.FAILED
+    assert log.outcome_category == AdminAuditLog.OutcomeCategory.SUCCESS
+
+
+def test_check_tara_status_failed_attempt_still_failed_stays_failed(admin_user, mocker):
+    order = make_order(email="check-status-failed-still-failed@example.com")
+    installment = order.installments.get()
+    attempt = create_payable_attempt(installment)
+    PaymentCreditService().apply_verified_failure(attempt.id)
+
+    mock_client = Mock()
+    mock_client.check_transaction_status.return_value = TaraTransactionStatusResponse.model_validate({
+        "productId": attempt.tara_product_id, "status": "FAILURE", "message": "declined",
+    })
+    mocker.patch("apps.payments.admin_services.TaraConfigService.get_client", return_value=mock_client)
+
+    updated = PaymentAttemptAdministrationService().check_tara_status(attempt.id, "checking", admin_user)
+
+    assert updated.status == PaymentAttempt.Status.FAILED
+
+
+def test_check_tara_status_duplicate_payment_raises_and_is_audited(admin_user, mocker):
+    order = make_order(email="check-status-duplicate-payment@example.com")
+    installment = order.installments.get()
+    old_attempt = create_payable_attempt(installment)
+    PaymentCreditService().apply_verified_failure(old_attempt.id)
+    newer_attempt = create_payable_attempt(installment)
+    PaymentCreditService().apply_verified_success(newer_attempt.id)
+
+    mock_client = Mock()
+    mock_client.check_transaction_status.return_value = TaraTransactionStatusResponse.model_validate({
+        "productId": old_attempt.tara_product_id, "status": "SUCCESS", "message": "ok",
+    })
+    mocker.patch("apps.payments.admin_services.TaraConfigService.get_client", return_value=mock_client)
+
+    with pytest.raises(AdminActionError):
+        PaymentAttemptAdministrationService().check_tara_status(old_attempt.id, "checking", admin_user)
+
+    old_attempt.refresh_from_db()
+    assert old_attempt.status == PaymentAttempt.Status.FAILED
+    log = AdminAuditLog.objects.get(payment_attempt=old_attempt)
+    assert log.outcome_category == AdminAuditLog.OutcomeCategory.FAILED
 
 
 def test_check_tara_status_duplicate_success_remains_idempotent(admin_user, mocker):

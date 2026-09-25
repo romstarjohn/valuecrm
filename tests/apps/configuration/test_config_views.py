@@ -19,7 +19,7 @@ def test_settings_page_requires_login(client):
     url = reverse("configuration:settings")
     response = client.get(url)
     assert response.status_code == 302
-    assert "/admin/login/" in response.url
+    assert "/connexion/" in response.url
 
 @pytest.mark.django_db
 def test_verify_token_flow(mocker, staff_client, active_config):

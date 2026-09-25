@@ -1,20 +1,20 @@
 {% extends "base.html" %}
-{% block title %}Installments | ValuedCRM{% endblock %}
+{% block title %}Versements | {{ BRAND_NAME }}{% endblock %}
 {% block content %}
-{% include "components/page_header.html" with title="Installments" subtitle="All scheduled, due, and settled installments across orders." %}
+{% include "components/page_header.html" with title="Versements" subtitle="Tous les versements planifiés, dus ou réglés, toutes commandes confondues." %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="table-container mb-4 shadow-sm border-0">
         <div class="table-toolbar flex-wrap gap-3">
             <form method="get" class="d-flex flex-wrap align-items-center gap-2 flex-grow-1">
                 <select name="status" class="form-select form-select-sm w-auto">
-                    <option value="">All Statuses</option>
+                    <option value="">Tous les statuts</option>
                     {% for value, label in status_options %}
                         <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                 </select>
                 <select name="plan" class="form-select form-select-sm w-auto">
-                    <option value="">All Plans</option>
+                    <option value="">Tous les plans</option>
                     {% for plan_id, plan_name in plan_options %}
                         <option value="{{ plan_id }}" {% if plan_filter == plan_id|stringformat:"s" %}selected{% endif %}>{{ plan_name }}</option>
                     {% endfor %}
@@ -23,14 +23,14 @@
                 <input type="date" name="date_to" class="form-control form-control-sm w-auto" value="{{ date_to }}">
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" name="overdue" value="1" id="overdue" {% if overdue_only == "1" %}checked{% endif %}>
-                    <label class="form-check-label small" for="overdue">Overdue</label>
+                    <label class="form-check-label small" for="overdue">En retard</label>
                 </div>
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" name="needs_review" value="1" id="needsReview" {% if needs_review == "1" %}checked{% endif %}>
-                    <label class="form-check-label small" for="needsReview">Needs Review</label>
+                    <label class="form-check-label small" for="needsReview">À vérifier</label>
                 </div>
-                <button type="submit" class="btn btn-crm btn-crm-primary btn-sm">Apply</button>
-                <a href="{% url 'operations:installment_list' %}" class="btn btn-crm-outline btn-sm">Reset</a>
+                <button type="submit" class="btn btn-crm btn-crm-primary btn-sm">Appliquer</button>
+                <a href="{% url 'operations:installment_list' %}" class="btn btn-crm-outline btn-sm">Réinitialiser</a>
             </form>
         </div>
 
@@ -42,17 +42,17 @@
                     <td class="small">{{ installment.order.customer.email }}</td>
                     <td class="small">{{ installment.sequence }}</td>
                     <td class="small text-muted">{{ installment.due_date }}</td>
-                    <td class="small">{{ installment.expected_amount }} {{ installment.currency }}</td>
-                    <td class="small">{{ installment.paid_amount|default:"--" }}</td>
+                    <td class="small font-mono">{{ installment.expected_amount }} {{ installment.currency }}</td>
+                    <td class="small font-mono">{{ installment.paid_amount|default:"--" }}</td>
                     <td>{% include "components/status_badge.html" with status=installment.status %}</td>
                     <td class="small">
-                        {% if installment.status == "FAILED" %}<span class="badge-status badge-danger">REVIEW</span>{% endif %}
+                        {% if installment.status == "FAILED" %}<span class="badge-status badge-danger">À VÉRIFIER</span>{% endif %}
                     </td>
                 </tr>
                 {% endfor %}
             {% include "components/table_end.html" %}
         {% else %}
-            {% include "components/table_empty_state.html" with title="No installments found" description="Adjust your filters." %}
+            {% include "components/table_empty_state.html" with title="Aucun versement trouvé" description="Ajustez vos filtres." %}
         {% endif %}
     </div>
     {% if page_obj %}{% include "components/pagination.html" with page_obj=page_obj %}{% endif %}

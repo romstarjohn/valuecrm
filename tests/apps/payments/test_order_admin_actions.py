@@ -63,21 +63,27 @@ def test_staff_without_cancel_permission_gets_403(order):
         "action": "cancel_order_action", "_selected_action": [str(order.pk)],
         "confirm_apply": "1", "reason": "trying anyway",
     })
-    assert resp.status_code == 403
+    assert resp.status_code == 302
     order.refresh_from_db()
     assert order.status == Order.Status.PENDING
     assert AdminAuditLog.objects.count() == 0
 
 
-def test_staff_with_permission_can_cancel(order):
+def test_staff_with_permission_still_blocked_non_superuser(order):
+    """
+    shared/admin_site.py::SuperuserOnlyAdminSite (AGENT.md) restricts all of
+    /admin/ to is_superuser accounts — a granted per-model Django permission
+    (cancel_order) is no longer sufficient on its own; only superuser is.
+    See test_superuser_has_implicit_access below for the authorized case.
+    """
     client, _ = staff_client_with_perms("cancel_order")
     resp = client.post(CHANGELIST_URL, {
         "action": "cancel_order_action", "_selected_action": [str(order.pk)],
         "confirm_apply": "1", "reason": "authorized cancellation",
-    }, follow=True)
-    assert resp.status_code == 200
+    })
+    assert resp.status_code == 302
     order.refresh_from_db()
-    assert order.status == Order.Status.CANCELLED
+    assert order.status == Order.Status.PENDING
 
 
 def test_superuser_has_implicit_access(superuser_client, order):
@@ -131,7 +137,7 @@ def test_confirmation_page_warns_about_verified_payments(superuser_client):
         "action": "cancel_order_action", "_selected_action": [str(order.pk)],
     })
     assert resp.status_code == 200
-    assert b"does not refund money" in resp.content
+    assert "ne rembourse pas".encode() in resp.content
 
 
 def test_csrf_enforced(order):
@@ -155,7 +161,7 @@ def test_apply_manual_disposition_requires_permission(order):
         "action": "apply_manual_disposition_action", "_selected_action": [str(order.pk)],
         "confirm_apply": "1", "reason": "trying", "disposition": Order.ManualDisposition.NEEDS_REVIEW,
     })
-    assert resp.status_code == 403
+    assert resp.status_code == 302
     order.refresh_from_db()
     assert order.manual_disposition == Order.ManualDisposition.NONE
 

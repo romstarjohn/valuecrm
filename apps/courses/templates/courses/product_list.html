@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Produits | {{ BRAND_NAME }}{% endblock %}
+
+{% block content %}
+{% include "components/page_header.html" with title="Produits" subtitle="Un produit par cours — sa page de paiement et ses plans en dépendent." %}
+
+<div class="container-fluid px-4 fade-in pb-5">
+    {% if rows %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>Cours</th><th>Produit</th><th>Langue</th><th class="num">Plans actifs</th><th>Statut</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr {% if row.offer and can_edit %}class="clickable" onclick="window.location='{% url 'courses:product_edit' row.offer.pk %}'"{% endif %}>
+                    <td>
+                        <div class="cell-title">{{ row.course.name }}</div>
+                        <div class="cell-sub">{{ row.course.cf_course_id }}</div>
+                    </td>
+                    <td>
+                        {% if row.offer %}{{ row.offer.title }}{% else %}<span class="cell-sub fst-italic">Aucun produit — page de secours utilisée</span>{% endif %}
+                    </td>
+                    <td class="cell-sub">{% if row.offer %}{{ row.offer.get_language_display }}{% else %}—{% endif %}</td>
+                    <td class="num">{{ row.active_plan_count }}</td>
+                    <td>
+                        {% if row.offer %}<span class="pill good"><span class="dot"></span>Configuré</span>
+                        {% else %}<span class="pill neutral"><span class="dot"></span>Non configuré</span>{% endif %}
+                    </td>
+                    <td class="text-end">
+                        {% if row.offer %}
+                            {% if can_edit %}<a href="{% url 'courses:product_edit' row.offer.pk %}" class="btn-crm btn-crm-outline btn-crm-sm">Modifier</a>{% endif %}
+                        {% else %}
+                            {% if can_add %}<a href="{% url 'courses:product_add' %}?course_id={{ row.course.pk }}" class="btn-crm btn-crm-primary btn-crm-sm">Créer le produit</a>{% endif %}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        {% include "components/table_empty_state.html" with title="Aucun cours importé" description="Synchronisez vos cours ClickFunnels avant de créer des produits." action_label="Synchroniser" action_url="/courses/sync/" action_icon="fa-solid fa-sync" %}
+    {% endif %}
+</div>
+{% endblock %}

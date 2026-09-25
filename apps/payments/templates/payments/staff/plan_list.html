@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Produits &amp; Plans | {{ BRAND_NAME }}{% endblock %}
+
+{% block content %}
+{% include "components/page_header.html" with title="Produits & Plans" subtitle="Chaque cours est son propre produit — ses plans de paiement lui appartiennent, ils ne sont jamais indépendants." %}
+
+<div class="container-fluid px-4 fade-in pb-5">
+    {% for group in groups %}
+    <div class="crm-card border-0 shadow-sm">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h5 class="fw-bold mb-1">{{ group.course.name }}</h5>
+                <div class="cell-sub">{{ group.course.cf_course_id }}</div>
+            </div>
+            {% if can_add %}
+                <a href="{% url 'plans:add' %}?course_id={{ group.course.pk }}" class="btn-crm btn-crm-outline btn-crm-sm">
+                    <i class="fa-solid fa-plus me-1 small" aria-hidden="true"></i>Nouveau plan pour ce cours
+                </a>
+            {% endif %}
+        </div>
+
+        {% if group.plans %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th>Plan</th><th class="num">Versements</th><th class="num">Montant</th><th>Accès</th><th>Statut</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        {% for plan in group.plans %}
+                        <tr {% if can_edit %}class="clickable" onclick="window.location='{% url 'plans:edit' plan.pk %}'"{% endif %}>
+                            <td>
+                                <div class="cell-title">{{ plan.name }}</div>
+                                <div class="cell-sub">{{ plan.code }}</div>
+                            </td>
+                            <td class="num">{{ plan.installment_count }}</td>
+                            <td class="num">{{ plan.installment_amount }} {{ plan.currency }}{% if plan.installment_count > 1 %}<div class="cell-sub">{{ plan.computed_total }} {{ plan.currency }} au total</div>{% endif %}</td>
+                            <td class="cell-sub">{% if plan.access_policy == "FULL_PAYMENT" %}Paiement intégral{% else %}Premier versement{% endif %}</td>
+                            <td>
+                                {% if plan.is_active %}<span class="pill good"><span class="dot"></span>Actif</span>
+                                {% else %}<span class="pill neutral"><span class="dot"></span>Inactif</span>{% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if can_edit %}<a href="{% url 'plans:edit' plan.pk %}" class="btn-crm btn-crm-outline btn-crm-sm">Modifier</a>{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="text-muted small fst-italic mb-0">Aucun plan pour ce cours — sans plan, aucun lien de paiement ne peut être partagé.</p>
+        {% endif %}
+    </div>
+    {% empty %}
+        {% include "components/table_empty_state.html" with title="Aucun cours importé" description="Synchronisez vos cours ClickFunnels avant de créer des plans de paiement." action_label="Synchroniser" action_url="/courses/sync/" action_icon="fa-solid fa-sync" %}
+    {% endfor %}
+</div>
+{% endblock %}
