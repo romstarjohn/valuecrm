@@ -1,77 +1,81 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Cours | {{ BRAND_NAME }}{% endblock %}
+{% block title %}Offres | {{ BRAND_NAME }}{% endblock %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/offres.css' %}">{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title="Cours" subtitle="Un produit par cours importé · le lien de paiement se copie et se partage directement." action_label="Synchroniser tous les cours" action_url="/courses/sync/" action_icon="fa-solid fa-sync" %}
+{% url 'courses:sync' as sync_url %}
+{% include "components/page_header.html" with title="Offres" subtitle="Vos formations telles que vous les vendez : page de vente, prix et lien de paiement à partager." action_label="Importer depuis ClickFunnels" action_url=sync_url action_icon="fa-solid fa-cloud-arrow-down" %}
 
 <div class="container-fluid px-4 fade-in pb-5">
+    {% if rows or query %}
     <div class="mb-4">
         <form method="get" class="d-flex align-items-center flex-grow-1 gap-3 flex-wrap">
-            {% include "components/search_bar.html" with placeholder="Rechercher un nom de formation ou un ID..." %}
-            {% include "components/filter_dropdown.html" with label=workspace_label options=workspace_filter_options %}
-            {% if workspace_filter %}<input type="hidden" name="workspace_id" value="{{ workspace_filter }}">{% endif %}
-            {% if sort_key %}
-                <input type="hidden" name="sort" value="{{ sort_key }}">
-                <input type="hidden" name="dir" value="{{ sort_dir }}">
-            {% endif %}
+            {% include "components/search_bar.html" with placeholder="Rechercher une formation…" %}
         </form>
     </div>
+    {% endif %}
 
-    {% if page_obj %}
+    {% if rows %}
     <div class="table-wrap">
         <table>
             <thead>
                 <tr>
-                    {% for header in headers %}
-                    <th class="{% if header.align %}{{ header.align }}{% endif %}">
-                        {% if header.sort_key %}
-                            <a href="?{% if sort_qs %}{{ sort_qs }}&{% endif %}sort={{ header.sort_key }}&dir={% if header.sort_key == sort_key and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none" style="color:inherit;">
-                                {{ header.label }}
-                                {% if header.sort_key == sort_key %}<i class="fa-solid {% if sort_dir == 'desc' %}fa-sort-down{% else %}fa-sort-up{% endif %} ms-1" aria-hidden="true"></i>{% endif %}
-                            </a>
-                        {% else %}
-                            {{ header.label }}
-                        {% endif %}
-                    </th>
-                    {% endfor %}
+                    <th>Offre</th>
+                    <th>Page de vente</th>
+                    <th>Prix</th>
+                    <th>Lien de paiement</th>
+                    <th>État</th>
                 </tr>
             </thead>
             <tbody>
-                {% for course in page_obj %}
-                <tr class="clickable" data-panel-url="{% url 'courses:detail_panel' course.cf_course_id %}" data-panel-title="{{ course.name }}">
+                {% for row in rows %}
+                <tr class="clickable" onclick="window.location='{% url 'courses:detail' row.course.cf_course_id %}'">
                     <td>
-                        <div class="cell-title">{{ course.name }}</div>
-                        <div class="cell-sub">{{ course.workspace_id|default:"—" }}</div>
-                    </td>
-                    <td>{{ course.cf_course_id }}</td>
-                    <td>
-                        <span class="pill good"><span class="dot"></span>il y a {{ course.updated_at|timesince }}</span>
+                        <div class="cell-title">{{ row.course.name }}</div>
+                        <div class="cell-sub">{{ row.course.active_enrollment_count }} élève{{ row.course.active_enrollment_count|pluralize }} avec accès</div>
                     </td>
                     <td>
-                        {% with plan=course.active_plans|first %}
-                            {% if plan %}
-                                {% if plan.installment_count == 1 %}Unique · {{ plan.installment_amount }} {{ plan.currency }}
-                                {% else %}{{ plan.installment_count }} × {{ plan.installment_amount }} {{ plan.currency }} / {{ plan.installment_interval_days }} j{% endif %}
-                                {% if course.active_plans|length > 1 %}<span class="cell-sub">+{{ course.active_plans|length|add:"-1" }} autre{{ course.active_plans|length|add:"-1"|pluralize }}</span>{% endif %}
-                            {% else %}
-                                <span class="cell-sub fst-italic">Aucun plan actif</span>
-                            {% endif %}
-                        {% endwith %}
+                        {% if row.offer %}<span class="pill good"><span class="dot"></span>Prête</span>
+                        {% else %}<span class="pill neutral"><span class="dot"></span>À créer</span>{% endif %}
                     </td>
-                    <td class="num">{{ course.active_enrollment_count }}</td>
+                    <td>{% if row.price %}{{ row.price }}{% else %}<span class="cell-sub fst-italic">Aucun prix en vente</span>{% endif %}</td>
+                    <td onclick="event.stopPropagation();">
+                        {% if row.checkout_url %}
+                            <span id="offer-link-{{ row.course.pk }}" hidden>{{ row.checkout_url }}</span>
+                            <button type="button" class="btn-crm btn-crm-outline btn-crm-sm js-copy" data-copy-target="offer-link-{{ row.course.pk }}">
+                                Copier le lien
+                            </button>
+                        {% else %}
+                            <span class="cell-sub">—</span>
+                        {% endif %}
+                    </td>
+                    <td onclick="event.stopPropagation();">
+                        {% if row.readiness.ready %}
+                            <span class="pill good"><span class="dot"></span>{{ row.readiness.label }}</span>
+                        {% else %}
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <span class="pill warn"><span class="dot"></span>{{ row.readiness.label }}</span>
+                                {% if row.readiness.next_step == "page" and can_add_offer %}
+                                    <a href="{% url 'courses:product_add' %}?course_id={{ row.course.pk }}" class="btn-crm btn-crm-primary btn-crm-sm">Créer la page de vente</a>
+                                {% elif row.readiness.next_step == "price" and can_add_plan %}
+                                    <a href="{% url 'plans:add' %}?course_id={{ row.course.pk }}" class="btn-crm btn-crm-primary btn-crm-sm">Ajouter un prix</a>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+    {% include "components/pagination.html" with page_obj=page_obj querystring=querystring %}
+    {% elif query %}
+        {% include "components/table_empty_state.html" with title="Aucune offre trouvée" description="Aucune formation ne correspond à votre recherche. Vérifiez l'orthographe ou effacez la recherche." %}
     {% else %}
-        {% include "components/table_empty_state.html" with title="Aucune formation synchronisée" description="Synchronisez vos produits ClickFunnels pour commencer à inscrire des étudiants." action_label="Synchroniser maintenant" action_url="/courses/sync/" action_icon="fa-solid fa-sync" %}
-    {% endif %}
-
-    {% if page_obj %}
-        {% include "components/pagination.html" with page_obj=page_obj querystring=querystring %}
+        {% include "components/table_empty_state.html" with title="Aucune formation pour l'instant" description="Vos formations viennent de ClickFunnels. Connectez ClickFunnels dans « Connexion ClickFunnels », puis importez vos formations." action_label="Importer depuis ClickFunnels" action_url=sync_url action_icon="fa-solid fa-cloud-arrow-down" %}
     {% endif %}
 </div>
 {% endblock %}

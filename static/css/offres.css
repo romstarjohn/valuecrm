@@ -1,0 +1,49 @@
+/* "Offres" area — offer list, offer page steps, sales-page and price forms.
+   Uses the existing design tokens only (static/css/tokens.css). */
+
+.offer-steps { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.offer-step { display: flex; gap: var(--space-4); align-items: flex-start; }
+.offer-step-number {
+    flex: 0 0 32px; height: 32px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px;
+    background: var(--border-soft); color: var(--ink-soft); border: 1px solid var(--border);
+}
+.offer-step.done .offer-step-number { background: var(--good-soft); color: var(--good); border-color: var(--good-border); }
+.offer-step.todo .offer-step-number { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-soft-border); }
+.offer-step-body { flex: 1; min-width: 0; }
+.offer-step-title { font-size: 16px; font-weight: 700; margin: 4px 0 2px; }
+.offer-step-hint { font-size: 13px; color: var(--ink-soft); margin-bottom: var(--space-3); }
+
+.offer-page-preview { display: flex; gap: var(--space-3); align-items: center; }
+.offer-thumb {
+    width: 96px; height: 64px; object-fit: cover; border-radius: var(--radius-md);
+    border: 1px solid var(--border); background: var(--border-soft); flex: 0 0 auto;
+}
+.offer-thumb-empty { display: inline-flex; align-items: center; justify-content: center; color: var(--ink-soft); }
+
+.form-section { padding-bottom: var(--space-5); margin-bottom: var(--space-5); border-bottom: 1px solid var(--border-soft); }
+.form-section:last-of-type { border-bottom: none; margin-bottom: 0; }
+.form-section-title { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+.form-section-hint { font-size: 13px; color: var(--ink-soft); margin-bottom: var(--space-3); }
+.form-field-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+
+.image-preview { max-width: 100%; max-height: 220px; border-radius: var(--radius-md); border: 1px solid var(--border); margin-bottom: var(--space-2); }
+
+.benefit-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-3); margin-bottom: var(--space-3); background: var(--color-surface); }
+.benefit-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-2); gap: var(--space-2); }
+.benefit-card-head .benefit-position { font-size: 12px; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; }
+.benefit-move { display: inline-flex; gap: 4px; }
+.benefit-card.is-deleted { opacity: .5; }
+
+.choice-cards { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+.choice-cards label {
+    flex: 1 1 200px; border: 1px solid var(--border); border-radius: var(--radius-md);
+    padding: var(--space-3); cursor: pointer; display: flex; gap: var(--space-2); align-items: center; font-weight: 600;
+}
+.choice-cards input { margin: 0; }
+.choice-cards label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+
+.price-total { font-size: 15px; font-weight: 700; padding: var(--space-3); border-radius: var(--radius-md); background: var(--border-soft); }
+.offer-disabled-note { font-size: 13px; color: var(--ink-soft); font-style: italic; }

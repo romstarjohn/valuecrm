@@ -3,7 +3,7 @@
     <div class="course-offer-visual">
         {% if offer %}
         <div class="course-offer-art">
-            <img src="{{ offer.image_url }}" alt="{{ offer.mockup_alt }}" width="1536" height="1024" {% if course.id == selected_plan.course_id %}fetchpriority="high"{% else %}loading="lazy"{% endif %}>
+            {% if offer.image_url %}<img src="{{ offer.image_url }}" alt="{{ offer.mockup_alt }}" width="1536" height="1024" {% if course.id == selected_plan.course_id %}fetchpriority="high"{% else %}loading="lazy"{% endif %}>{% endif %}
             <span class="course-offer-format"><i class="fa-solid fa-circle-play" aria-hidden="true"></i> FORMATION EN LIGNE</span>
         </div>
 

@@ -178,7 +178,7 @@ def test_freeze_enrollment_attempt_requires_success_status_and_cf_id(admin_user,
     )
     mock_service = mock_bundle(mocker)
 
-    with pytest.raises(AdminActionError, match="no successful ClickFunnels record"):
+    with pytest.raises(AdminActionError, match="Aucun accès ouvert dans ClickFunnels pour cette inscription"):
         EnrollmentAdministrationService().freeze_enrollment_attempt(failed_attempt.id, "reason", admin_user)
 
     mock_service.set_enrollment_suspension.assert_not_called()
@@ -188,7 +188,7 @@ def test_freeze_enrollment_attempt_clickfunnels_error_leaves_local_state_untouch
     enrollment_attempt = make_standalone_enrollment()
     mock_bundle(mocker, suspend_side_effect=Exception("ClickFunnels API Error"))
 
-    with pytest.raises(AdminActionError, match="Could not update the ClickFunnels enrollment"):
+    with pytest.raises(AdminActionError, match="ClickFunnels n'a pas pu être mis à jour"):
         EnrollmentAdministrationService().freeze_enrollment_attempt(enrollment_attempt.id, "reason", admin_user)
 
     enrollment_attempt.refresh_from_db()
@@ -244,7 +244,7 @@ def test_freeze_order_enrollment_no_provisioning_request(admin_user, mocker):
     ProvisioningRequest.objects.filter(contact_id=order.customer_id, course_id=order.course_id).delete()
     mock_service = mock_bundle(mocker)
 
-    with pytest.raises(AdminActionError, match="nothing to freeze"):
+    with pytest.raises(AdminActionError, match="rien à suspendre"):
         EnrollmentAdministrationService().freeze_order_enrollment(order.id, "reason", admin_user)
 
     mock_service.set_enrollment_suspension.assert_not_called()
@@ -259,7 +259,7 @@ def test_freeze_order_enrollment_no_successful_enrollment_attempt(admin_user, mo
     # SUCCESS ProvisioningAttempt/EnrollmentAttempt was ever created.
     mock_service = mock_bundle(mocker)
 
-    with pytest.raises(AdminActionError, match="no successful ClickFunnels enrollment"):
+    with pytest.raises(AdminActionError, match="Aucun accès ouvert dans ClickFunnels pour cette vente"):
         EnrollmentAdministrationService().freeze_order_enrollment(order.id, "reason", admin_user)
 
     mock_service.set_enrollment_suspension.assert_not_called()
@@ -275,7 +275,7 @@ def test_freeze_order_enrollment_invalid_order_status(admin_user, mocker):
     order.status = Order.Status.COMPLETED
     order.save(update_fields=["status"])
 
-    with pytest.raises(AdminActionError, match="not eligible to be frozen"):
+    with pytest.raises(AdminActionError, match="pas possible dans l.état actuel"):
         EnrollmentAdministrationService().freeze_order_enrollment(order.id, "reason", admin_user)
 
     mock_service.set_enrollment_suspension.assert_not_called()

@@ -1,0 +1,1 @@
+{% load access_labels %}{% with state=attempt|access_state %}<span class="pill {{ state.1 }}"><span class="dot"></span>{{ state.0 }}</span>{% endwith %}

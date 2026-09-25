@@ -85,3 +85,17 @@ def test_workspace_subdomain_is_mandatory(staff_client, active_config):
     assert "Workspace subdomain was not returned by ClickFunnels" in response.content.decode()
     active_config.refresh_from_db()
     assert active_config.workspace_subdomain is None
+
+
+
+@pytest.mark.django_db
+def test_clickfunnels_page_plain_status_and_separate_test_button(staff_client, active_config):
+    import html
+    content = html.unescape(staff_client.get(reverse("configuration:settings")).content.decode())
+    assert "Connexion ClickFunnels" in content
+    assert "Que faire ?" in content or "Connecté ✓" in content
+    assert "Tester la connexion" in content
+    # Testing must live in its own form: clicking it must never look like it saves a newly typed key.
+    save_form_end = content.index('value="save_token"')
+    save_form_close = content.index("</form>", save_form_end)
+    assert content.index('value="verify_token"') > save_form_close

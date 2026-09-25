@@ -80,55 +80,111 @@ class CheckoutContactForm(forms.Form):
 
 class PaymentPlanForm(forms.ModelForm):
     """
-    Staff-facing (apps/payments/staff_views.py) — creates/edits a PaymentPlan,
-    the platform's "produit" (docs/PRODUCT_CADRAGE_PMI.md §4: one produit per
-    cours, always tied to an existing imported course, never the reverse).
-    `code` auto-generates from `name` when left blank — the same convenience
-    apps.courses.models.Course.save() already gives its own slug, so creating
-    a plan never blocks on typing a stable internal identifier by hand.
+    Staff-facing "formule de prix" of one course (docs/UI_VOCABULARY.md).
+    Asks the question a non-technical user can answer — "comment le client
+    paie-t-il ?" — instead of raw installment fields: "en une fois" forces
+    installment_count=1, "en plusieurs fois" asks for the number and the
+    rhythm. `code` is always generated; display_order is optional ("Options
+    avancées"). Every PaymentPlan invariant still comes from the model
+    (PaymentPlan.clean(), field validators).
+
+    Pass `course=` when the course is known (opened from an Offre page, or
+    editing): it is then fixed instead of offered as a choice.
     """
+
+    ONCE, SEVERAL = "once", "several"
+    payment_mode = forms.ChoiceField(
+        label="Comment le client paie-t-il ?",
+        choices=[(ONCE, "En une fois"), (SEVERAL, "En plusieurs fois")],
+        widget=forms.RadioSelect,
+        initial=ONCE,
+    )
 
     class Meta:
         model = PaymentPlan
         fields = [
-            "course", "name", "code", "description",
+            "course", "name", "description",
             "installment_count", "installment_amount", "installment_interval_days",
             "access_policy", "is_active", "display_order",
         ]
+        labels = {
+            "course": "Formation",
+            "name": "Nom de la formule (visible par le client)",
+            "description": "Précision affichée sous le prix (facultatif)",
+            "installment_count": "Nombre de paiements",
+            "installment_amount": "Montant de chaque paiement (XAF)",
+            "installment_interval_days": "Nombre de jours entre deux paiements",
+            "access_policy": "Quand le client reçoit-il l'accès à la formation ?",
+            "is_active": "En vente — visible sur le lien de paiement",
+            "display_order": "Position dans la liste des formules",
+        }
         widgets = {
             "course": forms.Select(attrs={"class": "form-select"}),
-            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Ex. : Locking Professionnel — 3 versements"}),
-            "code": forms.TextInput(attrs={"class": "form-control", "placeholder": "Généré automatiquement si laissé vide"}),
-            "description": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
-            "installment_count": forms.NumberInput(attrs={"class": "form-control", "min": 1}),
-            "installment_amount": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0.01"}),
+            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Ex. : Paiement en une fois"}),
+            "description": forms.Textarea(attrs={"class": "form-control", "rows": 2, "placeholder": "Ex. : Le plus simple — accès immédiat."}),
+            "installment_count": forms.NumberInput(attrs={"class": "form-control", "min": 2}),
+            "installment_amount": forms.NumberInput(attrs={"class": "form-control", "step": "1", "min": "1", "placeholder": "Ex. : 20000"}),
             "installment_interval_days": forms.NumberInput(attrs={"class": "form-control", "min": 1}),
-            "access_policy": forms.Select(attrs={"class": "form-select"}),
+            "access_policy": forms.RadioSelect,
             "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "display_order": forms.NumberInput(attrs={"class": "form-control", "min": 0}),
         }
         help_texts = {
-            "installment_count": "1 pour un paiement unique, ou le nombre de versements.",
-            "installment_amount": "Montant par versement — le total est calculé, jamais saisi directement.",
-            "is_active": "Un plan inactif n'apparaît pas sur le lien de paiement public.",
+            "installment_interval_days": "Ex. : 30 pour un paiement par mois. Le premier paiement se fait à la commande.",
+            "is_active": "Décochez pour masquer cette formule sans la supprimer. Les ventes déjà faites ne changent pas.",
+            "display_order": "0 = en premier. Laissez 0 si l'ordre vous est égal.",
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, course=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["course"].queryset = Course.objects.order_by("name")
-        self.fields["code"].required = False
+        self.fixed_course = course or (self.instance.course if self.instance.pk else None)
+        if self.fixed_course is not None:
+            del self.fields["course"]
+            self.instance.course = self.fixed_course
+        else:
+            self.fields["course"].queryset = Course.objects.order_by("name")
+        self.fields["access_policy"].choices = [
+            (PaymentPlan.AccessPolicy.FIRST_INSTALLMENT, "Dès le premier paiement"),
+            (PaymentPlan.AccessPolicy.FULL_PAYMENT, "Une fois tout payé"),
+        ]
+        self.fields["installment_count"].required = False
+        self.fields["installment_interval_days"].required = False
+        self.fields["display_order"].required = False
+        if self.instance.pk and self.instance.installment_count > 1:
+            self.initial["payment_mode"] = self.SEVERAL
 
-    def clean_code(self):
-        code = (self.cleaned_data.get("code") or "").strip()
-        if code:
-            return code
-        # `name` is cleaned before `code` (Meta.fields order), so it's
-        # already in cleaned_data here whether this is a create or an edit.
-        base = slugify(self.cleaned_data.get("name", "")) or "plan"
-        candidate = base
-        suffix = 2
-        qs = PaymentPlan.objects.exclude(pk=self.instance.pk)
-        while qs.filter(code=candidate).exists():
-            candidate = f"{base}-{suffix}"
-            suffix += 1
-        return candidate
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("payment_mode") == self.ONCE:
+            cleaned["installment_count"] = 1
+            if not cleaned.get("installment_interval_days"):
+                cleaned["installment_interval_days"] = self.instance.installment_interval_days or 30
+        else:
+            count = cleaned.get("installment_count")
+            if not count or count < 2:
+                self.add_error("installment_count", "Indiquez au moins 2 paiements (sinon choisissez « En une fois »).")
+            if not cleaned.get("installment_interval_days"):
+                self.add_error("installment_interval_days", "Indiquez le nombre de jours entre deux paiements.")
+        if cleaned.get("display_order") is None:
+            cleaned["display_order"] = self.instance.display_order or 0
+        return cleaned
+
+    def _post_clean(self):
+        # The forced/defaulted values from clean() must reach the instance before model validation.
+        for field in ("installment_count", "installment_interval_days", "display_order"):
+            if field in self.cleaned_data and self.cleaned_data[field] is not None:
+                setattr(self.instance, field, self.cleaned_data[field])
+        super()._post_clean()
+
+    def save(self, commit=True):
+        plan = super().save(commit=False)
+        if not plan.code:
+            base = slugify(plan.name) or "formule"
+            candidate, suffix = base, 2
+            while PaymentPlan.objects.exclude(pk=plan.pk).filter(code=candidate).exists():
+                candidate = f"{base}-{suffix}"
+                suffix += 1
+            plan.code = candidate
+        if commit:
+            plan.save()
+        return plan

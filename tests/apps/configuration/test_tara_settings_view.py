@@ -54,7 +54,7 @@ def test_navigation_exposes_tara_link(staff_client):
     response = staff_client.get(reverse("dashboard:index"))
     content = response.content.decode()
     assert reverse(TARA_URL_NAME) in content
-    assert "Paramètres Tara" in content
+    assert "Connexion Tara" in content
 
 
 def _extract_anchor_tag(content: str, href: str) -> str:
@@ -354,3 +354,24 @@ def test_no_secret_in_logs(staff_client, active_tara_config, caplog):
     })
     for record in caplog.records:
         assert "log-sensitive-value" not in record.getMessage()
+
+
+# --- Plain-language status (docs/UI_VOCABULARY.md) ---
+
+@pytest.mark.django_db
+def test_tara_page_says_what_to_do_when_not_connected(staff_client):
+    import html
+    content = html.unescape(staff_client.get(reverse(TARA_URL_NAME)).content.decode())
+    assert "Connexion Tara" in content
+    assert "Non connecté" in content
+    assert "Que faire ?" in content
+    assert "À quoi ça sert ?" in content
+
+
+@pytest.mark.django_db
+def test_tara_page_shows_connected_and_last_notification(staff_client, active_tara_config):
+    from apps.payments.models import TaraWebhookEvent
+    TaraWebhookEvent.objects.create(dedup_key="n1", raw_provider_status="SUCCESS", tara_payment_id="p1")
+    content = staff_client.get(reverse(TARA_URL_NAME)).content.decode()
+    assert "Connecté ✓" in content
+    assert "Dernière notification reçue de Tara" in content

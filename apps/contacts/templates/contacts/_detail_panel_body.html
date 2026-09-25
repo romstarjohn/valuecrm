@@ -1,51 +1,54 @@
+{% load vente_format %}
 <div>
     <div class="so-section-title">Coordonnées</div>
     <div class="kv">
         <div class="kv-row"><span>Téléphone</span><span>{{ contact.phone|default:"—" }}</span></div>
-        <div class="kv-row"><span>Statut</span><span>{{ contact.status|default:"—" }}</span></div>
         <div class="kv-row"><span>Client depuis</span><span>{{ contact.created_at|date:"d/m/Y" }}</span></div>
     </div>
 </div>
 
 <div>
-    <div class="so-section-title">Commandes &amp; paiements</div>
+    <div class="so-section-title">Achats</div>
     {% if orders %}
-        <div class="kv">
+        <div class="d-flex flex-column gap-2">
             {% for order in orders %}
-            <div class="kv-row">
-                <span>{{ order.course_name }}<br><span class="cell-sub">{{ order.plan_name }}</span></span>
-                <span>{{ order.total_paid_amount }} / {{ order.total_expected_amount }} {{ order.currency }}</span>
+            <div class="d-flex align-items-start justify-content-between gap-2">
+                <span>
+                    <span class="cell-title" style="font-size:13px;">{{ order.course_name }}</span>
+                    <span class="cell-sub d-block">{{ order.paid_total|money:"" }} / {{ order.total_expected_amount|money:order.currency }}</span>
+                </span>
+                {% include "components/sale_state.html" with state=order.state %}
             </div>
             {% endfor %}
         </div>
     {% else %}
-        <p class="helper mb-0">Aucune commande payée pour ce contact.</p>
+        <p class="helper mb-0">Aucun achat pour ce client.</p>
     {% endif %}
 </div>
 
 <div>
-    <div class="so-section-title">Accès par cours</div>
+    <div class="so-section-title">Accès aux formations</div>
     {% if enrollments %}
         <div class="d-flex flex-column gap-2">
             {% for enr in enrollments %}
             <div class="d-flex align-items-center justify-content-between gap-2">
                 <span class="cell-title" style="font-size:13px;">{{ enr.course.name }}</span>
                 {% if enr.status == "SUCCESS" %}
-                    {% if enr.cf_suspended %}<span class="pill critical"><span class="dot"></span>Suspendu</span>
-                    {% else %}<span class="pill good"><span class="dot"></span>Actif</span>{% endif %}
+                    {% if enr.cf_suspended %}<span class="pill warn"><span class="dot"></span>Suspendu</span>
+                    {% else %}<span class="pill good"><span class="dot"></span>Ouvert</span>{% endif %}
                 {% else %}
-                    <span class="pill warn"><span class="dot"></span>Échec</span>
+                    <span class="pill critical"><span class="dot"></span>Échec</span>
                 {% endif %}
             </div>
             {% endfor %}
         </div>
     {% else %}
-        <p class="helper mb-0">Aucune inscription enregistrée.</p>
+        <p class="helper mb-0">Aucun accès à une formation.</p>
     {% endif %}
 </div>
 
 <div>
     <a href="{% url 'contacts:detail' contact.pk %}" class="btn-crm btn-crm-outline btn-crm-sm w-100">
-        <i class="fa-solid fa-arrow-up-right-from-square me-2 small" aria-hidden="true"></i>Voir la fiche complète
+        <i class="fa-solid fa-arrow-up-right-from-square me-2 small" aria-hidden="true"></i>Ouvrir la fiche client
     </a>
 </div>

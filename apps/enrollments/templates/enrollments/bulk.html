@@ -1,28 +1,29 @@
 {% extends "base.html" %}
+{% load access_labels %}
 
-{% block title %}Inscription groupée | {{ BRAND_NAME }}{% endblock %}
+{% block title %}Donner accès à plusieurs clients | {{ BRAND_NAME }}{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title="Inscription groupée" subtitle="Inscrivez plusieurs étudiants à une formation en une seule fois." %}
+{% include "components/page_header.html" with title="Donner accès à plusieurs clients" subtitle="Ouvrez la même formation à une liste de clients en une fois (50 au maximum)." %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="row">
         <div class="col-lg-12">
             {% if bulk_result %}
                 <div class="crm-card mb-4 border-start border-4 border-info">
-                    <h5 class="fw-bold mb-4">Résumé du traitement groupé</h5>
+                    <h5 class="fw-bold mb-4">Résultat</h5>
                     <div class="row g-4 text-center">
                         <div class="col-md-4 border-end">
                             <h3 class="fw-bold mb-0">{{ bulk_result.total }}</h3>
-                            <div class="text-muted small text-uppercase">Total traité</div>
+                            <div class="text-muted small text-uppercase">Clients traités</div>
                         </div>
                         <div class="col-md-4 border-end">
                             <h3 class="fw-bold mb-0 text-success">{{ bulk_result.success_count }}</h3>
-                            <div class="text-muted small text-uppercase">Réussies</div>
+                            <div class="text-muted small text-uppercase">Accès ouverts</div>
                         </div>
                         <div class="col-md-4">
                             <h3 class="fw-bold mb-0 text-danger">{{ bulk_result.failure_count }}</h3>
-                            <div class="text-muted small text-uppercase">Échouées</div>
+                            <div class="text-muted small text-uppercase">Échecs</div>
                         </div>
                     </div>
                 </div>
@@ -32,20 +33,20 @@
                         <thead>
                             <tr>
                                 <th>E-mail</th>
-                                <th>Statut</th>
-                                <th class="text-end">Détails</th>
+                                <th>Accès</th>
+                                <th class="text-end">Détail</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for res in bulk_result.results %}
                             <tr>
                                 <td class="fw-medium">{{ res.contact_email }}</td>
-                                <td>{% include "components/status_badge.html" with status=res.status %}</td>
+                                <td>{% if res.status == "SUCCESS" %}<span class="pill good"><span class="dot"></span>Ouvert</span>{% else %}<span class="pill warn"><span class="dot"></span>Échec</span>{% endif %}</td>
                                 <td class="text-end">
                                     {% if res.enrollment_attempt_id %}
-                                        <a href="{% url 'enrollments:detail' res.enrollment_attempt_id %}" class="btn-crm btn-crm-outline btn-crm-sm">Audit</a>
+                                        <a href="{% url 'enrollments:detail' res.enrollment_attempt_id %}" class="btn-crm btn-crm-outline btn-crm-sm">Voir</a>
                                     {% else %}
-                                        <span class="text-muted small fst-italic">{{ res.error_message|default:"Erreur interne" }}</span>
+                                        <span class="text-muted small fst-italic">{{ res.error_message|access_error_plain|default:"L'accès n'a pas pu être ouvert." }}</span>
                                     {% endif %}
                                 </td>
                             </tr>
@@ -55,7 +56,7 @@
                 </div>
 
                 <div class="d-flex justify-content-center mb-5">
-                    <a href="{% url 'enrollments:bulk' %}" class="btn-crm btn-crm-outline">Démarrer un nouveau traitement groupé</a>
+                    <a href="{% url 'enrollments:bulk' %}" class="btn-crm btn-crm-outline">Donner accès à d'autres clients</a>
                 </div>
 
             {% else %}
@@ -65,7 +66,7 @@
                             <form method="post" id="bulk-enrollment-form">
                                 {% csrf_token %}
                                 <div class="mb-4">
-                                    <label class="form-label small fw-bold text-muted" for="{{ form.course_id.id_for_label }}">Choisir la formation cible</label>
+                                    <label class="form-label small fw-bold text-muted" for="{{ form.course_id.id_for_label }}">Formation</label>
                                     {{ form.course_id }}
                                     {% if form.course_id.errors %}
                                         <div class="form-error">{{ form.course_id.errors|striptags }}</div>
@@ -73,39 +74,39 @@
                                 </div>
 
                                 <div class="mb-4">
-                                    <label class="form-label small fw-bold text-muted" for="{{ form.emails.id_for_label }}">Adresses e-mail</label>
+                                    <label class="form-label small fw-bold text-muted" for="{{ form.emails.id_for_label }}">E-mails des clients</label>
                                     {{ form.emails }}
-                                    <div class="form-text small mt-2">Collez les e-mails, un par ligne. Nous identifierons automatiquement les contacts existants.</div>
+                                    <div class="form-text small mt-2">Collez un e-mail par ligne. Les clients déjà connus sont reconnus automatiquement.</div>
                                     {% if form.emails.errors %}
                                         <div class="form-error">{{ form.emails.errors|striptags }}</div>
                                     {% endif %}
                                 </div>
 
                                 <button type="submit" class="btn-crm btn-crm-primary w-100 py-3 fs-5" id="bulk-enrollment-form-submit">
-                                    <i class="fa-solid fa-bolt me-2" aria-hidden="true"></i>Lancer l'inscription groupée
+                                    <i class="fa-solid fa-key me-2" aria-hidden="true"></i>Donner accès à ces clients
                                 </button>
                             </form>
                         </div>
                     </div>
                     <div class="col-lg-4">
                         <div class="crm-card bg-dark text-white border-0 h-100">
-                            <h5 class="fw-bold mb-4">Règles du traitement groupé</h5>
+                            <h5 class="fw-bold mb-4">Bon à savoir</h5>
                             <ul class="list-unstyled">
                                 <li class="mb-3 d-flex align-items-top">
                                     <i class="fa-solid fa-circle-check text-primary mt-1 me-3" aria-hidden="true"></i>
-                                    <span>Maximum 50 e-mails par requête.</span>
+                                    <span>50 clients au maximum à la fois.</span>
                                 </li>
                                 <li class="mb-3 d-flex align-items-top">
                                     <i class="fa-solid fa-circle-check text-primary mt-1 me-3" aria-hidden="true"></i>
-                                    <span>Chaque étudiant est vérifié/créé dans CF avant l'inscription.</span>
+                                    <span>Un compte ClickFunnels est créé pour les clients qui n'en ont pas.</span>
                                 </li>
                                 <li class="mb-3 d-flex align-items-top">
                                     <i class="fa-solid fa-circle-check text-primary mt-1 me-3" aria-hidden="true"></i>
-                                    <span>Un échec d'inscription individuel n'interrompt pas la file.</span>
+                                    <span>Si un client échoue, les autres sont quand même traités.</span>
                                 </li>
                                 <li class="mb-3 d-flex align-items-top">
                                     <i class="fa-solid fa-circle-check text-primary mt-1 me-3" aria-hidden="true"></i>
-                                    <span>Un journal d'audit est créé pour chaque tentative d'inscription.</span>
+                                    <span>Chaque accès est enregistré et visible dans « Accès aux formations ».</span>
                                 </li>
                             </ul>
                         </div>
@@ -126,7 +127,7 @@
         form.addEventListener("submit", function () {
             var btn = document.getElementById("bulk-enrollment-form-submit");
             btn.disabled = true;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Traitement en cours…';
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Ouverture des accès…';
         });
     }
 </script>

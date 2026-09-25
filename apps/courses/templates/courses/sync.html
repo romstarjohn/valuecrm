@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 
-{% block title %}Synchroniser les formations | {{ BRAND_NAME }}{% endblock %}
+{% block title %}Importer depuis ClickFunnels | {{ BRAND_NAME }}{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title="Synchroniser les formations" subtitle="Récupérez les derniers produits depuis votre espace de travail ClickFunnels actif." %}
+{% include "components/page_header.html" with title="Importer depuis ClickFunnels" subtitle="Récupère vos formations ClickFunnels pour pouvoir les vendre ici. Sans risque : rien n'est supprimé." %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="row">
         <div class="col-lg-6">
             <div class="crm-card border-0 shadow-sm">
-                <h5 class="fw-bold mb-4">État de l'intégration ClickFunnels</h5>
+                <h5 class="fw-bold mb-4">Connexion à ClickFunnels</h5>
 
                 {% if active_config %}
                     <div class="d-flex align-items-center mb-4 p-3 bg-light rounded-3 border">
@@ -18,16 +18,16 @@
                                 <i class="fa-solid fa-check" aria-hidden="true"></i>
                             </div>
                             <div>
-                                <div class="fw-bold">Espace de travail actif : {{ active_config.workspace_name }}</div>
-                                <div class="text-muted small">Sous-domaine : <code>{{ active_config.workspace_subdomain }}</code></div>
+                                <div class="fw-bold">Connecté à : {{ active_config.workspace_name }}</div>
+                                <div class="text-muted small">{{ active_config.workspace_subdomain }}.myclickfunnels.com</div>
                             </div>
                         {% else %}
                             <div class="stat-icon bg-warning text-white me-3">
                                 <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
                             </div>
                             <div>
-                                <div class="fw-bold text-dark">Espace de travail non configuré</div>
-                                <div class="text-muted small">Veuillez terminer la configuration en 3 étapes dans les paramètres.</div>
+                                <div class="fw-bold text-dark">Connexion pas encore terminée</div>
+                                <div class="text-muted small">Terminez les réglages dans « Connexion ClickFunnels », puis revenez ici.</div>
                             </div>
                         {% endif %}
                     </div>
@@ -37,27 +37,23 @@
                             {% csrf_token %}
                             <div class="alert alert-info border-0 small mb-4">
                                 <i class="fa-solid fa-circle-info me-2" aria-hidden="true"></i>
-                                Cette opération récupère toutes les formations/produits de votre <strong>espace de travail actif</strong>. Les enregistrements existants seront mis à jour et les nouveaux seront créés.
+                                Les nouvelles formations apparaissent dans « Offres ». Celles déjà importées sont mises à jour ; vos pages de vente et vos prix ne changent pas.
                             </div>
                             <button type="submit" class="btn-crm btn-crm-primary w-100 py-3 fs-5 shadow-sm" id="sync-form-submit">
-                                <i class="fa-solid fa-sync me-2" aria-hidden="true"></i>Démarrer la synchronisation
+                                <i class="fa-solid fa-cloud-arrow-down me-2" aria-hidden="true"></i>Importer mes formations
                             </button>
                         </form>
                     {% else %}
-                        <div class="alert alert-info border-0 small mb-4">
-                            <i class="fa-solid fa-circle-info me-2" aria-hidden="true"></i>
-                            Cette opération récupère toutes les formations/produits de votre <strong>espace de travail actif</strong>. Les enregistrements existants seront mis à jour et les nouveaux seront créés.
-                        </div>
                         <a href="{% url 'configuration:settings' %}" class="btn-crm btn-crm-primary w-100 py-3">
-                            <i class="fa-solid fa-sliders me-2" aria-hidden="true"></i>Configurer l'espace de travail
+                            <i class="fa-solid fa-plug me-2" aria-hidden="true"></i>Terminer la connexion ClickFunnels
                         </a>
                     {% endif %}
                 {% else %}
                     <div class="text-center py-5">
                         <i class="fa-solid fa-plug-circle-xmark text-danger fs-1 mb-3 opacity-25" aria-hidden="true"></i>
-                        <h5 class="fw-bold">Aucune configuration active</h5>
-                        <p class="text-muted px-4">Vous devez configurer et activer une configuration API ClickFunnels avant de pouvoir synchroniser les formations.</p>
-                        <a href="{% url 'configuration:settings' %}" class="btn-crm btn-crm-primary mt-3">Configurer la connexion</a>
+                        <h5 class="fw-bold">ClickFunnels n'est pas encore connecté</h5>
+                        <p class="text-muted px-4">Pour importer vos formations, connectez d'abord votre compte ClickFunnels.</p>
+                        <a href="{% url 'configuration:settings' %}" class="btn-crm btn-crm-primary mt-3">Connecter ClickFunnels</a>
                     </div>
                 {% endif %}
             </div>
@@ -65,23 +61,23 @@
 
         <div class="col-lg-6">
             <div class="crm-card bg-dark text-white border-0 shadow-lg">
-                <h5 class="fw-bold mb-4 text-white">Que se passe-t-il lors de la synchronisation ?</h5>
+                <h5 class="fw-bold mb-4 text-white">Que fait l'import ?</h5>
                 <ul class="list-unstyled">
                     <li class="mb-3 d-flex align-items-top">
                         <i class="fa-solid fa-cloud-arrow-down text-primary mt-1 me-3" aria-hidden="true"></i>
-                        <span>Connexion à l'API ClickFunnels v2 à l'aide de votre jeton sécurisé.</span>
+                        <span>Se connecte à votre compte ClickFunnels de façon sécurisée.</span>
                     </li>
                     <li class="mb-3 d-flex align-items-top">
                         <i class="fa-solid fa-magnifying-glass text-primary mt-1 me-3" aria-hidden="true"></i>
-                        <span>Identification des produits/formations dans l'espace de travail actif.</span>
+                        <span>Récupère la liste de vos formations.</span>
                     </li>
                     <li class="mb-3 d-flex align-items-top">
                         <i class="fa-solid fa-database text-primary mt-1 me-3" aria-hidden="true"></i>
-                        <span>Synchronisation des noms, descriptions et métadonnées en local.</span>
+                        <span>Ajoute les nouvelles et met à jour le nom et la description des autres.</span>
                     </li>
                     <li class="mb-3 d-flex align-items-top">
                         <i class="fa-solid fa-clock-rotate-left text-primary mt-1 me-3" aria-hidden="true"></i>
-                        <span>Mise à jour de l'horodatage « Dernière mise à jour » pour tous les enregistrements traités.</span>
+                        <span>Ne touche jamais à vos pages de vente, vos prix ni vos ventes.</span>
                     </li>
                 </ul>
             </div>
@@ -100,7 +96,7 @@
         form.addEventListener("submit", function () {
             var btn = document.getElementById("sync-form-submit");
             btn.disabled = true;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Synchronisation…';
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Import en cours…';
         });
     }
 </script>

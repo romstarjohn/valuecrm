@@ -62,23 +62,67 @@ def _querystring_without_page(request) -> str:
 
 
 _ORDER_HEADERS = [
-    {"label": "Commande", "sortable": False},
     {"label": "Client", "sortable": False},
-    {"label": "Plan / Formation", "sortable": False},
-    {"label": "Finances", "sortable": False},
-    {"label": "Progression", "sortable": False},
-    {"label": "Statut", "sortable": True},
-    {"label": "Créée le", "sortable": True},
+    {"label": "Offre", "sortable": False},
+    {"label": "Montant", "sortable": False},
+    {"label": "État", "sortable": False},
+    {"label": "Date", "sortable": False},
+    {"label": "Réf.", "sortable": False},
 ]
+
+# Plain-language "État" filter of the Ventes list (docs/UI_VOCABULARY.md) ->
+# Order.status values. "a_verifier" is computed separately (_needs_attention_q)
+# because it mirrors apps/operations/presentation.py::sale_state's
+# needs_attention rule, which isn't a single status.
+_SALE_FILTERS = [
+    ("a_verifier", "À vérifier"),
+    ("en_attente", "En attente de paiement"),
+    ("en_cours", "Paiement en plusieurs fois"),
+    ("payees", "Payées"),
+    ("expirees", "Expirées"),
+    ("annulees", "Annulées"),
+]
+_SALE_FILTER_STATUSES = {
+    "en_attente": [Order.Status.PENDING],
+    "en_cours": [Order.Status.ACTIVE, Order.Status.PAST_DUE],
+    "payees": [Order.Status.COMPLETED],
+    "expirees": [Order.Status.EXPIRED],
+    "annulees": [Order.Status.CANCELLED],
+}
+_OPEN_ORDER_STATUSES = [Order.Status.PENDING, Order.Status.ACTIVE, Order.Status.PAST_DUE, Order.Status.SUSPENDED]
+
+
+def _needs_attention_q():
+    """
+    Same rule as sale_state(...).needs_attention, as one ORM filter: an open
+    sale where Tara reported a payment we couldn't confirm, a payment still
+    being confirmed, a late installment, or a manual suspension.
+    """
+    from .presentation import reported_unconfirmed_product_ids
+
+    reported_order_ids = (
+        PaymentAttempt.objects.filter(tara_product_id__in=reported_unconfirmed_product_ids())
+        .exclude(status=PaymentAttempt.Status.SUCCEEDED)
+        .values("installment__order_id")
+    )
+    confirming_order_ids = PaymentAttempt.objects.filter(
+        status__in=[PaymentAttempt.Status.PENDING, PaymentAttempt.Status.UNKNOWN],
+    ).values("installment__order_id")
+    return (
+        Q(status__in=_OPEN_ORDER_STATUSES, id__in=reported_order_ids)
+        | Q(status__in=_OPEN_ORDER_STATUSES, id__in=confirming_order_ids)
+        | Q(status=Order.Status.PAST_DUE)
+        | Q(status=Order.Status.ACTIVE, installments__status__in=[Installment.Status.DUE, Installment.Status.FAILED])
+        | Q(status=Order.Status.SUSPENDED)
+    )
 
 
 @login_required
 def hub(request):
     """
-    Operations landing page — server-derived summary counts, each linking to
-    the corresponding filtered list per resource (only where that list route
-    already exists), plus a workflow overview using existing card/step
-    markup (no new visual system).
+    "Outils techniques" — landing page of the Technique menu: one card per
+    technical list saying what it contains and when to use it, with a count.
+    Everyday work happens in "À traiter" / "Ventes" (docs/UI_VOCABULARY.md).
     """
     today = date.today()
 
@@ -111,7 +155,72 @@ def hub(request):
         .order_by("-updated_at")[:5]
     )
 
+    unresolved_notifications = TaraWebhookEvent.objects.exclude(
+        processing_status=TaraWebhookEvent.ProcessingStatus.PROCESSED,
+    ).count()
+
+    # One card per technical list: what it is, when to use it, one count.
+    tools = [
+        {
+            "title": "Paiements Tara", "icon": "fa-solid fa-money-check-dollar",
+            "url": reverse("operations:payment_attempt_list"),
+            "what": "Chaque demande de paiement envoyée à Tara (une par lien de paiement) et sa réponse brute.",
+            "when": "pour savoir si Tara a bien créé un lien, ou revérifier un paiement précis.",
+            "count": payments_awaiting_verification, "count_label": "en attente", "alert": bool(payments_awaiting_verification),
+        },
+        {
+            "title": "Notifications Tara", "icon": "fa-solid fa-bell",
+            "url": reverse("operations:webhook_event_list"),
+            "what": "Les messages envoyés par Tara quand un client paie, et ce que nous en avons fait.",
+            "when": "quand un client dit avoir payé mais que la vente ne bouge pas.",
+            "count": unresolved_notifications, "count_label": "non traitées", "alert": bool(unresolved_notifications),
+        },
+        {
+            "title": "Échéancier", "icon": "fa-solid fa-calendar-days",
+            "url": reverse("operations:installment_list"),
+            "what": "Tous les versements prévus, dus ou payés, toutes ventes confondues.",
+            "when": "pour voir ce qui doit être encaissé dans les prochains jours.",
+            "count": due_installments, "count_label": "dus", "alert": False,
+        },
+        {
+            "title": "E-mails de confirmation", "icon": "fa-solid fa-envelope",
+            "url": reverse("operations:confirmation_list"),
+            "what": "Les e-mails « paiement reçu » envoyés aux clients, et les échecs d'envoi.",
+            "when": "quand un client dit ne pas avoir reçu sa confirmation.",
+            "count": confirmations_awaiting_delivery, "count_label": "à envoyer", "alert": False,
+        },
+        {
+            "title": "Accès ClickFunnels (tâches)", "icon": "fa-solid fa-key",
+            "url": reverse("operations:provisioning_list"),
+            "what": "Les tâches automatiques qui ouvrent l'accès à la formation après un paiement.",
+            "when": "quand un client a payé mais n'a pas accès à sa formation.",
+            "count": enrollments_awaiting_processing, "count_label": "en attente", "alert": False,
+        },
+        {
+            "title": "Ventes à examiner", "icon": "fa-solid fa-triangle-exclamation",
+            "url": reverse("operations:order_list") + "?needs_review=1",
+            "what": "Ventes avec un paiement incertain, un e-mail ou un accès bloqué.",
+            "when": "pour une revue complète des cas bloqués.",
+            "count": manual_review_items, "count_label": "à examiner", "alert": bool(manual_review_items),
+        },
+        {
+            "title": "Rapprochement automatique", "icon": "fa-solid fa-rotate",
+            "url": reverse("operations:reconciliation_list"),
+            "what": "Le contrôle horaire qui revérifie les paiements incertains et relance e-mails et accès.",
+            "when": "pour vérifier que les tâches automatiques tournent bien.",
+            "count": failed_reconciliation_runs, "count_label": "en échec", "alert": bool(failed_reconciliation_runs),
+        },
+        {
+            "title": "Journal d'audit", "icon": "fa-solid fa-clock-rotate-left",
+            "url": reverse("operations:audit_list"),
+            "what": "Qui a fait quelle action manuelle (annulation, vérification, accès…), quand et pourquoi.",
+            "when": "pour retrouver l'origine d'un changement.",
+            "count": None, "count_label": "", "alert": False,
+        },
+    ]
+
     context = {
+        "tools": tools,
         "active_plans": active_plans,
         "pending_orders": pending_orders,
         "payments_awaiting_verification": payments_awaiting_verification,
@@ -120,6 +229,7 @@ def hub(request):
         "enrollments_awaiting_processing": enrollments_awaiting_processing,
         "manual_review_items": manual_review_items,
         "failed_reconciliation_runs": failed_reconciliation_runs,
+        "unresolved_notifications": unresolved_notifications,
         "recent_verified_payments": recent_verified_payments,
     }
     return render(request, "operations/hub.html", context)
@@ -133,11 +243,24 @@ _ORDER_ELIGIBLE_Q = (
 
 @login_required
 def order_list(request):
-    """Server-side search/filter/sort/pagination — mirrors apps/contacts/views.py::contact_list's shape."""
+    """
+    "Ventes" — every sale with a plain-language state (sale_state) and its
+    next step. Main filters are the ones a non-technical user needs (état,
+    offre, période, recherche); the older technical filters (status, plan,
+    access, disposition, needs_review) keep working as query parameters and
+    sit under "Plus de filtres".
+    """
     if not request.user.has_perm("payments.view_order"):
         raise PermissionDenied
 
+    from apps.courses.models import Course
+
+    from .presentation import reported_unconfirmed_product_ids, sale_state
+
     query = request.GET.get("q", "").strip()
+    etat_filter = request.GET.get("etat", "")
+    if etat_filter not in dict(_SALE_FILTERS):
+        etat_filter = ""
     status_filter = request.GET.get("status", "")
     plan_filter = request.GET.get("plan", "")
     course_filter = request.GET.get("course", "")
@@ -148,12 +271,13 @@ def order_list(request):
     needs_review = request.GET.get("needs_review", "")
 
     orders = Order.objects.select_related("customer", "plan", "course").prefetch_related(
-        "installments", "payment_confirmations", "provisioning_requests",
+        "installments__payment_attempts", "payment_confirmations", "provisioning_requests",
     )
 
     if query:
+        reference_query = query.lstrip("#")  # "#B40D3341" as shown in the list
         orders = orders.filter(
-            Q(reference__icontains=query)
+            Q(reference__icontains=reference_query)
             | Q(customer__first_name__icontains=query)
             | Q(customer__last_name__icontains=query)
             | Q(customer__email__icontains=query)
@@ -161,7 +285,11 @@ def order_list(request):
             | Q(course_name__icontains=query)
         )
 
-    if status_filter in dict(Order.Status.choices):
+    if etat_filter == "a_verifier":
+        orders = orders.filter(_needs_attention_q()).distinct()
+    elif etat_filter:
+        orders = orders.filter(status__in=_SALE_FILTER_STATUSES[etat_filter])
+    elif status_filter in dict(Order.Status.choices):
         orders = orders.filter(status=status_filter)
     elif not query:
         # Expired checkouts are noise in the default view; filtering by status
@@ -213,13 +341,26 @@ def order_list(request):
     paginator = Paginator(orders, 20)
     page_obj = paginator.get_page(request.GET.get("page"))
 
-    for order in page_obj:
+    page_orders = list(page_obj)
+    reported = reported_unconfirmed_product_ids(
+        a.tara_product_id for o in page_orders for i in o.installments.all() for a in i.payment_attempts.all()
+    )
+    can_verify = request.user.has_perm("payments.check_tara_status")
+    for order in page_orders:
         _attach_order_display_fields(order)
+        order.state = sale_state(order, reported, can_verify=can_verify)
+
+    has_more_filters = bool(status_filter or plan_filter or access_filter or disposition_filter or needs_review == "1")
 
     context = {
         "page_obj": page_obj,
         "headers": _ORDER_HEADERS,
         "query": query,
+        "etat_filter": etat_filter,
+        "etat_options": _SALE_FILTERS,
+        "to_verify_count": Order.objects.filter(_needs_attention_q()).distinct().count(),
+        "course_options": Course.objects.filter(orders__isnull=False).distinct().order_by("name").values_list("id", "name"),
+        "has_more_filters": has_more_filters,
         "status_filter": status_filter,
         "plan_filter": plan_filter,
         "course_filter": course_filter,
@@ -263,6 +404,78 @@ def _attach_order_display_fields(order: Order) -> None:
 
     provisioning_statuses = {r.status for r in order.provisioning_requests.all()}
     order.display_provisioning_state = ", ".join(sorted(provisioning_statuses)) if provisioning_statuses else "—"
+
+
+_CONFIRMATION_IN_WORDS = {
+    PaymentConfirmation.Status.SENT: ("E-mail envoyé", "good"),
+    PaymentConfirmation.Status.PENDING: ("En cours d'envoi", "neutral"),
+    PaymentConfirmation.Status.SENDING: ("En cours d'envoi", "neutral"),
+    PaymentConfirmation.Status.FAILED: ("Échec de l'envoi", "critical"),
+    PaymentConfirmation.Status.MANUAL_REVIEW: ("Envoi bloqué — à relancer", "critical"),
+}
+
+
+def _sale_target(order: Order) -> str:
+    """'Vente #B40D3341 — Sarah N., 1 000 XAF' — how an order is named on confirmation pages."""
+    from apps.contacts.templatetags.vente_format import format_money
+
+    from .presentation import short_ref
+
+    customer = order.customer
+    name = " ".join(part for part in [customer.first_name, f"{customer.last_name[:1]}." if customer.last_name else ""] if part)
+    return f"Vente {short_ref(order.reference)} — {name or customer.email}, {format_money(order.total_expected_amount, order.currency)}"
+
+
+def _installment_in_words(installment: Installment, total: int) -> dict:
+    """'Versement 1 sur 3 — 1 000 XAF — Payé le 16/08' for the Vente page."""
+    from apps.contacts.templatetags.vente_format import format_money
+
+    title = f"Versement {installment.sequence} sur {total}" if total > 1 else "Paiement"
+    amount = format_money(installment.expected_amount, installment.currency)
+    status = installment.status
+    if status == Installment.Status.PAID:
+        detail = f"Payé le {installment.paid_at:%d/%m/%Y}" if installment.paid_at else "Payé"
+        if installment.paid_amount is not None and installment.paid_amount != installment.expected_amount:
+            detail += f" ({format_money(installment.paid_amount, installment.currency)} reçus)"
+        tone = "good"
+    elif status == Installment.Status.WAIVED:
+        detail, tone = "Le client en a été dispensé", "neutral"
+    elif status == Installment.Status.CANCELLED:
+        detail, tone = "Annulé", "neutral"
+    elif status == Installment.Status.FAILED:
+        detail, tone = f"Paiement échoué — dû le {installment.due_date:%d/%m/%Y}", "critical"
+    elif installment.due_date and installment.due_date < date.today():
+        detail, tone = f"En retard — dû le {installment.due_date:%d/%m/%Y}", "critical"
+    else:
+        detail, tone = (f"Dû le {installment.due_date:%d/%m/%Y}" if installment.due_date else "À payer"), "neutral"
+    return {
+        "title": title, "amount": amount, "detail": detail, "tone": tone,
+        "is_open": status not in (Installment.Status.PAID, Installment.Status.WAIVED, Installment.Status.CANCELLED),
+    }
+
+
+def _access_in_words(order: Order, provisioning_requests) -> dict:
+    """Course access for the Vente page — never ClickFunnels job states."""
+    if any(getattr(r, "cf_suspended", False) for r in provisioning_requests) or order.status == Order.Status.SUSPENDED:
+        return {"label": "Accès suspendu", "tone": "warn", "explanation": "Le client voit la formation mais ne peut plus avancer tant que l'accès n'est pas rétabli."}
+    if any(r.status == ProvisioningRequest.Status.COMPLETED for r in provisioning_requests):
+        return {"label": "Accès ouvert", "tone": "good", "explanation": "Le client peut suivre la formation dans ClickFunnels."}
+    failed = [r for r in provisioning_requests if r.status in (ProvisioningRequest.Status.FAILED, ProvisioningRequest.Status.MANUAL_REVIEW)]
+    if failed:
+        return {
+            "label": "Échec de l'ouverture de l'accès", "tone": "critical",
+            "explanation": "Le paiement est confirmé mais l'accès n'a pas pu être ouvert dans ClickFunnels. Relancez l'ouverture.",
+            "retry_request": failed[0],
+        }
+    if provisioning_requests:
+        return {"label": "Ouverture en cours", "tone": "neutral", "explanation": "L'accès va être ouvert automatiquement dans les prochaines minutes."}
+    if order.display_access_eligible:
+        return {"label": "Ouverture en cours", "tone": "neutral", "explanation": "L'accès va être ouvert automatiquement."}
+    if order.status in (Order.Status.CANCELLED, Order.Status.EXPIRED):
+        return {"label": "Pas d'accès", "tone": "neutral", "explanation": "Cette vente n'a pas abouti."}
+    if order.access_policy == PaymentPlan.AccessPolicy.FULL_PAYMENT:
+        return {"label": "En attente du paiement", "tone": "neutral", "explanation": "L'accès s'ouvre automatiquement une fois tout payé."}
+    return {"label": "En attente du paiement", "tone": "neutral", "explanation": "L'accès s'ouvre automatiquement dès le premier paiement."}
 
 
 @login_required
@@ -310,8 +523,23 @@ def order_detail(request, reference):
 
     _attach_order_display_fields(order)
 
+    from .presentation import sale_state, short_ref
+
+    can_check_tara_status = request.user.has_perm("payments.check_tara_status")
+    state = sale_state(order, can_verify=can_check_tara_status)
+    for installment in installments:
+        installment.plain = _installment_in_words(installment, len(installments))
+    for confirmation in confirmations:
+        confirmation.plain_label, confirmation.plain_tone = _CONFIRMATION_IN_WORDS.get(
+            confirmation.status, (confirmation.status, "neutral"),
+        )
+    access = _access_in_words(order, list(provisioning_requests))
+
     context = {
         "order": order,
+        "state": state,
+        "short_ref": short_ref(order.reference),
+        "access": access,
         "installments": installments,
         "webhook_events": webhook_events,
         "confirmations": confirmations,
@@ -333,10 +561,10 @@ def order_detail(request, reference):
 # --- Installment list ---
 
 _INSTALLMENT_HEADERS = [
-    {"label": "Commande", "sortable": False}, {"label": "Client", "sortable": False},
-    {"label": "N°", "sortable": False}, {"label": "Échéance", "sortable": True},
-    {"label": "Attendu", "sortable": False}, {"label": "Payé", "sortable": False},
-    {"label": "Statut", "sortable": True}, {"label": "Vérification", "sortable": False},
+    {"label": "Vente", "sortable": False}, {"label": "Client", "sortable": False},
+    {"label": "N°", "sortable": False}, {"label": "Dû le", "sortable": True},
+    {"label": "Montant dû", "sortable": False}, {"label": "Payé", "sortable": False},
+    {"label": "Statut", "sortable": True}, {"label": "À vérifier", "sortable": False},
 ]
 
 
@@ -396,9 +624,9 @@ def installment_list(request):
 # --- Payment attempt list ---
 
 _ATTEMPT_HEADERS = [
-    {"label": "Statut interne", "sortable": True}, {"label": "Statut fournisseur", "sortable": False},
-    {"label": "Tara Product ID", "sortable": False}, {"label": "Tara Payment ID", "sortable": False},
-    {"label": "Attendu", "sortable": False}, {"label": "Commande / Versement", "sortable": False},
+    {"label": "Statut interne", "sortable": True}, {"label": "Réponse de Tara", "sortable": False},
+    {"label": "Réf. produit Tara (productId)", "sortable": False}, {"label": "Réf. paiement Tara (paymentId)", "sortable": False},
+    {"label": "Montant", "sortable": False}, {"label": "Vente / versement", "sortable": False},
     {"label": "Mis à jour", "sortable": True},
 ]
 
@@ -455,10 +683,10 @@ def payment_attempt_list(request):
 # --- Webhook events (read-only) ---
 
 _WEBHOOK_HEADERS = [
-    {"label": "Référence", "sortable": False}, {"label": "Montant", "sortable": False},
-    {"label": "Corrélation", "sortable": False},
+    {"label": "Réf. notification", "sortable": False}, {"label": "Montant", "sortable": False},
+    {"label": "Vente", "sortable": False},
     {"label": "Vérification", "sortable": False}, {"label": "Traitement", "sortable": True},
-    {"label": "Catégorie d'échec", "sortable": False}, {"label": "Reçu", "sortable": True},
+    {"label": "Motif d'échec", "sortable": False}, {"label": "Reçue le", "sortable": True},
 ]
 
 
@@ -472,7 +700,7 @@ def webhook_event_list(request):
     date_from = request.GET.get("date_from", "")
     date_to = request.GET.get("date_to", "")
 
-    events = TaraWebhookEvent.objects.select_related("payment_attempt__installment__order")
+    events = TaraWebhookEvent.objects.select_related("payment_attempt__installment__order__customer")
 
     if processing_status_filter in dict(TaraWebhookEvent.ProcessingStatus.choices):
         events = events.filter(processing_status=processing_status_filter)
@@ -578,10 +806,10 @@ def webhook_event_attribute(request, pk):
 # --- Payment confirmations ---
 
 _CONFIRMATION_HEADERS = [
-    {"label": "Commande / Client", "sortable": False}, {"label": "Versement", "sortable": False},
+    {"label": "Vente / client", "sortable": False}, {"label": "Versement", "sortable": False},
     {"label": "Canal", "sortable": False}, {"label": "Statut", "sortable": True},
-    {"label": "Tentatives", "sortable": False}, {"label": "Prochain essai", "sortable": False},
-    {"label": "Envoyé", "sortable": True},
+    {"label": "Essais", "sortable": False}, {"label": "Prochain essai", "sortable": False},
+    {"label": "Envoyé le", "sortable": True},
 ]
 
 
@@ -618,9 +846,9 @@ def confirmation_list(request):
 # --- Provisioning / enrollment ---
 
 _PROVISIONING_HEADERS = [
-    {"label": "Client", "sortable": False}, {"label": "Commande", "sortable": False},
+    {"label": "Client", "sortable": False}, {"label": "Vente", "sortable": False},
     {"label": "Formation", "sortable": False}, {"label": "Statut", "sortable": True},
-    {"label": "Tentatives", "sortable": False}, {"label": "Catégorie d'échec", "sortable": False},
+    {"label": "Essais", "sortable": False}, {"label": "Motif d'échec", "sortable": False},
     {"label": "Mis à jour", "sortable": True},
 ]
 
@@ -657,8 +885,9 @@ _RECONCILIATION_HEADERS = [
     {"label": "Démarrée", "sortable": True}, {"label": "Statut", "sortable": True},
     {"label": "Examinées", "sortable": False}, {"label": "Vérifiées R/É", "sortable": False},
     {"label": "En attente/inconnu", "sortable": False}, {"label": "Confirmations", "sortable": False},
-    {"label": "Provisionnement", "sortable": False}, {"label": "Réparées", "sortable": False},
-    {"label": "Non corrélées", "sortable": False}, {"label": "Erreurs", "sortable": False},
+    {"label": "Accès ClickFunnels", "sortable": False}, {"label": "Réparées", "sortable": False},
+    {"label": "Non corrélées", "sortable": False}, {"label": "Ventes expirées", "sortable": False},
+    {"label": "Erreurs", "sortable": False},
 ]
 
 
@@ -690,7 +919,7 @@ def reconciliation_list(request):
 
 _AUDIT_HEADERS = [
     {"label": "Quand", "sortable": True}, {"label": "Administrateur", "sortable": False},
-    {"label": "Action", "sortable": True}, {"label": "Target", "sortable": False},
+    {"label": "Action", "sortable": True}, {"label": "Cible", "sortable": False},
     {"label": "Précédent → Résultant", "sortable": False}, {"label": "Résultat", "sortable": False},
     {"label": "Motif", "sortable": False},
 ]
@@ -742,16 +971,22 @@ def order_cancel(request, reference):
 
     def do_cancel(reason):
         OrderAdministrationService().cancel_order(order.pk, reason, request.user, request)
-        return f"Commande {order.reference} annulée."
+        return "Vente annulée. Les versements restants ne seront plus demandés."
 
     context = {
-        "title": "Annuler la commande", "description": "Annule cette commande — l'historique de paiement est conservé, aucun remboursement n'est émis.",
-        "target_label": f"{order.reference} — {order.customer.email}",
+        "title": "Annuler la vente",
+        "description": (
+            "La vente passe à « Annulée » et les versements restants ne sont plus demandés au client. "
+            "Les paiements déjà reçus restent enregistrés."
+        ),
+        "target_label": _sale_target(order),
         "back_url": reverse("operations:order_detail", args=[order.reference]),
         "warning": (
-            f"Cette commande a des paiements vérifiés (total payé jusqu'ici). L'annulation ne rembourse pas "
-            f"l'argent et n'annule pas l'historique de paiement existant." if order.total_paid_amount else ""
+            "Le client a déjà payé une partie de cette vente. Annuler ne le rembourse pas : "
+            "un éventuel remboursement se fait à part, directement dans Tara." if order.total_paid_amount else ""
         ),
+        "submit_label": "Annuler la vente",
+        "reason_placeholder": "Ex. : le client a renoncé, doublon de commande…",
     }
     response = render_confirmation_or_process(
         request, permission="payments.cancel_order", context=context, service_call=do_cancel,
@@ -768,14 +1003,22 @@ def order_disposition(request, reference):
     if disposition not in dict(Order.ManualDisposition.choices):
         disposition = Order.ManualDisposition.NEEDS_REVIEW
 
+    from shared.templatetags.status_labels import status_label
+
     def do_apply(reason):
         OrderAdministrationService().apply_manual_disposition(order.pk, disposition, reason, request.user, request)
-        return f"Disposition définie sur {disposition} pour la commande {order.reference}."
+        return f"Note « {status_label(disposition)} » ajoutée à la vente."
 
     context = {
-        "title": "Appliquer une disposition manuelle", "description": "Ne fait que poser une annotation métier interne — ne modifie jamais le statut de paiement.",
-        "target_label": f"{order.reference} — {order.customer.email} → {disposition}",
+        "title": "Signaler la vente",
+        "description": (
+            f"Ajoute la note interne « {status_label(disposition)} » à cette vente. "
+            "C'est un simple repère pour l'équipe : le paiement et l'accès du client ne changent pas."
+        ),
+        "target_label": _sale_target(order),
         "back_url": reverse("operations:order_detail", args=[order.reference]),
+        "submit_label": "Ajouter la note",
+        "reason_placeholder": "Ex. : le client dit avoir payé deux fois, à vérifier avec Tara…",
     }
     response = render_confirmation_or_process(
         request, permission="payments.apply_manual_disposition", context=context, service_call=do_apply,
@@ -791,13 +1034,18 @@ def order_freeze_enrollment(request, reference):
 
     def do_freeze(reason):
         EnrollmentAdministrationService().freeze_order_enrollment(order.pk, reason, request.user, request)
-        return f"Inscription suspendue pour la commande {order.reference}."
+        return "Accès suspendu. Vous pourrez le rétablir à tout moment depuis cette vente."
 
     context = {
-        "title": "Suspendre l'inscription",
-        "description": "Suspend l'accès de ce client à la formation ClickFunnels. Il continue de voir la formation mais ne peut plus terminer de leçons tant que ce n'est pas repris. Entièrement réversible.",
-        "target_label": f"{order.reference} — {order.customer.email}",
+        "title": "Suspendre l'accès à la formation",
+        "description": (
+            "Le client voit toujours la formation mais ne peut plus avancer dans les leçons. "
+            "Rien n'est supprimé : vous pouvez rétablir l'accès à tout moment."
+        ),
+        "target_label": _sale_target(order),
         "back_url": reverse("operations:order_detail", args=[order.reference]),
+        "submit_label": "Suspendre l'accès",
+        "reason_placeholder": "Ex. : versement en retard depuis 15 jours…",
     }
     response = render_confirmation_or_process(
         request, permission="payments.freeze_enrollment", context=context, service_call=do_freeze,
@@ -813,13 +1061,15 @@ def order_resume_enrollment(request, reference):
 
     def do_resume(reason):
         EnrollmentAdministrationService().resume_order_enrollment(order.pk, reason, request.user, request)
-        return f"Inscription reprise pour la commande {order.reference}."
+        return "Accès rétabli. Le client peut de nouveau suivre la formation."
 
     context = {
-        "title": "Reprendre l'inscription",
-        "description": "Restaure l'accès de ce client à la formation ClickFunnels après une suspension.",
-        "target_label": f"{order.reference} — {order.customer.email}",
+        "title": "Rétablir l'accès à la formation",
+        "description": "Le client retrouve un accès complet à la formation, là où il s'était arrêté.",
+        "target_label": _sale_target(order),
         "back_url": reverse("operations:order_detail", args=[order.reference]),
+        "submit_label": "Rétablir l'accès",
+        "reason_placeholder": "Ex. : le versement en retard a été payé…",
     }
     response = render_confirmation_or_process(
         request, permission="payments.resume_enrollment", context=context, service_call=do_resume,
@@ -831,16 +1081,22 @@ def order_resume_enrollment(request, reference):
 
 @login_required
 def installment_cancel(request, pk):
-    installment = get_object_or_404(Installment.objects.select_related("order"), pk=pk)
+    installment = get_object_or_404(Installment.objects.select_related("order", "order__customer"), pk=pk)
 
     def do_cancel(reason):
         OrderAdministrationService().cancel_installment(installment.pk, reason, request.user, request)
-        return f"Versement n°{installment.sequence} annulé."
+        return f"Versement {installment.sequence} annulé : il ne sera plus demandé au client."
 
     context = {
-        "title": "Annuler le versement", "description": "Seuls les versements non payés éligibles peuvent être annulés.",
-        "target_label": f"Commande {installment.order.reference} — versement n°{installment.sequence}",
+        "title": "Annuler ce versement",
+        "description": (
+            "Ce versement ne sera plus demandé au client. Utilisez-le pour une erreur ou un versement qui n'a plus lieu d'être. "
+            "Un versement déjà payé ne peut pas être annulé."
+        ),
+        "target_label": f"{_sale_target(installment.order)} — versement {installment.sequence} sur {installment.order.installment_count}",
         "back_url": reverse("operations:order_detail", args=[installment.order.reference]),
+        "submit_label": "Annuler ce versement",
+        "reason_placeholder": "Ex. : versement créé par erreur…",
     }
     response = render_confirmation_or_process(
         request, permission="payments.cancel_installment", context=context, service_call=do_cancel,
@@ -852,16 +1108,22 @@ def installment_cancel(request, pk):
 
 @login_required
 def installment_waive(request, pk):
-    installment = get_object_or_404(Installment.objects.select_related("order"), pk=pk)
+    installment = get_object_or_404(Installment.objects.select_related("order", "order__customer"), pk=pk)
 
     def do_waive(reason):
         OrderAdministrationService().waive_installment(installment.pk, reason, request.user, request)
-        return f"Versement n°{installment.sequence} exonéré."
+        return f"Le client est dispensé du versement {installment.sequence}."
 
     context = {
-        "title": "Exonérer le versement", "description": "Une décision métier interne — pas un paiement du fournisseur. Aucun e-mail de confirmation n'est envoyé.",
-        "target_label": f"Commande {installment.order.reference} — versement n°{installment.sequence}",
+        "title": "Dispenser le client de ce versement",
+        "description": (
+            "Le client n'aura pas à payer ce versement : il est considéré comme réglé, sans argent reçu (geste commercial, arrangement…). "
+            "Si c'était le dernier versement, l'accès à la formation s'ouvre. Aucun e-mail n'est envoyé."
+        ),
+        "target_label": f"{_sale_target(installment.order)} — versement {installment.sequence} sur {installment.order.installment_count}",
         "back_url": reverse("operations:order_detail", args=[installment.order.reference]),
+        "submit_label": "Dispenser le client",
+        "reason_placeholder": "Ex. : geste commercial accordé par la direction…",
     }
     response = render_confirmation_or_process(
         request, permission="payments.waive_installment", context=context, service_call=do_waive,
@@ -873,16 +1135,32 @@ def installment_waive(request, pk):
 
 @login_required
 def payment_attempt_check_status(request, pk):
-    attempt = get_object_or_404(PaymentAttempt.objects.select_related("installment__order"), pk=pk)
+    attempt = get_object_or_404(
+        PaymentAttempt.objects.select_related("installment__order", "installment__order__customer"), pk=pk,
+    )
+    order = attempt.installment.order
 
     def do_check(reason):
         updated = PaymentAttemptAdministrationService().check_tara_status(attempt.pk, reason, request.user, request)
-        return f"Statut Tara vérifié pour {updated.tara_product_id} : la tentative est maintenant {updated.status}."
+        if updated.status == PaymentAttempt.Status.SUCCEEDED:
+            order.refresh_from_db()
+            if order.status == Order.Status.COMPLETED:
+                return "Paiement confirmé par Tara — la vente est payée. Le client va recevoir son e-mail et son accès."
+            return "Paiement confirmé par Tara — le versement est enregistré comme payé."
+        if updated.status == PaymentAttempt.Status.FAILED:
+            return "Tara indique que ce paiement a échoué. Aucun argent n'a été reçu pour ce versement."
+        return "Tara ne confirme pas encore ce paiement. Réessayez plus tard ; si le client a bien payé, contactez le support Tara."
 
     context = {
-        "title": "Vérifier le statut Tara", "description": "Revérifie cette tentative auprès de Tara de manière synchrone — seules les tentatives EN ATTENTE/INCONNU sont éligibles.",
-        "target_label": f"{attempt.tara_product_id} (order {attempt.installment.order.reference})",
-        "back_url": reverse("operations:order_detail", args=[attempt.installment.order.reference]),
+        "title": "Vérifier le paiement auprès de Tara",
+        "description": (
+            "Nous demandons à Tara si ce paiement a bien été reçu. Si Tara le confirme, la vente passe à « Payée » "
+            "et le client reçoit son e-mail et son accès. Sinon, rien ne change."
+        ),
+        "target_label": _sale_target(order),
+        "back_url": reverse("operations:order_detail", args=[order.reference]),
+        "submit_label": "Vérifier maintenant",
+        "reason_placeholder": "Ex. : le client dit avoir payé le 16/08 par Orange Money…",
     }
     response = render_confirmation_or_process(
         request, permission="payments.check_tara_status", context=context, service_call=do_check,
@@ -894,16 +1172,22 @@ def payment_attempt_check_status(request, pk):
 
 @login_required
 def confirmation_retry(request, pk):
-    confirmation = get_object_or_404(PaymentConfirmation.objects.select_related("order"), pk=pk)
+    confirmation = get_object_or_404(PaymentConfirmation.objects.select_related("order", "order__customer"), pk=pk)
 
     def do_retry(reason):
         PaymentConfirmationAdministrationService().retry_confirmation(confirmation.pk, reason, request.user, request)
-        return f"Confirmation {confirmation.reference} mise en file pour nouvel essai."
+        return "L'e-mail de confirmation va être renvoyé dans les prochaines minutes."
 
     context = {
-        "title": "Relancer la confirmation", "description": "Remet cette confirmation dans un état prêt à être traité — c'est le worker qui l'envoie, pas cette page.",
-        "target_label": str(confirmation.reference),
+        "title": "Renvoyer l'e-mail de confirmation",
+        "description": (
+            f"L'e-mail de confirmation de paiement sera renvoyé à {confirmation.order.customer.email} "
+            "dans les prochaines minutes (envoi automatique, pas depuis cette page)."
+        ),
+        "target_label": _sale_target(confirmation.order),
         "back_url": reverse("operations:order_detail", args=[confirmation.order.reference]),
+        "submit_label": "Renvoyer l'e-mail",
+        "reason_placeholder": "Ex. : le client n'a rien reçu, adresse corrigée…",
     }
     response = render_confirmation_or_process(
         request, permission="payments.retry_payment_confirmation", context=context, service_call=do_retry,
@@ -919,16 +1203,25 @@ def provisioning_retry(request, pk):
 
     def do_retry(reason):
         ProvisioningService().retry_request(provisioning_request.pk, reason, request.user, request)
-        return f"Demande de provisionnement n°{provisioning_request.pk} mise en file pour nouvel essai."
+        return "L'ouverture de l'accès va être relancée dans les prochaines minutes."
 
     back_url = (
         reverse("operations:order_detail", args=[provisioning_request.order.reference])
         if provisioning_request.order_id else reverse("operations:provisioning_list")
     )
     context = {
-        "title": "Relancer le provisionnement", "description": "Remet cette demande d'inscription dans un état prêt à être traitée — aucun appel ClickFunnels n'a lieu sur cette page.",
-        "target_label": f"Demande de provisionnement n°{provisioning_request.pk}",
+        "title": "Relancer l'ouverture de l'accès",
+        "description": (
+            "Nous réessayons d'ouvrir l'accès du client à la formation dans ClickFunnels, "
+            "automatiquement dans les prochaines minutes."
+        ),
+        "target_label": (
+            _sale_target(provisioning_request.order) if provisioning_request.order_id
+            else f"Accès à « {provisioning_request.course.name} » — {provisioning_request.contact.email}"
+        ),
         "back_url": back_url,
+        "submit_label": "Relancer l'ouverture",
+        "reason_placeholder": "Ex. : problème ClickFunnels corrigé…",
     }
     response = render_confirmation_or_process(
         request, permission="provisioning.retry_provisioning_request", context=context, service_call=do_retry,

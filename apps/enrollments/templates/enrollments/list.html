@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Inscriptions &amp; Accès | {{ BRAND_NAME }}{% endblock %}
+{% block title %}Accès aux formations | {{ BRAND_NAME }}{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title="Inscriptions & Accès" subtitle="Journal de toutes les tentatives d'inscription et de leur statut réel dans ClickFunnels." action_label="Nouvelle inscription" action_url="/enrollments/new/" action_icon="fa-solid fa-plus" %}
+{% include "components/page_header.html" with title="Accès aux formations" subtitle="Qui peut ouvrir quelle formation dans ClickFunnels. Donnez, suspendez ou rétablissez un accès." action_label="Donner accès" action_url="/enrollments/new/" action_icon="fa-solid fa-key" %}
 
 <div class="container-fluid px-4 fade-in pb-5">
     <div class="mb-4 d-flex flex-wrap align-items-center gap-3">
         <form method="get" class="d-flex align-items-center flex-grow-1 gap-3 flex-wrap">
-            {% include "components/search_bar.html" with placeholder="Rechercher un e-mail ou une formation..." %}
+            {% include "components/search_bar.html" with placeholder="Rechercher un client (nom, e-mail) ou une formation…" %}
             <div class="d-flex gap-2 flex-wrap">
                 {% include "components/filter_dropdown.html" with label=status_label options=status_filter_options %}
                 {% include "components/filter_dropdown.html" with label=course_label options=course_filter_options %}
@@ -22,7 +22,7 @@
             {% endif %}
         </form>
         <a href="{% url 'enrollments:bulk' %}" class="btn-crm btn-crm-outline btn-crm-sm">
-            <i class="fa-solid fa-layer-group me-2" aria-hidden="true"></i>Inscription groupée
+            <i class="fa-solid fa-users me-2" aria-hidden="true"></i>Donner accès à plusieurs clients
         </a>
     </div>
 
@@ -49,27 +49,20 @@
                 {% for attempt in page_obj %}
                 <tr class="clickable" data-panel-url="{% url 'enrollments:detail_panel' attempt.pk %}" data-panel-title="{{ attempt.contact.first_name }} {{ attempt.contact.last_name }}">
                     <td>
-                        <div class="cell-title">{{ attempt.contact.first_name }} {{ attempt.contact.last_name }}</div>
+                        <div class="cell-title">{% if attempt.contact.first_name or attempt.contact.last_name %}{{ attempt.contact.first_name }} {{ attempt.contact.last_name }}{% else %}{{ attempt.contact.email }}{% endif %}</div>
                         <div class="cell-sub">{{ attempt.contact.email }}</div>
                     </td>
                     <td class="cell-sub">{{ attempt.course.name }}</td>
-                    <td>
-                        {% if attempt.status == "SUCCESS" %}
-                            {% if attempt.cf_suspended %}<span class="pill critical"><span class="dot"></span>Suspendu</span>
-                            {% else %}<span class="pill good"><span class="dot"></span>Actif</span>{% endif %}
-                        {% else %}
-                            <span class="pill warn"><span class="dot"></span>Échec</span>
-                        {% endif %}
-                    </td>
-                    <td class="cell-sub">{{ attempt.cf_enrollment_id|default:"—" }}</td>
-                    <td class="cell-sub">{{ attempt.created_at|date:"d M Y, H:i" }}</td>
+                    <td>{% include "enrollments/_access_pill.html" %}</td>
+                    <td class="cell-sub">{{ attempt.created_at|date:"d/m/Y" }}</td>
+                    <td class="text-end"><a href="{% url 'enrollments:detail' attempt.pk %}" class="btn-crm btn-crm-outline btn-crm-sm" onclick="event.stopPropagation();">Voir</a></td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
     {% else %}
-        {% include "components/table_empty_state.html" with title="Aucune tentative d'inscription" description="Votre historique de transactions est vide. Commencez par inscrire un étudiant." action_label="Nouvelle inscription" action_url="/enrollments/new/" action_icon="fa-solid fa-plus" %}
+        {% include "components/table_empty_state.html" with title="Aucun accès pour le moment" description="Les accès s'ouvrent automatiquement après un paiement. Vous pouvez aussi en donner un à la main." action_label="Donner accès" action_url="/enrollments/new/" action_icon="fa-solid fa-key" %}
     {% endif %}
 
     {% if page_obj %}

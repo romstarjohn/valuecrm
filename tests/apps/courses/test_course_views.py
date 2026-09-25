@@ -27,7 +27,7 @@ def test_course_sync_view_get(staff_client):
     url = reverse("courses:sync")
     response = staff_client.get(url)
     assert response.status_code == 200
-    assert "Synchroniser les formations" in response.content.decode()
+    assert "Importer depuis ClickFunnels" in response.content.decode()
 
 @pytest.mark.django_db
 def test_course_sync_view_post_success(mocker, staff_client):

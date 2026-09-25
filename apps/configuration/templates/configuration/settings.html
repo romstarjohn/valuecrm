@@ -1,190 +1,189 @@
 {% extends "base.html" %}
 
-{% block title %}Configuration API | {{ BRAND_NAME }}{% endblock %}
+{% block title %}Connexion ClickFunnels | {{ BRAND_NAME }}{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title="Configuration API" subtitle="Construisez votre passerelle sécurisée vers ClickFunnels 2.0." %}
+{% include "components/page_header.html" with title="Connexion ClickFunnels" subtitle="Reliez votre compte ClickFunnels pour ouvrir automatiquement l'accès aux formations après un paiement." %}
 
 <div class="container-fluid px-4 fade-in pb-5">
     <div class="row g-4">
-        <!-- Main Configuration Path -->
         <div class="col-lg-8">
-            
+
+            <!-- Connection status, in words -->
+            {% if connected and token_ok %}
+            <div class="crm-card border-0 shadow-sm mb-4 border-start border-4 border-success">
+                <div class="d-flex align-items-center gap-3">
+                    <span class="pill good"><span class="dot"></span>Connecté ✓</span>
+                    <div class="small">ClickFunnels est connecté à l'espace de travail <strong>{{ config.workspace_name|default:config.workspace_subdomain }}</strong>. Les accès s'ouvrent automatiquement après chaque paiement.</div>
+                </div>
+            </div>
+            {% else %}
+            <div class="crm-card border-0 shadow-sm mb-4 border-start border-4 border-warning">
+                <div class="d-flex align-items-start gap-3">
+                    <span class="pill warn text-nowrap"><span class="dot"></span>Non connecté</span>
+                    <div class="small">
+                        <div class="fw-bold mb-1">Que faire ?</div>
+                        {% if not config %}Collez votre clé d'accès ClickFunnels à l'étape 1, puis enregistrez.
+                        {% elif not token_ok %}Enregistrez votre clé d'accès (étape 1), puis cliquez sur « Tester la connexion ».
+                        {% elif not config.team_id %}La clé fonctionne. Choisissez maintenant votre équipe (étape 2).
+                        {% else %}Il reste une étape : choisissez votre espace de travail (étape 3).{% endif %}
+                        Tant que ce n'est pas fait, aucun accès ne peut être ouvert automatiquement.
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Step 1: Token -->
             <div class="crm-card border-0 shadow-sm mb-4">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h5 class="fw-bold mb-0"><span class="badge bg-primary rounded-circle me-2">1</span> Jeton d’accès API</h5>
-                    {% if config.validation_status == 'VALID' %}
-                        <span class="badge bg-success rounded-pill px-3"><i class="fa-solid fa-check me-1"></i> Autorisé</span>
-                    {% endif %}
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold mb-0"><span class="badge bg-primary rounded-circle me-2">1</span> Votre clé d'accès ClickFunnels</h5>
+                    {% if token_ok %}<span class="pill good"><span class="dot"></span>Clé acceptée</span>{% endif %}
                 </div>
+                <p class="small text-muted mb-4">
+                    La clé d'accès (appelée « API access token » dans ClickFunnels) se crée dans la partie développeurs / API de votre compte ClickFunnels.
+                    Si vous ne la trouvez pas, demandez-la à la personne qui gère votre compte ClickFunnels.
+                </p>
 
                 <form method="post">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="save_token">
 
                     <div class="row g-4">
-                        <div class="col-md-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ token_form.name.id_for_label }}">Nom convivial</label>
-                            {{ token_form.name }}
-                        </div>
-
                         <div class="col-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ token_form.api_access_token.id_for_label }}">Jeton d’accès API</label>
+                            <label class="form-label fw-bold small" for="{{ token_form.api_access_token.id_for_label }}">Clé d'accès</label>
                             {{ token_form.api_access_token }}
                             <div class="form-text small mt-2">
-                                <i class="fa-solid fa-shield-halved me-1 text-success"></i>
-                                Les jetons sont chiffrés avec Fernet AES-256. Laissez vide pour conserver le jeton actuel.
+                                <i class="fa-solid fa-lock me-1 text-success" aria-hidden="true"></i>
+                                Stockée chiffrée, jamais réaffichée. {% if config %}Laissez vide pour garder la clé actuelle.{% endif %}
                             </div>
                         </div>
 
                         <div class="col-md-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ token_form.api_user_agent.id_for_label }}">Chaîne User-Agent</label>
-                            {{ token_form.api_user_agent }}
+                            <label class="form-label fw-bold small" for="{{ token_form.name.id_for_label }}">Nom de cette connexion <span class="fw-normal text-muted">(pour vous repérer)</span></label>
+                            {{ token_form.name }}
                         </div>
 
                         <div class="col-12">
                             <div class="form-check form-switch p-3 bg-light rounded-3 border border-dashed">
                                 <div class="ms-1">
                                     {{ token_form.is_active }}
-                                    <label class="form-check-label fw-bold ms-2" for="{{ token_form.is_active.id_for_label }}">Définir comme configuration active</label>
+                                    <label class="form-check-label fw-bold ms-2" for="{{ token_form.is_active.id_for_label }}">Utiliser cette connexion</label>
                                 </div>
                             </div>
                         </div>
+
+                        <div class="col-12">
+                            <details>
+                                <summary class="small text-muted">Réglage avancé (à ne modifier que sur demande du support)</summary>
+                                <div class="mt-3">
+                                    <label class="form-label small fw-bold text-muted" for="{{ token_form.api_user_agent.id_for_label }}">Identifiant technique de l'application (User-Agent)</label>
+                                    {{ token_form.api_user_agent }}
+                                </div>
+                            </details>
+                        </div>
                     </div>
 
-                    <div class="mt-4 d-flex gap-2">
-                        <button type="submit" class="btn btn-crm btn-crm-outline px-4">Enregistrer les paramètres</button>
-                        <button type="submit" name="action" value="verify_token" formmethod="post" class="btn btn-crm btn-crm-primary px-4 shadow-sm">
-                            <i class="fa-solid fa-bolt me-2"></i> Vérifier et récupérer les équipes
-                        </button>
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-crm btn-crm-primary px-4 shadow-sm">Enregistrer la clé</button>
                     </div>
                 </form>
+
+                {% if config %}
+                <!-- Separate form on purpose: testing uses the SAVED key, so it must never
+                     look like it also saves what was just typed above. -->
+                <form method="post" class="mt-3 pt-3 border-top">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="verify_token">
+                    <div class="d-flex flex-wrap align-items-center gap-3">
+                        <button type="submit" class="btn btn-crm btn-crm-outline px-4">
+                            <i class="fa-solid fa-plug-circle-check me-2" aria-hidden="true"></i>Tester la connexion
+                        </button>
+                        <span class="small text-muted">Vérifie la clé enregistrée auprès de ClickFunnels et charge vos équipes.</span>
+                    </div>
+                </form>
+                {% endif %}
             </div>
 
             <!-- Step 2: Select Team -->
-            <div class="crm-card border-0 shadow-sm mb-4 {% if config.validation_status != 'VALID' %}opacity-50{% endif %}">
-                <h5 class="fw-bold mb-4"><span class="badge bg-primary rounded-circle me-2">2</span> Sélectionner l’équipe</h5>
+            <div class="crm-card border-0 shadow-sm mb-4 {% if not token_ok %}settings-step-locked{% endif %}">
+                <h5 class="fw-bold mb-2"><span class="badge bg-primary rounded-circle me-2">2</span> Votre équipe ClickFunnels</h5>
+                <p class="small text-muted mb-4">L'équipe qui possède vos formations.</p>
 
                 {% if team_form %}
                     <form method="post">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="select_team">
                         <div class="mb-4">
-                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ team_form.team_id.id_for_label }}">Équipes disponibles</label>
+                            <label class="form-label fw-bold small" for="{{ team_form.team_id.id_for_label }}">Équipe</label>
                             {{ team_form.team_id }}
                         </div>
-                        <button type="submit" class="btn btn-crm btn-crm-primary px-4">Confirmer l’équipe</button>
+                        <button type="submit" class="btn btn-crm btn-crm-primary px-4">Choisir cette équipe</button>
                     </form>
                 {% else %}
-                    <p class="text-muted small italic">Vérifiez d’abord votre jeton pour charger les équipes disponibles.</p>
+                    <p class="text-muted small fst-italic mb-0">Disponible après l'étape 1 (clé enregistrée et testée).</p>
                 {% endif %}
             </div>
 
             <!-- Step 3: Select Workspace -->
-            <div class="crm-card border-0 shadow-sm mb-4 {% if not config.team_id %}opacity-50{% endif %}">
-                <h5 class="fw-bold mb-4"><span class="badge bg-primary rounded-circle me-2">3</span> Sélectionner l’espace de travail</h5>
+            <div class="crm-card border-0 shadow-sm mb-4 {% if not config.team_id %}settings-step-locked{% endif %}">
+                <h5 class="fw-bold mb-2"><span class="badge bg-primary rounded-circle me-2">3</span> Votre espace de travail</h5>
+                <p class="small text-muted mb-4">L'espace de travail où se trouvent les formations que vous vendez.</p>
 
                 {% if workspace_form %}
                     <form method="post">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="select_workspace">
                         <div class="mb-4">
-                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ workspace_form.workspace_id.id_for_label }}">Espaces de travail de l’équipe</label>
+                            <label class="form-label fw-bold small" for="{{ workspace_form.workspace_id.id_for_label }}">Espace de travail</label>
                             {{ workspace_form.workspace_id }}
-                            <div class="form-text small mt-2">Sélectionner un espace de travail liera automatiquement le sous-domaine API requis.</div>
                         </div>
-                        <button type="submit" class="btn btn-crm btn-crm-primary px-4">Activer l’espace de travail</button>
+                        <button type="submit" class="btn btn-crm btn-crm-primary px-4">Utiliser cet espace de travail</button>
                     </form>
                 {% else %}
-                    <p class="text-muted small italic">Sélectionnez d’abord une équipe pour charger les espaces de travail disponibles.</p>
+                    <p class="text-muted small fst-italic mb-0">Disponible après l'étape 2 (équipe choisie).</p>
                 {% endif %}
             </div>
 
-            <!-- Advanced Details -->
-            <div class="crm-card border-0 shadow-sm bg-light">
-                <h6 class="text-uppercase text-muted fw-bold small mb-4 letter-spacing-wider">Détails de connexion avancés</h6>
-                <div class="row g-3">
+            <details class="crm-card border-0 shadow-sm bg-light">
+                <summary class="small fw-bold text-muted">Détail technique (pour le support)</summary>
+                <div class="row g-3 mt-2">
                     <div class="col-md-4">
-                        <label class="text-muted x-small fw-bold text-uppercase d-block mb-1">ID d’équipe</label>
-                        <code class="small text-dark">{{ config.team_id|default:"--" }}</code>
+                        <div class="text-muted small mb-1">ID d'équipe</div>
+                        <code class="small text-dark">{{ config.team_id|default:"—" }}</code>
                     </div>
                     <div class="col-md-4">
-                        <label class="text-muted x-small fw-bold text-uppercase d-block mb-1">ID d’espace de travail</label>
-                        <code class="small text-dark">{{ config.workspace_id|default:"--" }}</code>
+                        <div class="text-muted small mb-1">ID d'espace de travail</div>
+                        <code class="small text-dark">{{ config.workspace_id|default:"—" }}</code>
                     </div>
                     <div class="col-md-4">
-                        <label class="text-muted x-small fw-bold text-uppercase d-block mb-1">Sous-domaine API</label>
-                        <code class="small text-primary fw-bold">{{ config.workspace_subdomain|default:"--" }}</code>
+                        <div class="text-muted small mb-1">Sous-domaine</div>
+                        <code class="small text-dark">{{ config.workspace_subdomain|default:"—" }}</code>
                     </div>
                 </div>
-            </div>
+            </details>
         </div>
 
-        <!-- Sidebar / Status -->
         <div class="col-lg-4">
-            <div class="crm-card bg-dark text-white border-0 shadow-lg p-4 sticky-top" style="top: 100px;">
-                <h5 class="fw-bold mb-4 text-white">État de la passerelle</h5>
-
-                <div class="mb-4">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="small fw-bold text-uppercase opacity-50">Statut du jeton</span>
-                        {% if config.validation_status == 'VALID' %}
-                            <span class="text-success small fw-bold">VALIDE</span>
-                        {% else %}
-                            <span class="text-danger small fw-bold">INVALIDE</span>
-                        {% endif %}
-                    </div>
-                    <div class="progress" style="height: 6px; background-color: rgba(255,255,255,0.1);">
-                        <div class="progress-bar bg-success" style="width: {% if config.validation_status == 'VALID' %}100%{% else %}0%{% endif %}"></div>
-                    </div>
+            <div class="crm-card border-0 shadow-sm">
+                <h6 class="fw-bold mb-3"><i class="fa-solid fa-circle-question me-2 text-muted" aria-hidden="true"></i>À quoi ça sert ?</h6>
+                <p class="small mb-3">Cette connexion permet à l'application de :</p>
+                <ul class="small ps-3 mb-3">
+                    <li class="mb-2">ouvrir l'accès à la formation dès qu'un client a payé ;</li>
+                    <li class="mb-2">suspendre ou rétablir un accès depuis « Accès aux formations » ;</li>
+                    <li>importer vos formations pour créer vos offres.</li>
+                </ul>
+                <div class="small text-muted border-top pt-3">
+                    <div class="d-flex justify-content-between mb-1"><span>Clé d'accès</span><span>{% if token_ok %}✓ acceptée{% elif config %}à tester{% else %}manquante{% endif %}</span></div>
+                    <div class="d-flex justify-content-between mb-1"><span>Équipe</span><span>{% if config.team_id %}✓ choisie{% else %}à choisir{% endif %}</span></div>
+                    <div class="d-flex justify-content-between"><span>Espace de travail</span><span>{% if connected %}✓ {{ config.workspace_name|default:"choisi" }}{% else %}à choisir{% endif %}</span></div>
                 </div>
-
-                <div class="mb-4">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="small fw-bold text-uppercase opacity-50">Équipe sélectionnée</span>
-                        {% if config.team_id %}
-                            <span class="text-success small fw-bold">OUI</span>
-                        {% else %}
-                            <span class="text-warning small fw-bold">NON</span>
-                        {% endif %}
-                    </div>
-                    <div class="progress" style="height: 6px; background-color: rgba(255,255,255,0.1);">
-                        <div class="progress-bar bg-success" style="width: {% if config.team_id %}100%{% else %}0%{% endif %}"></div>
-                    </div>
-                </div>
-
-                <div class="mb-4">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="small fw-bold text-uppercase opacity-50">Espace de travail actif</span>
-                        {% if config.workspace_id %}
-                            <span class="text-success small fw-bold">OUI</span>
-                        {% else %}
-                            <span class="text-warning small fw-bold">NON</span>
-                        {% endif %}
-                    </div>
-                    <div class="progress" style="height: 6px; background-color: rgba(255,255,255,0.1);">
-                        <div class="progress-bar bg-success" style="width: {% if config.workspace_id %}100%{% else %}0%{% endif %}"></div>
-                    </div>
-                </div>
-
-                {% if config.workspace_subdomain %}
-                    <div class="alert alert-success border-0 bg-white bg-opacity-10 text-white small mb-0 mt-4">
-                        <i class="fa-solid fa-check-circle me-2"></i> La passerelle est prête pour les transactions.
-                    </div>
-                {% else %}
-                    <div class="alert alert-warning border-0 bg-white bg-opacity-10 text-white small mb-0 mt-4">
-                        <i class="fa-solid fa-circle-exclamation me-2"></i> Sélectionnez un espace de travail pour terminer.
-                    </div>
-                {% endif %}
             </div>
         </div>
     </div>
 </div>
-
 <style>
     .border-dashed { border-style: dashed !important; }
-    .x-small { font-size: 0.65rem; }
-    .opacity-50 { opacity: 0.5; pointer-events: none; }
+    .settings-step-locked { opacity: .55; }
+    .settings-step-locked form { pointer-events: none; }
 </style>
 {% endblock %}

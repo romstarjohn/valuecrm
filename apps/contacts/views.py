@@ -2,7 +2,8 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db.models import DecimalField, OuterRef, Q, Subquery, Sum
+from django.db.models import Count, DecimalField, IntegerField, OuterRef, Q, Subquery, Sum
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -10,12 +11,14 @@ from apps.configuration.services import ConfigurationService
 from apps.courses.models import Course
 from apps.enrollments.models import EnrollmentAttempt
 from apps.enrollments.services import EnrollmentService
-from apps.payments.models import AdminAuditLog, Installment, PaymentConfirmation
+from apps.payments.models import AdminAuditLog, Installment, Order, PaymentConfirmation
 from apps.provisioning.models import ProvisioningRequest
 from integrations.clickfunnels.client import ClickFunnelsClient
+from apps.operations.presentation import reported_unconfirmed_product_ids, sale_state, short_ref
 from .models import Contact
 from .forms import ContactForm
 from .services import ContactService
+from .templatetags.vente_format import ACTION_LABELS, OUTCOME_LABELS
 
 # Column -> model field(s) a list-page column may be sorted by. Whitelisted
 # so `?sort=` can never reach arbitrary/relation fields.
@@ -23,6 +26,7 @@ CONTACT_SORT_FIELDS = {
     "name": ["first_name", "last_name"],
     "status": ["status"],
     "source": ["source"],
+    "sales": ["sale_count"],
     "paid": ["total_paid_amount"],
     "added": ["created_at"],
     "updated": ["updated_at"],
@@ -75,15 +79,31 @@ def contact_list(request):
         .annotate(total=Sum("paid_amount"))
         .values("total")
     )
+    # Same correlated-subquery approach for the counts: expired/cancelled
+    # checkouts are not "ventes" a user cares about in this list.
+    sale_count = (
+        Order.objects.filter(customer=OuterRef("pk"))
+        .exclude(status__in=[Order.Status.EXPIRED, Order.Status.CANCELLED])
+        .values("customer").annotate(n=Count("id")).values("n")
+    )
+    open_access_count = (
+        EnrollmentAttempt.objects.filter(
+            contact=OuterRef("pk"), status=EnrollmentAttempt.Status.SUCCESS, cf_suspended=False,
+        )
+        .values("contact").annotate(n=Count("course", distinct=True)).values("n")
+    )
     contacts = Contact.objects.all().annotate(
         total_paid_amount=Subquery(paid_total, output_field=DecimalField(max_digits=12, decimal_places=2)),
+        sale_count=Coalesce(Subquery(sale_count, output_field=IntegerField()), 0),
+        open_access_count=Coalesce(Subquery(open_access_count, output_field=IntegerField()), 0),
     )
 
     if query:
         contacts = contacts.filter(
             Q(first_name__icontains=query) |
             Q(last_name__icontains=query) |
-            Q(email__icontains=query)
+            Q(email__icontains=query) |
+            Q(phone__icontains=query)
         )
 
     if status_filter:
@@ -120,15 +140,15 @@ def contact_list(request):
         Contact.objects.exclude(status="").order_by().values_list("status", flat=True).distinct()
     )
     course_choices = [(c.cf_course_id, c.name) for c in Course.objects.order_by("name")]
-    course_label = next((name for cf_id, name in course_choices if cf_id == course_filter), course_filter) if course_filter else "Tous"
+    course_label = next((name for cf_id, name in course_choices if cf_id == course_filter), course_filter) if course_filter else "Toutes"
 
     headers = [
         {"label": "Client", "sortable": True, "sort_key": "name"},
-        {"label": "Tags", "sortable": False},
-        {"label": "Statut (abonnement)", "sortable": True, "sort_key": "status"},
-        {"label": "Montant total payé", "sortable": True, "sort_key": "paid", "align": "num"},
-        {"label": "Ajouté le", "sortable": True, "sort_key": "added"},
-        {"label": "Dernière mise à jour", "sortable": True, "sort_key": "updated"},
+        {"label": "Téléphone", "sortable": False},
+        {"label": "Ventes", "sortable": True, "sort_key": "sales", "align": "num"},
+        {"label": "Déjà payé", "sortable": True, "sort_key": "paid", "align": "num"},
+        {"label": "Accès", "sortable": False},
+        {"label": "Dernière activité", "sortable": True, "sort_key": "updated"},
     ]
 
     context = {
@@ -138,10 +158,10 @@ def contact_list(request):
         "course_filter": course_filter,
         "status_options": status_options,
         "course_options": course_choices,
-        "status_filter_options": _filter_options(request, param="status", options=status_options, all_label="Tous les statuts"),
-        "course_filter_options": _filter_options(request, param="course_id", options=course_choices, all_label="Tous les cours"),
-        "status_label": f"Statut : {status_filter or 'Tous'}",
-        "course_label": f"Cours : {course_label}",
+        "status_filter_options": _filter_options(request, param="status", options=status_options, all_label="Tous"),
+        "course_filter_options": _filter_options(request, param="course_id", options=course_choices, all_label="Toutes les formations"),
+        "status_label": f"Statut ClickFunnels : {status_filter or 'Tous'}",
+        "course_label": f"Formation : {course_label}",
         "headers": headers,
         "sort_key": sort_key,
         "sort_dir": sort_dir,
@@ -149,6 +169,14 @@ def contact_list(request):
         "querystring": _querystring(request, exclude=("page",)),
     }
     return render(request, "contacts/list.html", context)
+
+_CONFIRMATION_LABELS = {
+    PaymentConfirmation.Status.SENT: "Envoyé",
+    PaymentConfirmation.Status.PENDING: "En cours d'envoi",
+    PaymentConfirmation.Status.SENDING: "En cours d'envoi",
+    PaymentConfirmation.Status.FAILED: "Échec de l'envoi",
+    PaymentConfirmation.Status.MANUAL_REVIEW: "Envoi bloqué",
+}
 
 _AUDIT_OUTCOME_PILL = {
     AdminAuditLog.OutcomeCategory.SUCCESS: "good",
@@ -180,16 +208,16 @@ def _build_contact_activity(contact, limit=50):
     )
     for entry in audit_entries:
         detail = entry.reason
-        if entry.previous_state or entry.resulting_state:
-            detail = f"{entry.previous_state or '—'} → {entry.resulting_state or '—'} · {entry.reason}"
+        if entry.order_id:
+            detail = f"Vente {short_ref(entry.order.reference)} · {entry.reason}"
         events.append({
             "date": entry.created_at,
             "icon": "fa-user-shield",
-            "label": entry.get_action_type_display(),
+            "label": ACTION_LABELS.get(entry.action_type, entry.get_action_type_display()),
             "detail": detail,
-            "actor": entry.administrator_username or "système",
+            "actor": entry.administrator_username or "automatique",
             "pill": _AUDIT_OUTCOME_PILL.get(entry.outcome_category, "neutral"),
-            "pill_label": entry.get_outcome_category_display(),
+            "pill_label": OUTCOME_LABELS.get(entry.outcome_category, entry.get_outcome_category_display()),
         })
 
     for confirmation in contact.payment_confirmations.select_related("order")[:limit]:
@@ -197,11 +225,11 @@ def _build_contact_activity(contact, limit=50):
         events.append({
             "date": confirmation.sent_at or confirmation.created_at,
             "icon": "fa-envelope",
-            "label": "Confirmation de paiement",
-            "detail": f"Commande {confirmation.order.reference}" if confirmation.order_id else "",
-            "actor": "système",
+            "label": "E-mail de confirmation de paiement",
+            "detail": f"Vente {short_ref(confirmation.order.reference)}" if confirmation.order_id else "",
+            "actor": "automatique",
             "pill": "good" if is_sent else ("critical" if confirmation.status == PaymentConfirmation.Status.FAILED else "warn"),
-            "pill_label": confirmation.get_status_display(),
+            "pill_label": _CONFIRMATION_LABELS.get(confirmation.status, confirmation.get_status_display()),
         })
 
     for enr in contact.enrollment_attempts.select_related("course")[:limit]:
@@ -209,9 +237,9 @@ def _build_contact_activity(contact, limit=50):
         events.append({
             "date": enr.created_at,
             "icon": "fa-graduation-cap",
-            "label": "Tentative d'inscription",
+            "label": "Ouverture de l'accès à une formation",
             "detail": enr.course.name,
-            "actor": "système",
+            "actor": "automatique",
             "pill": "good" if is_success else "critical",
             "pill_label": "Réussie" if is_success else "Échouée",
         })
@@ -223,14 +251,31 @@ def _build_contact_activity(contact, limit=50):
 @login_required
 def contact_detail(request, pk):
     """
-    Detailed contact profile view — tabbed: Aperçu, Activité, Commandes
-    (orders and, separately, individual payments received), Inscriptions.
+    Client page — tabbed: Résumé, Achats (sales with their plain state and
+    next step, then individual payments received), Accès aux formations,
+    Historique. Wording: docs/UI_VOCABULARY.md.
     """
     contact = get_object_or_404(Contact, pk=pk)
     enrollments = list(contact.enrollment_attempts.all().select_related("course"))
     orders = list(
-        contact.orders.select_related("plan", "course").prefetch_related("installments").order_by("-created_at")
+        contact.orders.select_related("plan", "course")
+        .prefetch_related("installments__payment_attempts")
+        .order_by("-created_at")
     )
+    reported = reported_unconfirmed_product_ids(
+        a.tara_product_id for o in orders for i in o.installments.all() for a in i.payment_attempts.all()
+    )
+    can_verify = request.user.has_perm("payments.check_tara_status")
+    for order in orders:
+        order.state = sale_state(order, reported, can_verify=can_verify)
+        order.short_ref = short_ref(order.reference)
+        order.paid_total = sum(
+            (i.paid_amount or 0) for i in order.installments.all() if i.status == Installment.Status.PAID
+        )
+    attention_orders = [o for o in orders if o.state.needs_attention]
+    open_access_count = len({
+        e.course_id for e in enrollments if e.status == EnrollmentAttempt.Status.SUCCESS and not e.cf_suspended
+    })
     # Distinct from `orders` above: each individual amount actually received
     # (docs/PRODUCT_CADRAGE_PMI.md §4 "Paiement reçu" vs "Achat / commande" —
     # two different concepts, never collapsed into one row).
@@ -259,6 +304,10 @@ def contact_detail(request, pk):
         "contact": contact,
         "enrollments": enrollments,
         "orders": orders,
+        "attention_orders": attention_orders,
+        "sale_count": sum(1 for o in orders if o.status not in (Order.Status.EXPIRED, Order.Status.CANCELLED)),
+        "paid_total": sum((i.paid_amount or 0) for i in payments),
+        "open_access_count": open_access_count,
         "payments": payments,
         "activity": activity,
         "can_view_order": request.user.has_perm("payments.view_order"),
@@ -277,8 +326,18 @@ def contact_detail_panel(request, pk):
     """
     contact = get_object_or_404(Contact, pk=pk)
     orders = list(
-        contact.orders.select_related("plan", "course").prefetch_related("installments").order_by("-created_at")[:5]
+        contact.orders.select_related("plan", "course")
+        .prefetch_related("installments__payment_attempts")
+        .order_by("-created_at")[:5]
     )
+    reported = reported_unconfirmed_product_ids(
+        a.tara_product_id for o in orders for i in o.installments.all() for a in i.payment_attempts.all()
+    )
+    for order in orders:
+        order.state = sale_state(order, reported, can_verify=request.user.has_perm("payments.check_tara_status"))
+        order.paid_total = sum(
+            (i.paid_amount or 0) for i in order.installments.all() if i.status == Installment.Status.PAID
+        )
     enrollments = list(contact.enrollment_attempts.select_related("course").order_by("-created_at")[:5])
 
     actions_html = (
@@ -311,12 +370,12 @@ def contact_create(request):
         form = ContactForm(request.POST)
         if form.is_valid():
             contact = form.save()
-            messages.success(request, f"Contact {contact.email} créé avec succès.")
+            messages.success(request, f"Client {contact.email} ajouté.")
             return redirect("contacts:detail", pk=contact.pk)
     else:
         form = ContactForm()
 
-    return render(request, "contacts/form.html", {"form": form, "title": "Ajouter un contact"})
+    return render(request, "contacts/form.html", {"form": form, "title": "Ajouter un client"})
 
 @login_required
 def contact_update(request, pk):
@@ -328,12 +387,13 @@ def contact_update(request, pk):
         form = ContactForm(request.POST, instance=contact)
         if form.is_valid():
             contact = form.save()
-            messages.success(request, f"Contact {contact.email} mis à jour avec succès.")
+            messages.success(request, "Fiche client mise à jour.")
             return redirect("contacts:detail", pk=contact.pk)
     else:
         form = ContactForm(instance=contact)
 
-    return render(request, "contacts/form.html", {"form": form, "contact": contact, "title": f"Modifier {contact.email}"})
+    display_name = f"{contact.first_name} {contact.last_name}".strip() or contact.email
+    return render(request, "contacts/form.html", {"form": form, "contact": contact, "title": f"Modifier la fiche de {display_name}"})
 
 
 @login_required
@@ -355,7 +415,7 @@ def contact_enroll_panel(request, pk):
         "contacts/_enroll_panel_body.html", {"contact": contact, "courses": courses}, request=request,
     )
     return JsonResponse({
-        "title": "Inscrire à un cours",
+        "title": "Donner accès à une formation",
         "subtitle": f"{contact.first_name} {contact.last_name}".strip() or contact.email,
         "actions_html": "",
         "body_html": body_html,
@@ -377,15 +437,15 @@ def contact_enroll(request, pk):
 
     course_ids = request.POST.getlist("course_ids")
     if not course_ids:
-        messages.error(request, "Sélectionnez au moins un cours à inscrire.")
+        messages.error(request, "Choisissez au moins une formation.")
         return redirect(f"{reverse('contacts:detail', args=[contact.pk])}#tab-enrollments")
 
     config = ConfigurationService().get_active_config()
     if not config:
-        messages.error(request, "Aucune configuration ClickFunnels active trouvée.")
+        messages.error(request, "La connexion à ClickFunnels n'est pas configurée. Allez dans Réglages → Connexion ClickFunnels.")
         return redirect(f"{reverse('contacts:detail', args=[contact.pk])}#tab-enrollments")
     if not config.workspace_id or not config.workspace_subdomain:
-        messages.error(request, "Sélectionnez un espace de travail dans les paramètres avant d'inscrire des contacts.")
+        messages.error(request, "Choisissez d'abord votre espace ClickFunnels dans Réglages → Connexion ClickFunnels.")
         return redirect("configuration:settings")
 
     client = ClickFunnelsClient.from_configuration(config)
@@ -408,8 +468,8 @@ def contact_enroll(request, pk):
             failures.append(f"{course.name} ({result.error_message})")
 
     if successes:
-        messages.success(request, f"Inscrit à : {', '.join(successes)}.")
+        messages.success(request, f"Accès ouvert à : {', '.join(successes)}.")
     if failures:
-        messages.error(request, f"Échec pour : {', '.join(failures)}.")
+        messages.error(request, f"L'accès n'a pas pu être ouvert pour : {', '.join(failures)}.")
 
     return redirect(f"{reverse('contacts:detail', args=[contact.pk])}#tab-enrollments")

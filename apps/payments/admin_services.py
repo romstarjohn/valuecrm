@@ -178,7 +178,7 @@ class OrderAdministrationService:
                     reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
                     request=request,
                 )
-                error_message = f"Order cannot be cancelled from status {previous_status}."
+                error_message = "Cette vente ne peut plus être annulée (elle est déjà payée, terminée ou suspendue)."
             else:
                 installment_service = InstallmentService()
                 attempt_service = PaymentAttemptService()
@@ -231,7 +231,7 @@ class OrderAdministrationService:
                     reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
                     request=request,
                 )
-                error_message = "A paid installment (or one with a succeeded payment attempt) cannot be cancelled."
+                error_message = "Ce versement est déjà payé : il ne peut pas être annulé."
             else:
                 attempt_service = PaymentAttemptService()
                 for attempt in installment.payment_attempts.select_for_update():
@@ -300,7 +300,7 @@ class OrderAdministrationService:
                     reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
                     request=request,
                 )
-                error_message = "A paid installment (or one with a succeeded payment attempt) cannot be waived."
+                error_message = "Ce versement est déjà payé : le client ne peut pas en être dispensé."
             else:
                 attempt_service = PaymentAttemptService()
                 for attempt in installment.payment_attempts.select_for_update():
@@ -361,7 +361,7 @@ class OrderAdministrationService:
                     reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
                     request=request,
                 )
-                error_message = f"'{disposition}' is not a recognized disposition."
+                error_message = "Ce choix de signalement n'est pas reconnu."
             elif previous_disposition == disposition:
                 AdminAuditService().record(
                     administrator=administrator, action_type=AdminAuditLog.ActionType.APPLY_MANUAL_DISPOSITION,
@@ -433,7 +433,7 @@ class PaymentAttemptAdministrationService:
                 reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
                 request=request,
             )
-            raise AdminActionError("Only LINK_CREATED, PENDING, UNKNOWN, FAILED, or EXPIRED payment attempts can be checked.")
+            raise AdminActionError("Il n'y a rien à vérifier pour ce paiement : il est déjà confirmé ou n'a jamais été envoyé à Tara.")
 
         previous_status = attempt.status
 
@@ -449,7 +449,7 @@ class PaymentAttemptAdministrationService:
                 reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.FAILED,
                 request=request,
             )
-            raise AdminActionError("Tara is not configured; status could not be checked.") from e
+            raise AdminActionError("La connexion Tara n'est pas configurée : impossible de vérifier. Voir Réglages → Connexion Tara.") from e
 
         try:
             verification_service = TaraVerificationService()
@@ -497,11 +497,11 @@ class PaymentAttemptAdministrationService:
             )
             if verification.failure_category == TaraWebhookEvent.FailureCategory.AMOUNT_MISMATCH:
                 raise AdminActionError(
-                    f"Tara reports a payment of {verification.amount} for this attempt, "
-                    f"but {attempt.expected_amount} was expected. Not credited — manual review required."
+                    f"Tara indique un paiement de {verification.amount} XAF, mais {attempt.expected_amount} XAF "
+                    f"étaient attendus. Le paiement n'a pas été validé : vérifiez avec le client et Tara."
                 )
             raise AdminActionError(
-                "Tara's answer does not belong to this payment attempt (other product or business). Not credited."
+                "La réponse de Tara concerne un autre paiement que celui de cette vente. Rien n'a été validé."
             )
 
         normalized = verification.normalized
@@ -534,8 +534,9 @@ class PaymentAttemptAdministrationService:
                 attempt.refresh_from_db()
                 write_audit(attempt, AdminAuditLog.OutcomeCategory.FAILED)
                 raise AdminActionError(
-                    "Tara confirms this payment, but it could not be credited automatically "
-                    "(installment already paid via another attempt, or cancelled/waived). Manual review required."
+                    "Tara confirme ce paiement, mais il ne peut pas être validé automatiquement : ce versement est "
+                    "déjà payé par un autre paiement (le client a peut-être payé deux fois) ou a été annulé. "
+                    "À examiner avec Tara, un remboursement peut être nécessaire."
                 ) from e
         elif normalized == TaraTransactionStatus.FAILURE:
             attempt = PaymentCreditService().apply_verified_failure(
@@ -697,7 +698,7 @@ class PaymentConfirmationAdministrationService:
                     reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
                     request=request,
                 )
-                error_message = "A SENT confirmation cannot be retried."
+                error_message = "Cet e-mail a déjà été envoyé."
             elif confirmation.status not in (PaymentConfirmation.Status.FAILED, PaymentConfirmation.Status.MANUAL_REVIEW):
                 AdminAuditService().record(
                     administrator=administrator, action_type=AdminAuditLog.ActionType.RETRY_CONFIRMATION,
@@ -707,7 +708,7 @@ class PaymentConfirmationAdministrationService:
                     reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
                     request=request,
                 )
-                error_message = "Only FAILED or MANUAL_REVIEW confirmations can be retried."
+                error_message = "Cet e-mail est déjà en cours d'envoi : rien à relancer."
             else:
                 recipient = confirmation.contact.email
                 if not recipient:
@@ -719,7 +720,7 @@ class PaymentConfirmationAdministrationService:
                         reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
                         request=request,
                     )
-                    error_message = "Contact has no email address on file; cannot retry."
+                    error_message = "Ce client n'a pas d'adresse e-mail : ajoutez-la sur sa fiche, puis renvoyez l'e-mail."
                 else:
                     confirmation.recipient_snapshot = recipient
                     confirmation.status = PaymentConfirmation.Status.PENDING
@@ -803,7 +804,7 @@ class EnrollmentAdministrationService:
                 reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.REJECTED_INVALID_STATE,
                 request=request,
             )
-            raise AdminActionError("This enrollment has no successful ClickFunnels record on file; nothing to freeze/resume.")
+            raise AdminActionError("Aucun accès ouvert dans ClickFunnels pour cette inscription : rien à suspendre ou rétablir.")
 
         if attempt.cf_suspended == suspended:
             AdminAuditService().record(
@@ -824,7 +825,7 @@ class EnrollmentAdministrationService:
                 reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.FAILED,
                 request=request,
             )
-            raise AdminActionError("No active ClickFunnels configuration/workspace available.")
+            raise AdminActionError("La connexion ClickFunnels n'est pas configurée. Voir Réglages → Connexion ClickFunnels.")
         enrollment_service, config = bundle
 
         try:
@@ -844,7 +845,7 @@ class EnrollmentAdministrationService:
                 reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.FAILED,
                 request=request,
             )
-            raise AdminActionError("Could not update the ClickFunnels enrollment; no local state was changed.") from e
+            raise AdminActionError("ClickFunnels n'a pas pu être mis à jour : rien n'a été modifié. Réessayez dans quelques minutes.") from e
 
         # Provider call succeeded — apply local state atomically, re-locking
         # in case of a race during the network call above.
@@ -891,7 +892,7 @@ class EnrollmentAdministrationService:
             )
             wanted = "ACTIVE or PAST_DUE" if suspended else "SUSPENDED"
             verb = "frozen" if suspended else "resumed"
-            raise AdminActionError(f"Order status {order.status} is not eligible to be {verb} (must be {wanted}).")
+            raise AdminActionError("Cette action n'est pas possible dans l'état actuel de la vente.")
 
         provisioning_request = (
             ProvisioningRequest.objects.filter(contact_id=order.customer_id, course_id=order.course_id)
@@ -917,7 +918,7 @@ class EnrollmentAdministrationService:
                 request=request,
             )
             verb = "freeze" if suspended else "resume"
-            raise AdminActionError(f"This order has no successful ClickFunnels enrollment on record; nothing to {verb}.")
+            raise AdminActionError("Aucun accès ouvert dans ClickFunnels pour cette vente : rien à suspendre ou rétablir.")
 
         # Delegate the actual ClickFunnels call + attempt-level audit row to
         # the core method — propagates AdminActionError as-is on failure.

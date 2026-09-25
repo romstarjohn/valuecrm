@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Confirmations de paiement | {{ BRAND_NAME }}{% endblock %}
+{% block title %}E-mails de confirmation | {{ BRAND_NAME }}{% endblock %}
 {% block content %}
-{% include "components/page_header.html" with title="Confirmations de paiement" subtitle="Statut d'envoi des notifications de paiement reçu aux clients." %}
+{% include "operations/_tech_header.html" with title="E-mails de confirmation" purpose="voir les e-mails « paiement reçu » envoyés aux clients, et relancer ceux qui ont échoué." %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="table-container mb-4 shadow-sm border-0">
@@ -28,21 +28,19 @@
             {% include "components/table_start.html" with headers=headers has_actions=True %}
                 {% for confirmation in page_obj %}
                 <tr>
-                    <td>
-                        <a href="{% url 'operations:order_detail' confirmation.order.reference %}" class="text-decoration-none small fw-bold">{{ confirmation.order.reference }}</a>
-                        <div class="text-muted small">{{ confirmation.order.customer.email }}</div>
-                    </td>
+                    <td>{% include "operations/_sale_cell.html" with order=confirmation.order %}</td>
                     <td class="small">#{{ confirmation.installment.sequence }}</td>
                     <td class="small">{{ confirmation.channel }}</td>
                     <td>{% include "components/status_badge.html" with status=confirmation.status %}</td>
                     <td class="small text-muted">{{ confirmation.attempt_count }}</td>
-                    <td class="small text-muted">{{ confirmation.next_attempt_at|date:"d M, H:i"|default:"--" }}</td>
+                    <td class="small text-muted">{{ confirmation.next_attempt_at|date:"d/m/Y H:i"|default:"—" }}</td>
+                    <td class="small text-muted">{{ confirmation.sent_at|date:"d/m/Y H:i"|default:"—" }}</td>
                     <td class="text-end">
                         {% if can_retry_confirmation %}
                             {% if confirmation.status == "FAILED" or confirmation.status == "MANUAL_REVIEW" %}
                             {% include "components/action_menu.html" %}
                                 {% block menu_items %}
-                                    <li><a class="dropdown-item" href="{% url 'operations:confirmation_retry' confirmation.pk %}"><i class="fa-solid fa-rotate-right me-2 small"></i>Relancer la confirmation</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'operations:confirmation_retry' confirmation.pk %}"><i class="fa-solid fa-rotate-right me-2 small" aria-hidden="true"></i>Renvoyer l'e-mail</a></li>
                                 {% endblock %}
                             {% endif %}
                         {% endif %}
@@ -51,7 +49,7 @@
                 {% endfor %}
             {% include "components/table_end.html" %}
         {% else %}
-            {% include "components/table_empty_state.html" with title="Aucune confirmation trouvée" description="Ajustez vos filtres." %}
+            {% include "components/table_empty_state.html" with title="Aucun e-mail trouvé" description="Modifiez ou réinitialisez les filtres." %}
         {% endif %}
     </div>
     {% if page_obj %}{% include "components/pagination.html" with page_obj=page_obj %}{% endif %}

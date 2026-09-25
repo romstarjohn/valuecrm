@@ -1,21 +1,21 @@
 {% extends "base.html" %}
 
-{% block title %}Nouvelle inscription | {{ BRAND_NAME }}{% endblock %}
+{% block title %}Donner accès | {{ BRAND_NAME }}{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title="Nouvelle inscription" subtitle="Inscrivez un étudiant à une formation via ClickFunnels." %}
+{% include "components/page_header.html" with title="Donner accès à une formation" subtitle="Ouvrez à la main l'accès d'un client à une formation — par exemple après un paiement reçu hors Tara, ou un cadeau." %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="row">
         <div class="col-lg-6">
             <div class="crm-card">
-                <h5 class="fw-bold mb-4">Détails de l'inscription</h5>
+                <h5 class="fw-bold mb-4">À qui, et à quelle formation ?</h5>
 
                 {% if config %}
                     <form method="post" id="enrollment-form">
                         {% csrf_token %}
                         <div class="mb-3">
-                            <label class="form-label small fw-bold text-muted" for="{{ form.email.id_for_label }}">E-mail de l'étudiant</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.email.id_for_label }}">E-mail du client</label>
                             {{ form.email }}
                             {% if form.email.errors %}
                                 <div class="form-error">{{ form.email.errors|striptags }}</div>
@@ -23,7 +23,7 @@
                         </div>
 
                         <div class="mb-4">
-                            <label class="form-label small fw-bold text-muted" for="{{ form.course_id.id_for_label }}">Choisir une formation</label>
+                            <label class="form-label small fw-bold text-muted" for="{{ form.course_id.id_for_label }}">Formation</label>
                             {{ form.course_id }}
                             {% if form.course_id.errors %}
                                 <div class="form-error">{{ form.course_id.errors|striptags }}</div>
@@ -32,19 +32,19 @@
 
                         <div class="alert alert-info border-0 small mb-4">
                             <i class="fa-solid fa-circle-info me-2" aria-hidden="true"></i>
-                            Cela vérifiera si l'étudiant existe dans ClickFunnels, le créera si nécessaire, puis déclenchera l'inscription à la formation.
+                            Le client reçoit l'accès dans ClickFunnels. S'il n'y a pas encore de compte, il est créé automatiquement. Aucun paiement n'est enregistré.
                         </div>
 
                         <button type="submit" class="btn-crm btn-crm-primary w-100 py-3 fs-5" id="enrollment-form-submit">
-                            <i class="fa-solid fa-user-plus me-2" aria-hidden="true"></i>Valider l'inscription
+                            <i class="fa-solid fa-key me-2" aria-hidden="true"></i>Donner accès
                         </button>
                     </form>
                 {% else %}
                     <div class="text-center py-5">
                         <i class="fa-solid fa-plug-circle-xmark text-danger fs-1 mb-3 opacity-25" aria-hidden="true"></i>
-                        <h5 class="fw-bold">Intégration non prête</h5>
-                        <p class="text-muted">Vous avez besoin d'une configuration ClickFunnels active pour effectuer des inscriptions.</p>
-                        <a href="{% url 'configuration:settings' %}" class="btn-crm btn-crm-primary mt-3">Configurer maintenant</a>
+                        <h5 class="fw-bold">ClickFunnels n'est pas encore connecté</h5>
+                        <p class="text-muted">Pour donner des accès, connectez d'abord votre compte ClickFunnels.</p>
+                        <a href="{% url 'configuration:settings' %}" class="btn-crm btn-crm-primary mt-3">Connecter ClickFunnels</a>
                     </div>
                 {% endif %}
             </div>
@@ -52,18 +52,17 @@
 
         <div class="col-lg-6">
             <div class="crm-card bg-light border-0">
-                <h5 class="fw-bold mb-4">Contexte actuel</h5>
+                <h5 class="fw-bold mb-4">Compte ClickFunnels utilisé</h5>
                 <div class="mb-3">
-                    <label class="text-muted small fw-bold text-uppercase d-block">Espace de travail actif</label>
+                    <label class="text-muted small fw-bold text-uppercase d-block">Espace de travail</label>
                     <div class="fw-medium">{{ config.workspace_name|default:"Non configuré" }}</div>
-                    <code class="small text-muted">{{ config.workspace_id|default:"--" }}</code>
                 </div>
                 <div class="mb-3">
-                    <label class="text-muted small fw-bold text-uppercase d-block">État de l'intégration</label>
-                    {% include "components/status_badge.html" with status=config.validation_status %}
+                    <label class="text-muted small fw-bold text-uppercase d-block">Connexion</label>
+                    {% if config.validation_status == "VALID" %}<span class="pill good"><span class="dot"></span>Connecté</span>{% elif config %}<span class="pill warn"><span class="dot"></span>À vérifier</span>{% else %}<span class="pill neutral"><span class="dot"></span>Non connecté</span>{% endif %}
                 </div>
                 <hr>
-                <p class="small text-muted mb-0">Les inscriptions sont traitées de manière synchrone. Une inscription réussie vous redirigera vers la fiche d'audit.</p>
+                <p class="small text-muted mb-0">Cela prend quelques secondes. Vous verrez ensuite si l'accès est ouvert.</p>
             </div>
         </div>
     </div>
@@ -79,7 +78,7 @@
         form.addEventListener("submit", function () {
             var btn = document.getElementById("enrollment-form-submit");
             btn.disabled = true;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Inscription en cours…';
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Ouverture de l'accès…';
         });
     }
 </script>

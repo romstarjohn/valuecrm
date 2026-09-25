@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Événements Webhook Tara | {{ BRAND_NAME }}{% endblock %}
+{% block title %}Notifications Tara | {{ BRAND_NAME }}{% endblock %}
 {% block content %}
-{% include "components/page_header.html" with title="Événements Webhook Tara" subtitle="Envois non fiables par nature, utilisés uniquement comme déclencheur — vérifiés de serveur à serveur avant tout crédit." %}
+{% include "operations/_tech_header.html" with title="Notifications Tara" purpose="voir les messages que Tara envoie quand un client paie, et ce que nous en avons fait. Une notification seule ne crédite jamais rien : chaque paiement est revérifié auprès de Tara." %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="table-container mb-4 shadow-sm border-0">
@@ -32,15 +32,15 @@
                 <tr>
                     <td><code class="small">{{ event.reference }}</code></td>
                     <td class="small fw-bold font-mono">{% if event.amount %}{{ event.amount }} XAF{% else %}—{% endif %}</td>
-                    <td class="small text-muted">{{ event.processing_status }}</td>
+                    <td>{% if event.payment_attempt %}{% include "operations/_sale_cell.html" with order=event.payment_attempt.installment.order %}{% else %}<span class="small text-muted">Aucune vente</span>{% endif %}</td>
                     <td>{% include "components/status_badge.html" with status=event.verification_result %}</td>
                     <td>{% include "components/status_badge.html" with status=event.processing_status %}</td>
                     <td class="small text-muted">{{ event.failure_category|default:"--" }}</td>
-                    <td class="small text-muted">{{ event.received_at|date:"d M, H:i" }}</td>
+                    <td class="small text-muted">{{ event.received_at|date:"d/m/Y H:i" }}</td>
                     <td class="text-end">
                         {% if event.processing_status == "UNCORRELATED" %}
                             {% if can_attribute_payment %}
-                                <a href="{% url 'operations:webhook_event_attribute' event.pk %}" class="btn btn-crm btn-crm-primary btn-sm">Associer ce paiement</a>
+                                <a href="{% url 'operations:webhook_event_attribute' event.pk %}" class="btn btn-crm btn-crm-primary btn-sm">Associer à une vente</a>
                             {% else %}
                                 <span class="small text-muted fst-italic" title="Réservé au rôle administrateur">Réservé à l'administrateur</span>
                             {% endif %}
@@ -50,7 +50,7 @@
                 {% endfor %}
             {% include "components/table_end.html" %}
         {% else %}
-            {% include "components/table_empty_state.html" with title="Aucun événement webhook trouvé" description="Ajustez vos filtres." %}
+            {% include "components/table_empty_state.html" with title="Aucune notification trouvée" description="Modifiez ou réinitialisez les filtres." %}
         {% endif %}
     </div>
     {% if page_obj %}{% include "components/pagination.html" with page_obj=page_obj %}{% endif %}

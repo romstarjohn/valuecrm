@@ -1,0 +1,6 @@
+{% comment %}
+    Plain-language state of a sale. Pass `state` (apps/operations/presentation.py::SaleState).
+    `with_explanation=1` also prints the sentence below the pill.
+{% endcomment %}
+<span class="pill {{ state.tone }}"><span class="dot"></span>{{ state.label }}</span>
+{% if with_explanation %}<div class="cell-sub mt-1">{{ state.explanation }}</div>{% endif %}

@@ -63,3 +63,10 @@ def status_label(status):
     if not status:
         return ""
     return _STATUS_LABELS.get(status, status.upper())
+
+
+@register.filter
+def short_ref(reference):
+    """#B40D3341 — the human-sized order reference (docs/UI_VOCABULARY.md)."""
+    from apps.operations.presentation import short_ref as _short_ref
+    return _short_ref(reference)

@@ -96,7 +96,9 @@ def test_enrollment_bulk_view_post(mocker, staff_client, setup_data):
     response = staff_client.post(url, data=payload)
     
     assert response.status_code == 200
-    assert "Résumé du traitement groupé" in response.content.decode()
+    content = response.content.decode()
+    assert "Résultat" in content
+    assert "Accès ouverts" in content
 
 @pytest.mark.django_db
 def test_enrollment_detail_view(staff_client, setup_data):
@@ -192,3 +194,82 @@ def test_enrollment_resume_success_no_order(ops_permitted_client, setup_data, mo
     assert attempt.cf_suspended is False
     log = AdminAuditLog.objects.get(action_type=AdminAuditLog.ActionType.RESUME_ENROLLMENT)
     assert log.outcome_category == AdminAuditLog.OutcomeCategory.SUCCESS
+
+
+# --- Plain-language wording (docs/UI_VOCABULARY.md) ---
+
+@pytest.mark.django_db
+def test_list_shows_access_in_plain_words(staff_client, setup_data):
+    import html
+    config, course, contact = setup_data
+    EnrollmentAttempt.objects.create(contact=contact, course=course, status=EnrollmentAttempt.Status.SUCCESS)
+    EnrollmentAttempt.objects.create(
+        contact=Contact.objects.create(email="late@example.com"), course=course,
+        status=EnrollmentAttempt.Status.SUCCESS, cf_suspended=True,
+    )
+    EnrollmentAttempt.objects.create(
+        contact=Contact.objects.create(email="fail@example.com"), course=course,
+        status=EnrollmentAttempt.Status.FAILURE, error_log="Read timed out",
+    )
+
+    content = html.unescape(staff_client.get(reverse("enrollments:list")).content.decode())
+
+    assert "Accès aux formations" in content
+    for header in ("Client", "Formation", "Accès", "Depuis"):
+        assert f">{header}" in content or f"{header}\n" in content
+    for label in ("Actif", "Suspendu", "Échec"):
+        assert label in content
+    assert "ID ClickFunnels" not in content
+    assert "Donner accès à plusieurs clients" in content
+
+
+@pytest.mark.django_db
+def test_status_filter_label_is_french(staff_client, setup_data):
+    content = staff_client.get(reverse("enrollments:list") + "?status=SUCCESS").content.decode()
+    assert "Accès : Accès ouvert" in content
+    assert "Statut : SUCCESS" not in content
+
+
+@pytest.mark.django_db
+def test_list_search_matches_customer_name(staff_client, setup_data):
+    config, course, contact = setup_data
+    EnrollmentAttempt.objects.create(contact=contact, course=course, status=EnrollmentAttempt.Status.SUCCESS)
+    response = staff_client.get(reverse("enrollments:list") + "?q=User")
+    assert contact.email in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_failed_access_explains_why_and_keeps_raw_error_collapsed(staff_client, setup_data):
+    import html
+    config, course, contact = setup_data
+    attempt = EnrollmentAttempt.objects.create(
+        contact=contact, course=course, status=EnrollmentAttempt.Status.FAILURE,
+        error_log="HTTPSConnectionPool: Read timed out. (read timeout=30)",
+    )
+
+    content = html.unescape(staff_client.get(reverse("enrollments:detail", kwargs={"pk": attempt.pk})).content.decode())
+
+    assert "ClickFunnels n'a pas répondu à temps" in content
+    assert "Réessayer d'ouvrir l'accès" in content
+    assert "Détail technique" in content  # raw error kept, but inside the collapsed block
+    assert content.index("Détail technique") < content.index("HTTPSConnectionPool")
+
+
+@pytest.mark.django_db
+def test_access_error_plain_rules():
+    from apps.enrollments.templatetags.access_labels import access_error_plain
+    assert "plus valide" in access_error_plain("401 Unauthorized")
+    assert "introuvable" in access_error_plain("404 Not Found")
+    assert "e-mail invalide" in access_error_plain("422: email is invalid")
+    assert access_error_plain("") == ""
+    assert "transmettez le détail technique" in access_error_plain("something odd")
+
+
+@pytest.mark.django_db
+def test_single_and_bulk_pages_use_plain_wording(staff_client, setup_data):
+    single = staff_client.get(reverse("enrollments:new")).content.decode()
+    bulk = staff_client.get(reverse("enrollments:bulk")).content.decode()
+    assert "Donner accès à une formation" in single
+    assert "E-mail du client" in single
+    assert "(crs_123)" not in single  # no technical ids in the course picker
+    assert "Donner accès à plusieurs clients" in bulk

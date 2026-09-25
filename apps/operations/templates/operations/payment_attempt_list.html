@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Tentatives de paiement | {{ BRAND_NAME }}{% endblock %}
+{% block title %}Paiements Tara | {{ BRAND_NAME }}{% endblock %}
 {% block content %}
-{% include "components/page_header.html" with title="Tentatives de paiement Tara" subtitle="Statut interne toujours distinct des données brutes fournies par Tara." %}
+{% include "operations/_tech_header.html" with title="Paiements Tara" purpose="voir chaque demande de paiement envoyée à Tara (une par lien de paiement), sa réponse brute, et revérifier un paiement précis." %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="table-container mb-4 shadow-sm border-0">
@@ -35,16 +35,16 @@
                     <td><code class="small">{{ attempt.tara_payment_id|default:"--" }}</code></td>
                     <td class="small">{{ attempt.expected_amount }} {{ attempt.currency }}</td>
                     <td>
-                        <a href="{% url 'operations:order_detail' attempt.installment.order.reference %}" class="text-decoration-none small fw-bold">{{ attempt.installment.order.reference }}</a>
+                        {% include "operations/_sale_cell.html" with order=attempt.installment.order %}
                         <div class="text-muted small">versement n°{{ attempt.installment.sequence }}</div>
                     </td>
-                    <td class="small text-muted">{{ attempt.updated_at|date:"d M, H:i" }}</td>
+                    <td class="small text-muted">{{ attempt.updated_at|date:"d/m/Y H:i" }}</td>
                     <td class="text-end">
                         {% if can_check_tara_status %}
                             {% if attempt.status == "LINK_CREATED" or attempt.status == "PENDING" or attempt.status == "UNKNOWN" or attempt.status == "FAILED" or attempt.status == "EXPIRED" %}
                             {% include "components/action_menu.html" %}
                                 {% block menu_items %}
-                                    <li><a class="dropdown-item" href="{% url 'operations:payment_attempt_check_status' attempt.pk %}"><i class="fa-solid fa-satellite-dish me-2 small"></i>Vérifier le statut Tara</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'operations:payment_attempt_check_status' attempt.pk %}"><i class="fa-solid fa-satellite-dish me-2 small" aria-hidden="true"></i>Vérifier le paiement</a></li>
                                 {% endblock %}
                             {% endif %}
                         {% endif %}
@@ -53,7 +53,7 @@
                 {% endfor %}
             {% include "components/table_end.html" %}
         {% else %}
-            {% include "components/table_empty_state.html" with title="Aucune tentative de paiement trouvée" description="Ajustez vos filtres." %}
+            {% include "components/table_empty_state.html" with title="Aucun paiement Tara trouvé" description="Modifiez ou réinitialisez les filtres." %}
         {% endif %}
     </div>
     {% if page_obj %}{% include "components/pagination.html" with page_obj=page_obj %}{% endif %}

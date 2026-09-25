@@ -1,67 +1,76 @@
 {% extends "base.html" %}
+{% load static %}
 
-{% block title %}Vue d'ensemble | {{ BRAND_NAME }}{% endblock %}
+{% block title %}À traiter | {{ BRAND_NAME }}{% endblock %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/inbox.css' %}">{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title="Vue d'ensemble" subtitle="Ce qui demande une action aujourd'hui — chaque chiffre ouvre la liste correspondante." %}
+{% include "components/page_header.html" with title="À traiter" subtitle="Tout ce qui demande votre intervention, du plus urgent au moins urgent. Chaque ligne a un bouton." %}
 
-<div class="container-fluid px-4 fade-in pb-5">
+<div class="container-fluid px-4 fade-in pb-5 inbox">
 
-    <div class="kpi-row mb-4">
-        <a href="{% url 'operations:installment_list' %}" class="kpi">
-            <span class="kpi-label">Paiements reçus (7j)</span>
-            <span class="kpi-value">{{ payments_received_7d_amount }} <span class="unit">XAF</span></span>
-            <span class="kpi-sub">{{ payments_received_7d_count }} versement{{ payments_received_7d_count|pluralize }} confirmé{{ payments_received_7d_count|pluralize }}</span>
-            <svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none">
-                <polyline points="{{ sparkline_points }}" fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"></polyline>
-            </svg>
+    <div class="kpi-row inbox-tiles mb-4">
+        <a href="{% url 'operations:order_list' %}" class="kpi">
+            <span class="kpi-label">Encaissé ces 7 derniers jours</span>
+            <span class="kpi-value">{{ received_7d }}</span>
+            <span class="kpi-sub">Paiements confirmés par Tara</span>
         </a>
-        <a href="{% url 'operations:installment_list' %}?overdue=1" class="kpi">
-            <span class="kpi-label">Échéances en retard</span>
+        <a href="{% url 'operations:order_list' %}?etat=a_verifier" class="kpi">
+            <span class="kpi-label">Ventes à vérifier</span>
+            <span class="kpi-value {% if to_verify_count %}critical{% endif %}">{{ to_verify_count }}</span>
+            <span class="kpi-sub">{% if to_verify_count %}Un client a peut-être déjà payé{% else %}Aucune pour le moment{% endif %}</span>
+        </a>
+        <a href="{% url 'operations:order_list' %}?etat=en_retard" class="kpi">
+            <span class="kpi-label">Versements en retard</span>
             <span class="kpi-value {% if overdue_count %}critical{% endif %}">{{ overdue_count }}</span>
-            <span class="kpi-sub">{{ overdue_amount }} XAF dus au total</span>
-        </a>
-        <a href="{% url 'operations:installment_list' %}" class="kpi">
-            <span class="kpi-label">Échéances à venir (7j)</span>
-            <span class="kpi-value">{{ upcoming_count }}</span>
-            <span class="kpi-sub">dossiers à suivre</span>
-        </a>
-        <a href="{% url 'operations:provisioning_list' %}" class="kpi">
-            <span class="kpi-label">Échecs d'inscription</span>
-            <span class="kpi-value {% if enrollment_failures_count %}warn{% endif %}">{{ enrollment_failures_count }}</span>
-            <span class="kpi-sub">en attente de reprise</span>
-        </a>
-        <a href="{% url 'operations:webhook_event_list' %}" class="kpi">
-            <span class="kpi-label">Paiements non rapprochés</span>
-            <span class="kpi-value {% if unreconciled_count %}warn{% endif %}">{{ unreconciled_count }}</span>
-            <span class="kpi-sub">{{ unreconciled_amount }} XAF non attribués</span>
+            <span class="kpi-sub">{% if overdue_count %}À relancer auprès des clients{% else %}Aucun retard{% endif %}</span>
         </a>
     </div>
 
-    <div class="mb-1" style="font-size:14px;font-weight:700;">File d'attente d'action</div>
-    <p class="cell-sub mb-3">Retards, échecs d'inscription et paiements non rapprochés — triés par ancienneté, chaque ligne se résout en un clic.</p>
-
-    {% if queue %}
-    <div class="queue">
-        {% for row in queue %}
-        <div class="queue-item">
-            <div class="stripe {{ row.css }}"></div>
-            <div class="q-type {{ row.css }}">{{ row.kind_label }}</div>
-            <div class="q-body">
-                <div class="q-title">{{ row.title }}</div>
-                <div class="q-detail">{{ row.detail }}</div>
-            </div>
-            <div class="q-age">{{ row.age }}</div>
-            {% if row.action_disabled %}
-                <span class="small text-muted fst-italic text-nowrap" title="Réservé au rôle administrateur">{{ row.action_label }}</span>
-            {% else %}
-                <a href="{{ row.action_url }}" class="btn-crm btn-crm-primary btn-crm-sm text-nowrap">{{ row.action_label }}</a>
-            {% endif %}
-        </div>
+    {% if chips %}
+    <nav class="chips inbox-chips" aria-label="Filtrer par type">
+        <a href="{% url 'dashboard:index' %}" class="chip {% if not selected %}active{% endif %}">Tout <span class="count">{{ total_items }}</span></a>
+        {% for chip in chips %}
+        <a href="?type={{ chip.key }}" class="chip {% if selected == chip.key %}active{% endif %}">{{ chip.label }} <span class="count">{{ chip.count }}</span></a>
         {% endfor %}
-    </div>
+    </nav>
+    {% endif %}
+
+    {% if sections %}
+        {% for section in sections %}
+        <section class="inbox-section" aria-labelledby="inbox-{{ section.key }}">
+            <div class="inbox-section-head">
+                <h2 class="inbox-section-title" id="inbox-{{ section.key }}">{{ section.label }} ({{ section.total }})</h2>
+                {% if section.hidden %}<a class="inbox-more" href="?type={{ section.key }}">+{{ section.hidden }} autre{{ section.hidden|pluralize }}</a>{% endif %}
+            </div>
+            <div class="queue">
+                {% for row in section.rows %}
+                <div class="queue-item" data-inbox-type="{{ section.key }}">
+                    <div class="stripe {{ section.tone }}"></div>
+                    <div class="q-type {{ section.tone }}">{{ section.label }}</div>
+                    <div class="q-body">
+                        <div class="q-title">{{ row.title }}</div>
+                        <div class="q-detail">{{ row.detail }}</div>
+                    </div>
+                    <div class="q-age">{{ row.age }}</div>
+                    {% if row.action_disabled %}
+                        <span class="small text-muted fst-italic text-nowrap">{{ row.action_label }}</span>
+                    {% else %}
+                        <a href="{{ row.action_url }}" class="btn-crm btn-crm-primary btn-crm-sm text-nowrap">{{ row.action_label }}</a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endfor %}
     {% else %}
-        {% include "components/table_empty_state.html" with title="Rien à traiter" description="Aucun retard, échec d'inscription ou paiement non rapproché en attente." %}
+        <div class="crm-card inbox-empty">
+            <div class="inbox-empty-icon"><i class="fa-solid fa-circle-check" aria-hidden="true"></i></div>
+            <h2 class="h5 fw-bold mb-1">Rien à traiter pour le moment ✔</h2>
+            <p class="text-muted small mb-3">Les nouvelles ventes apparaissent dans Ventes.</p>
+            <a href="{% url 'operations:order_list' %}" class="btn-crm btn-crm-outline btn-crm-sm">Voir les ventes</a>
+        </div>
     {% endif %}
 </div>
 {% endblock %}

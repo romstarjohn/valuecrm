@@ -1,86 +1,127 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{{ course.name }} | {{ BRAND_NAME }}{% endblock %}
 
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/offres.css' %}">{% endblock %}
+
 {% block content %}
-{% if can_edit %}
-    {% include "components/page_header.html" with title=course.name subtitle=course_subtitle action_label="Modifier" action_url=edit_url action_icon="fa-solid fa-pen" %}
+{% if readiness.ready %}
+    {% include "components/page_header.html" with title=course.name subtitle="Cette offre est prête : partagez le lien de paiement avec vos clients." %}
 {% else %}
-    {% include "components/page_header.html" with title=course.name subtitle=course_subtitle %}
+    {% include "components/page_header.html" with title=course.name subtitle="Suivez les 3 étapes pour pouvoir vendre cette formation." %}
 {% endif %}
 
 <div class="container-fluid px-4 fade-in pb-5">
     <div class="row">
-        <!-- Main Details -->
         <div class="col-lg-8">
             <div class="crm-card border-0 shadow-sm">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="fw-bold mb-0">Produit &amp; plans</h5>
-                    {% if can_add_plan and plans %}
-                        <a href="{{ add_plan_url }}" class="btn-crm btn-crm-outline btn-crm-sm">
-                            <i class="fa-solid fa-plus me-1 small" aria-hidden="true"></i>Nouveau plan
-                        </a>
-                    {% endif %}
-                </div>
-                {% if plans %}
-                    <div class="d-flex flex-column gap-2 mb-3">
-                        {% for plan in plans %}
-                        <div class="plan-row">
-                            <div>
-                                <div class="plan-name">{{ plan.name }}</div>
-                                <div class="plan-terms">
-                                    {% if plan.installment_count == 1 %}Paiement unique · {{ plan.installment_amount }} {{ plan.currency }}
-                                    {% else %}{{ plan.installment_count }} × {{ plan.installment_amount }} {{ plan.currency }} · tous les {{ plan.installment_interval_days }} jours{% endif %}
-                                </div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                    <label class="text-muted small fw-bold text-uppercase d-block mb-1">Lien de paiement</label>
-                    <div class="link-field" style="width:100%;">
-                        <span id="checkout-link" style="flex:1;">{{ checkout_url }}</span>
-                        <button type="button" class="btn-crm btn-crm-outline btn-crm-sm js-copy" data-copy-target="checkout-link">Copier</button>
-                    </div>
-                    <div class="form-text small mt-2">Utilisable directement depuis un site externe — ouvre ce produit et ses plans actifs.</div>
-                {% else %}
-                    <div class="text-center py-4">
-                        <i class="fa-solid fa-sack-dollar text-muted opacity-25 fs-1 mb-3" aria-hidden="true"></i>
-                        <p class="text-muted small mb-3">Aucun plan de paiement actif pour ce cours — sans plan, aucun lien de paiement ne peut être partagé.</p>
-                        {% if can_add_plan %}
-                            <a href="{{ add_plan_url }}" class="btn-crm btn-crm-primary btn-crm-sm">
-                                <i class="fa-solid fa-plus me-2 small" aria-hidden="true"></i>Créer un plan de paiement
-                            </a>
-                        {% else %}
-                            <p class="text-muted small fst-italic mb-0">Vous n'avez pas la permission de créer un plan.</p>
-                        {% endif %}
-                    </div>
-                {% endif %}
-            </div>
+                <div class="offer-steps">
 
-            <div class="crm-card border-0 shadow-sm">
-                <h5 class="fw-bold mb-3">Aperçu du cours</h5>
-                <div class="kv">
-                    <div class="kv-row"><span>ID ClickFunnels</span><span>{{ course.cf_course_id }}</span></div>
-                    <div class="kv-row"><span>Espace de travail</span><span>{{ course.workspace_id|default:"—" }}</span></div>
-                    <div class="kv-row"><span>Lien produit (slug)</span><span>{{ course.slug }}</span></div>
+                    {# ① Page de vente #}
+                    <div class="offer-step {% if offer %}done{% else %}todo{% endif %}">
+                        <span class="offer-step-number">{% if offer %}<i class="fa-solid fa-check" aria-hidden="true"></i>{% else %}1{% endif %}</span>
+                        <div class="offer-step-body">
+                            <div class="offer-step-title">Page de vente</div>
+                            <div class="offer-step-hint">Le titre, l'image et les bénéfices que le client voit en ouvrant le lien de paiement.</div>
+                            {% if offer %}
+                                <div class="offer-page-preview mb-3">
+                                    {% if offer.image_url %}<img class="offer-thumb" src="{{ offer.image_url }}" alt="">{% else %}<span class="offer-thumb offer-thumb-empty"><i class="fa-regular fa-image" aria-hidden="true"></i></span>{% endif %}
+                                    <div>
+                                        <div class="fw-bold">{{ offer.title }}</div>
+                                        {% if offer.subtitle %}<div class="cell-sub">{{ offer.subtitle|truncatewords:18 }}</div>{% endif %}
+                                        <div class="cell-sub">{{ offer.benefits.count }} bénéfice{{ offer.benefits.count|pluralize }} affiché{{ offer.benefits.count|pluralize }}</div>
+                                    </div>
+                                </div>
+                                {% if can_edit_offer %}
+                                    <a href="{% url 'courses:product_edit' offer.pk %}" class="btn-crm btn-crm-outline btn-crm-sm"><i class="fa-solid fa-pen me-1 small" aria-hidden="true"></i>Modifier la page de vente</a>
+                                {% endif %}
+                            {% else %}
+                                <p class="small mb-2">Pas encore de page de vente : en attendant, le client voit une page générique.</p>
+                                {% if can_add_offer %}
+                                    <a href="{{ add_offer_url }}" class="btn-crm btn-crm-primary btn-crm-sm"><i class="fa-solid fa-plus me-1 small" aria-hidden="true"></i>Créer la page de vente</a>
+                                {% else %}
+                                    <p class="offer-disabled-note mb-0">Vous n'avez pas le droit de créer une page de vente. Demandez à un administrateur.</p>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <hr class="my-1">
+
+                    {# ② Formules de prix #}
+                    <div class="offer-step {% if active_plans %}done{% else %}todo{% endif %}">
+                        <span class="offer-step-number">{% if active_plans %}<i class="fa-solid fa-check" aria-hidden="true"></i>{% else %}2{% endif %}</span>
+                        <div class="offer-step-body">
+                            <div class="offer-step-title">Prix</div>
+                            <div class="offer-step-hint">Combien et comment le client paie : en une fois ou en plusieurs fois. Vous pouvez proposer plusieurs formules.</div>
+                            {% if plans %}
+                                <div class="d-flex flex-column gap-2 mb-3">
+                                    {% for plan in plans %}
+                                    <div class="plan-row">
+                                        <div>
+                                            <div class="plan-name">{{ plan.name }}
+                                                {% if plan.is_active %}<span class="pill good ms-1"><span class="dot"></span>En vente</span>
+                                                {% else %}<span class="pill neutral ms-1"><span class="dot"></span>Masquée</span>{% endif %}
+                                            </div>
+                                            <div class="plan-terms">{{ plan.description_text }}</div>
+                                        </div>
+                                        {% if can_edit_plan %}<a href="{% url 'plans:edit' plan.pk %}" class="btn-crm btn-crm-outline btn-crm-sm">Modifier</a>{% endif %}
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% if not active_plans %}<p class="small mb-2">Aucune formule n'est en vente : le lien de paiement ne propose rien à acheter.</p>{% endif %}
+                            {% else %}
+                                <p class="small mb-2">Aucun prix pour l'instant : ajoutez au moins une formule pour pouvoir vendre.</p>
+                            {% endif %}
+                            {% if can_add_plan %}
+                                <a href="{{ add_plan_url }}" class="btn-crm {% if active_plans %}btn-crm-outline{% else %}btn-crm-primary{% endif %} btn-crm-sm"><i class="fa-solid fa-plus me-1 small" aria-hidden="true"></i>Ajouter un prix</a>
+                            {% elif not plans %}
+                                <p class="offer-disabled-note mb-0">Vous n'avez pas le droit d'ajouter un prix. Demandez à un administrateur.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <hr class="my-1">
+
+                    {# ③ Lien de paiement #}
+                    <div class="offer-step {% if readiness.ready %}done{% elif active_plans %}todo{% endif %}">
+                        <span class="offer-step-number">{% if readiness.ready %}<i class="fa-solid fa-check" aria-hidden="true"></i>{% else %}3{% endif %}</span>
+                        <div class="offer-step-body">
+                            <div class="offer-step-title">Lien de paiement</div>
+                            <div class="offer-step-hint">À partager avec vos clients (WhatsApp, e-mail…) ou à mettre sur votre site.</div>
+                            {% if active_plans %}
+                                <div class="link-field mb-2" style="width:100%;">
+                                    <span id="checkout-link" style="flex:1;">{{ checkout_url }}</span>
+                                    <button type="button" class="btn-crm btn-crm-outline btn-crm-sm js-copy" data-copy-target="checkout-link">Copier le lien</button>
+                                </div>
+                                <a href="{{ checkout_url }}" target="_blank" rel="noopener" class="btn-crm btn-crm-outline btn-crm-sm">
+                                    <i class="fa-solid fa-arrow-up-right-from-square me-1 small" aria-hidden="true"></i>Ouvrir la page comme un client
+                                </a>
+                                {% if not offer %}<p class="small text-muted mt-2 mb-0">Le lien fonctionne déjà, mais avec la page générique tant que l'étape 1 n'est pas faite.</p>{% endif %}
+                            {% else %}
+                                <p class="offer-disabled-note mb-0">Le lien sera disponible dès qu'un prix sera en vente (étape 2).</p>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
-                {% if course.description %}
-                    <p class="text-dark small mt-3 mb-0">{{ course.description }}</p>
-                {% endif %}
             </div>
 
             <div class="crm-card p-0 overflow-hidden border-0 shadow-sm">
-                <div class="p-4 border-bottom bg-white d-flex justify-content-between align-items-center">
-                    <h5 class="fw-bold mb-0">Activité d'inscription récente</h5>
+                <div class="p-4 border-bottom bg-white d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                    <div>
+                        <h5 class="fw-bold mb-1">Élèves ayant accès</h5>
+                        <p class="small text-muted mb-0">{{ active_enrollment_count }} élève{{ active_enrollment_count|pluralize }} peu{{ active_enrollment_count|pluralize:"t,vent" }} ouvrir cette formation dans ClickFunnels.</p>
+                    </div>
                     <a href="{% url 'enrollments:new' %}?course_id={{ course.cf_course_id }}" class="btn-crm btn-crm-primary btn-crm-sm">
-                        <i class="fa-solid fa-user-plus me-1 small" aria-hidden="true"></i>Inscrire un étudiant
+                        <i class="fa-solid fa-user-plus me-1 small" aria-hidden="true"></i>Donner l'accès à un client
                     </a>
                 </div>
                 {% if recent_enrollments %}
                     <div class="table-wrap" style="border:none;border-radius:0;">
                         <table>
                             <thead>
-                                <tr><th>Étudiant</th><th>Statut</th><th>Date</th></tr>
+                                <tr><th>Client</th><th>Accès</th><th>Depuis le</th></tr>
                             </thead>
                             <tbody>
                                 {% for enr in recent_enrollments %}
@@ -91,10 +132,10 @@
                                     </td>
                                     <td>
                                         {% if enr.status == "SUCCESS" %}
-                                            {% if enr.cf_suspended %}<span class="pill critical"><span class="dot"></span>Suspendu</span>
-                                            {% else %}<span class="pill good"><span class="dot"></span>Actif</span>{% endif %}
+                                            {% if enr.cf_suspended %}<span class="pill critical"><span class="dot"></span>Accès suspendu</span>
+                                            {% else %}<span class="pill good"><span class="dot"></span>Accès ouvert</span>{% endif %}
                                         {% else %}
-                                            <span class="pill warn"><span class="dot"></span>Échec</span>
+                                            <span class="pill warn"><span class="dot"></span>Accès non ouvert (erreur)</span>
                                         {% endif %}
                                     </td>
                                     <td class="cell-sub">{{ enr.created_at|date:"d M Y" }}</td>
@@ -105,37 +146,41 @@
                     </div>
                 {% else %}
                     <div class="text-center px-4 py-5">
-                        <i class="fa-solid fa-clipboard-list text-muted opacity-25 fs-1 mb-3" aria-hidden="true"></i>
-                        <p class="text-muted small mb-0">Aucune activité d'inscription trouvée pour cette formation.</p>
+                        <i class="fa-solid fa-user-graduate text-muted opacity-25 fs-1 mb-3" aria-hidden="true"></i>
+                        <p class="text-muted small mb-0">Personne n'a encore accès à cette formation. L'accès est donné automatiquement après un paiement, ou à la main avec le bouton ci-dessus.</p>
                     </div>
                 {% endif %}
             </div>
         </div>
 
-        <!-- Sidebar -->
         <div class="col-lg-4">
             <div class="crm-card border-0 shadow-sm">
-                <h6 class="text-uppercase text-muted fw-bold small mb-4">Statistiques</h6>
+                <h6 class="text-uppercase text-muted fw-bold small mb-3">Résumé</h6>
                 <div class="kv">
-                    <div class="kv-row"><span>Inscrits actifs</span><span class="fw-bold">{{ active_enrollment_count }}</span></div>
-                    <div class="kv-row"><span>Tentatives totales</span><span>{{ total_attempts }}</span></div>
-                    <div class="kv-row">
-                        <span>Taux de réussite</span>
-                        <span>{% if success_rate is not None %}{{ success_rate }}%{% else %}—{% endif %}</span>
-                    </div>
+                    <div class="kv-row"><span>État</span><span>{% if readiness.ready %}<span class="pill good"><span class="dot"></span>{{ readiness.label }}</span>{% else %}<span class="pill warn"><span class="dot"></span>{{ readiness.label }}</span>{% endif %}</span></div>
+                    <div class="kv-row"><span>Prix en vente</span><span>{{ active_plans|length }}</span></div>
+                    <div class="kv-row"><span>Élèves avec accès</span><span>{{ active_enrollment_count }}</span></div>
                 </div>
+                {% if course.description %}<p class="small text-muted mt-3 mb-0">{{ course.description }}</p>{% endif %}
             </div>
 
-            <!-- Debug Data: native <details> — expand/collapse works with no
-                 JavaScript at all (not dependent on Bootstrap's collapse JS) -->
             <details class="crm-card border-0 shadow-sm p-0 overflow-hidden">
                 <summary class="p-3 fw-bold small text-uppercase text-muted">
-                    <i class="fa-solid fa-bug me-2 opacity-50" aria-hidden="true"></i> Métadonnées
+                    <i class="fa-solid fa-screwdriver-wrench me-2 opacity-50" aria-hidden="true"></i>Détails techniques
                 </summary>
-                <div class="bg-light border-top p-3">
+                <div class="border-top p-3">
+                    <div class="kv mb-3">
+                        <div class="kv-row"><span>ID ClickFunnels</span><span>{{ course.cf_course_id }}</span></div>
+                        <div class="kv-row"><span>Espace de travail</span><span>{{ course.workspace_id|default:"—" }}</span></div>
+                        <div class="kv-row"><span>Identifiant du lien</span><span>{{ course.slug }}</span></div>
+                        <div class="kv-row"><span>Dernière importation</span><span>il y a {{ course.updated_at|timesince }}</span></div>
+                    </div>
+                    {% if admin_edit_url %}
+                        <a href="{{ admin_edit_url }}" target="_blank" rel="noopener" class="btn-crm btn-crm-outline btn-crm-sm mb-3">Modifier dans l'administration Django</a>
+                    {% endif %}
                     <pre class="small m-0 p-3 bg-dark text-success rounded-3 raw-payload-block">{{ course.raw_payload|json_script:"raw-data" }}</pre>
                     <div class="mt-3 text-center">
-                        <button type="button" class="btn-crm btn-crm-outline btn-crm-sm" onclick="copyRaw()">Copier le JSON</button>
+                        <button type="button" class="btn-crm btn-crm-outline btn-crm-sm" onclick="copyRaw()">Copier les données ClickFunnels</button>
                     </div>
                 </div>
             </details>

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Provisionnement / Inscription | {{ BRAND_NAME }}{% endblock %}
+{% block title %}Accès ClickFunnels (tâches) | {{ BRAND_NAME }}{% endblock %}
 {% block content %}
-{% include "components/page_header.html" with title="Provisionnement / Inscription" subtitle="Attribution de l'accès à la formation — les appels ClickFunnels se font hors transaction, via le worker existant." %}
+{% include "operations/_tech_header.html" with title="Accès ClickFunnels (tâches)" purpose="voir les tâches automatiques qui ouvrent l'accès à la formation après un paiement, et relancer celles qui ont échoué." %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="table-container mb-4 shadow-sm border-0">
@@ -23,20 +23,18 @@
                 {% for req in page_obj %}
                 <tr>
                     <td class="small">{{ req.contact.email }}</td>
-                    <td class="small">
-                        <a href="{% url 'operations:order_detail' req.order.reference %}" class="text-decoration-none fw-bold">{{ req.order.reference }}</a>
-                    </td>
+                    <td>{% include "operations/_sale_cell.html" with order=req.order %}</td>
                     <td class="small">{{ req.course.name }}</td>
                     <td>{% include "components/status_badge.html" with status=req.status %}</td>
                     <td class="small text-muted">{{ req.attempt_count }}</td>
                     <td class="small text-muted">{{ req.failure_category|default:"--" }}</td>
-                    <td class="small text-muted">{{ req.updated_at|date:"d M, H:i" }}</td>
+                    <td class="small text-muted">{{ req.updated_at|date:"d/m/Y H:i" }}</td>
                     <td class="text-end">
                         {% if can_retry_provisioning %}
                             {% if req.status == "FAILED" or req.status == "MANUAL_REVIEW" %}
                             {% include "components/action_menu.html" %}
                                 {% block menu_items %}
-                                    <li><a class="dropdown-item" href="{% url 'operations:provisioning_retry' req.pk %}"><i class="fa-solid fa-rotate-right me-2 small"></i>Relancer l'inscription</a></li>
+                                    <li><a class="dropdown-item" href="{% url 'operations:provisioning_retry' req.pk %}"><i class="fa-solid fa-rotate-right me-2 small" aria-hidden="true"></i>Relancer l'accès</a></li>
                                 {% endblock %}
                             {% endif %}
                         {% endif %}
@@ -45,7 +43,7 @@
                 {% endfor %}
             {% include "components/table_end.html" %}
         {% else %}
-            {% include "components/table_empty_state.html" with title="Aucune demande de provisionnement trouvée" description="Ajustez vos filtres." %}
+            {% include "components/table_empty_state.html" with title="Aucune tâche d'accès trouvée" description="Modifiez ou réinitialisez les filtres." %}
         {% endif %}
     </div>
     {% if page_obj %}{% include "components/pagination.html" with page_obj=page_obj %}{% endif %}

@@ -6,7 +6,7 @@ from .models import ClickFunnelsConfig
 from .forms import ClickFunnelsSettingsForm, TaraConfigSettingsForm, TeamSelectionForm, WorkspaceSelectionForm
 from .services import ConfigurationService
 from integrations.clickfunnels.client import ClickFunnelsClient
-from apps.payments.models import TaraConfig
+from apps.payments.models import TaraConfig, TaraWebhookEvent
 from apps.payments.services import TaraConfigService
 
 @login_required
@@ -60,21 +60,21 @@ def settings_view(request):
                 token = form.cleaned_data.pop("api_access_token", None)
                 instance = form.save(commit=False)
                 service.update_credentials(instance, token)
-                messages.success(request, "Paramètres de base enregistrés.")
+                messages.success(request, "Clé enregistrée. Cliquez maintenant sur « Tester la connexion ».")
                 return redirect("configuration:settings")
         
         elif action == "verify_token":
             if not config:
-                messages.error(request, "Enregistrez d’abord la configuration.")
+                messages.error(request, "Enregistrez d’abord votre clé d’accès ClickFunnels.")
             else:
                 try:
                     client = ClickFunnelsClient.from_configuration(config)
                     service.client = client
                     service.verify_token(config)
                     service.fetch_teams(config) # Auto-fetch teams on success
-                    messages.success(request, "Jeton vérifié et équipes chargées.")
+                    messages.success(request, "Connexion réussie ✓ — choisissez maintenant votre équipe.")
                 except Exception as e:
-                    messages.error(request, f"Le jeton d’accès API est invalide ou non autorisé. Erreur : {str(e)}")
+                    messages.error(request, f"ClickFunnels refuse cette clé d’accès. Vérifiez qu’elle a été copiée en entier, enregistrez-la à nouveau puis réessayez. (Détail : {str(e)})")
             return redirect("configuration:settings")
 
         elif action == "select_team":
@@ -90,7 +90,7 @@ def settings_view(request):
                     client = ClickFunnelsClient.from_configuration(config)
                     service.client = client
                     service.fetch_workspaces(config, team_id)
-                    messages.success(request, "Équipe sélectionnée et espaces de travail chargés.")
+                    messages.success(request, "Équipe choisie — choisissez maintenant votre espace de travail.")
                 except Exception as e:
                     messages.error(request, str(e))
             return redirect("configuration:settings")
@@ -103,16 +103,20 @@ def settings_view(request):
             if form.is_valid():
                 try:
                     service.select_workspace(config, form.cleaned_data["workspace_id"])
-                    messages.success(request, f"L’espace de travail « {config.workspace_name} » est maintenant actif.")
+                    messages.success(request, f"C’est fait ✓ — ClickFunnels est connecté à « {config.workspace_name} ».")
                 except Exception as e:
                     messages.error(request, str(e))
             return redirect("configuration:settings")
 
+    token_ok = bool(config and config.validation_status == ClickFunnelsConfig.ValidationStatus.VALID)
     context = {
         "config": config,
         "token_form": token_form,
         "team_form": team_form,
         "workspace_form": workspace_form,
+        # Display-only flags for the plain-language status banner.
+        "token_ok": token_ok,
+        "connected": bool(token_ok and config.workspace_subdomain),
     }
     return render(request, "configuration/settings.html", context)
 
@@ -141,7 +145,7 @@ def tara_settings_view(request):
             instance = form.save(commit=False)
             service.update_credentials(instance, api_key, webhook_secret)
             instance.save()
-            messages.success(request, "Paramètres Tara enregistrés.")
+            messages.success(request, "Connexion Tara enregistrée.")
             return redirect("configuration:tara_settings")
         messages.error(request, "Merci de corriger les erreurs ci-dessous.")
 
@@ -153,6 +157,9 @@ def tara_settings_view(request):
         "webhook_url": webhook_url,
         "api_key_configured": bool(config.api_key) if config else False,
         "webhook_secret_configured": bool(config.webhook_secret) if config else False,
+        # Display-only: Tara offers no credential test, so the last notification
+        # received is the one honest signal that the connection works.
+        "last_tara_notification": TaraWebhookEvent.objects.order_by("-received_at").values_list("received_at", flat=True).first(),
     }
     return render(request, "configuration/tara_settings.html", context)
 
@@ -171,7 +178,7 @@ def verify_connection(request):
                 service.fetch_teams(config)
                 if config.team_id:
                     service.fetch_workspaces(config, config.team_id)
-                messages.success(request, "Passerelle d’intégration entièrement actualisée.")
+                messages.success(request, "Connexion ClickFunnels actualisée.")
             except Exception as e:
                 messages.error(request, str(e))
     return redirect("configuration:settings")

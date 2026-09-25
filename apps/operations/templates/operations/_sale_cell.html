@@ -1,0 +1,3 @@
+{% load status_labels %}{% comment %}Vente #B40D3341 + client name — pass `order`.{% endcomment %}
+<a href="{% url 'operations:order_detail' order.reference %}" class="text-decoration-none small fw-bold">Vente {{ order.reference|short_ref }}</a>
+<div class="text-muted small">{% if order.customer.first_name or order.customer.last_name %}{{ order.customer.first_name }} {{ order.customer.last_name }}{% else %}{{ order.customer.email }}{% endif %}</div>

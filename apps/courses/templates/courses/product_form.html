@@ -1,146 +1,159 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{{ title }} | {{ BRAND_NAME }}{% endblock %}
 
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/offres.css' %}">{% endblock %}
+
 {% block content %}
-{% include "components/page_header.html" with title=title subtitle="La page commerciale de ce cours — titre, visuel et bénéfices affichés sur le lien de paiement public." %}
+{% include "components/page_header.html" with title=title subtitle="Ce que le client voit en ouvrant le lien de paiement. Remplissez, enregistrez : c'est en ligne tout de suite." %}
 
 <div class="container-fluid px-4 fade-in pb-5">
     <div class="row">
         <div class="col-lg-8">
             <div class="crm-card">
-                <form method="post" id="product-form">
+                <form method="post" enctype="multipart/form-data" id="product-form" novalidate>
                     {% csrf_token %}
+                    {% if form.non_field_errors %}<div class="alert alert-danger small">{{ form.non_field_errors|striptags }}</div>{% endif %}
 
-                    <div class="mb-4 p-3 rounded-3" style="background:var(--accent-soft);border:1px solid var(--accent-soft-border);">
-                        <label class="form-label small fw-bold text-uppercase mb-1" for="{{ form.course.id_for_label }}">
-                            <i class="fa-solid fa-link me-1" aria-hidden="true"></i>Cours associé
-                        </label>
-                        {{ form.course }}
-                        <div class="form-text small mt-1">Un seul produit par cours — créer un second produit pour ce cours n'est pas permis.</div>
-                        {% if form.course.errors %}<div class="form-error">{{ form.course.errors|striptags }}</div>{% endif %}
+                    <div class="form-section">
+                        <div class="form-section-title">Formation</div>
+                        {% if form.course %}
+                            <div class="form-section-hint">Choisissez la formation pour laquelle vous créez cette page.</div>
+                            {{ form.course }}
+                            {% if form.course.errors %}<div class="form-error">{{ form.course.errors|striptags }}</div>{% endif %}
+                        {% else %}
+                            <p class="fw-bold mb-0">{{ course.name }}</p>
+                        {% endif %}
                     </div>
 
-                    <div class="row g-3">
-                        <div class="col-md-8">
-                            <label class="form-label small fw-bold text-uppercase text-muted letter-spacing-wide" for="{{ form.title.id_for_label }}">Titre</label>
-                            {{ form.title }}
-                            {% if form.title.errors %}<div class="form-error">{{ form.title.errors|striptags }}</div>{% endif %}
+                    <div class="form-section">
+                        <div class="form-section-title">Ce que voit le client</div>
+                        <div class="form-section-hint">Le titre et la phrase d'accroche en haut de la page de paiement.</div>
+                        <div class="row g-3">
+                            <div class="col-md-8">
+                                <label class="form-field-label" for="{{ form.title.id_for_label }}">{{ form.title.label }}</label>
+                                {{ form.title }}
+                                {% if form.title.errors %}<div class="form-error">{{ form.title.errors|striptags }}</div>{% endif %}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-field-label" for="{{ form.language.id_for_label }}">{{ form.language.label }}</label>
+                                {{ form.language }}
+                            </div>
+                            <div class="col-12">
+                                <label class="form-field-label" for="{{ form.subtitle.id_for_label }}">{{ form.subtitle.label }}</label>
+                                {{ form.subtitle }}
+                            </div>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label small fw-bold text-uppercase text-muted letter-spacing-wide" for="{{ form.language.id_for_label }}">Langue</label>
-                            {{ form.language }}
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label small fw-bold text-uppercase text-muted letter-spacing-wide" for="{{ form.subtitle.id_for_label }}">Sous-titre</label>
-                            {{ form.subtitle }}
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold text-uppercase text-muted letter-spacing-wide" for="{{ form.mockup_image.id_for_label }}">Visuel (URL ou chemin statique)</label>
-                            {{ form.mockup_image }}
-                            {% if form.mockup_image.errors %}<div class="form-error">{{ form.mockup_image.errors|striptags }}</div>{% endif %}
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold text-uppercase text-muted letter-spacing-wide" for="{{ form.mockup_alt.id_for_label }}">Texte alternatif du visuel</label>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-section-title">Image</div>
+                        <div class="form-section-hint">Une belle image de la formation, affichée en grand. Choisissez un fichier sur votre ordinateur ou téléphone.</div>
+                        {% if offer and offer.image_url %}
+                            <img src="{{ offer.image_url }}" alt="Image actuelle" class="image-preview d-block" id="image-preview">
+                            <div class="cell-sub mb-2">Image actuelle. Choisissez un nouveau fichier pour la remplacer.</div>
+                        {% else %}
+                            <img src="" alt="Aperçu de l'image choisie" class="image-preview d-block" id="image-preview" hidden>
+                        {% endif %}
+                        <label class="form-field-label" for="{{ form.image.id_for_label }}">{{ form.image.label }}</label>
+                        <input type="file" name="{{ form.image.html_name }}" id="{{ form.image.id_for_label }}" class="form-control" accept="image/jpeg,image/png,image/webp">
+                        <div class="form-text small">{{ form.image.help_text }}</div>
+                        {% if form.image.errors %}<div class="form-error">{{ form.image.errors|striptags }}</div>{% endif %}
+                        <div class="mt-3">
+                            <label class="form-field-label" for="{{ form.mockup_alt.id_for_label }}">{{ form.mockup_alt.label }}</label>
                             {{ form.mockup_alt }}
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold text-uppercase text-muted letter-spacing-wide" for="{{ form.slug.id_for_label }}">Identifiant interne</label>
-                            {{ form.slug }}
-                            <div class="form-text small">{{ form.slug.help_text }}</div>
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label small fw-bold text-uppercase text-muted letter-spacing-wide" for="{{ form.highlights.id_for_label }}">Points forts</label>
-                            {{ form.highlights }}
-                            <div class="form-text small">{{ form.highlights.help_text }}</div>
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label small fw-bold text-uppercase text-muted letter-spacing-wide" for="{{ form.closing_note.id_for_label }}">Note de clôture</label>
-                            {{ form.closing_note }}
+                            <div class="form-text small">Facultatif. Lu à voix haute par les lecteurs d'écran.</div>
                         </div>
                     </div>
 
-                    <hr class="my-4">
-                    <h5 class="fw-bold mb-1">Bénéfices affichés</h5>
-                    <p class="small text-muted mb-3">Un bonus est mis en avant visuellement sur la page de paiement.</p>
-                    {{ formset.management_form }}
-                    <div class="table-wrap mb-3">
-                        <table>
-                            <thead>
-                                <tr><th>Titre</th><th>Description</th><th>Ordre</th><th>Bonus</th><th></th></tr>
-                            </thead>
-                            <tbody>
-                                {% for bf in formset %}
-                                <tr>
-                                    <td>{{ bf.id }}{{ bf.title }}{% if bf.title.errors %}<div class="form-error">{{ bf.title.errors|striptags }}</div>{% endif %}</td>
-                                    <td>{{ bf.description }}</td>
-                                    <td style="width:90px;">{{ bf.display_order }}</td>
-                                    <td class="text-center" style="width:70px;">{{ bf.is_bonus }}</td>
-                                    <td class="text-center" style="width:70px;">
-                                        {% if bf.instance.pk %}<label class="small text-danger">{{ bf.DELETE }} Suppr.</label>{% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                    <div class="form-section">
+                        <div class="form-section-title">Points forts</div>
+                        <div class="form-section-hint">De courtes phrases qui rassurent le client, affichées à côté de l'image.</div>
+                        <label class="form-field-label" for="{{ form.highlights.id_for_label }}">{{ form.highlights.label }}</label>
+                        {{ form.highlights }}
+                        <div class="form-text small">Exemple : « Accès à vie », « À votre rythme », « Aucune connaissance préalable ».</div>
                     </div>
 
-                    <div class="mt-5 d-flex gap-2 justify-content-end">
-                        <a href="{% url 'courses:product_list' %}" class="btn-crm btn-crm-outline">Annuler</a>
-                        <button type="submit" class="btn-crm btn-crm-primary px-5" id="product-form-submit">Enregistrer le produit</button>
+                    <div class="form-section">
+                        <div class="form-section-title">Bénéfices</div>
+                        <div class="form-section-hint">Ce que contient la formation. Ils s'affichent dans cet ordre ; utilisez les flèches pour les déplacer. Un bonus est mis en valeur.</div>
+                        {{ formset.management_form }}
+                        {% if formset.non_form_errors %}<div class="form-error mb-2">{{ formset.non_form_errors|striptags }}</div>{% endif %}
+                        <div id="benefit-list">
+                            {% for bf in formset %}
+                            <div class="benefit-card" data-benefit-card {% if bf.instance.pk %}data-existing="1"{% endif %}>
+                                {{ bf.id }}{{ bf.offer }}
+                                <input type="hidden" name="{{ bf.ORDER.html_name }}" value="{{ bf.ORDER.value|default_if_none:'' }}" data-order-input>
+                                <div class="benefit-card-head">
+                                    <span class="benefit-position">Bénéfice <span data-position>{{ forloop.counter }}</span></span>
+                                    <span class="benefit-move">
+                                        <button type="button" class="btn-crm btn-crm-outline btn-crm-sm" data-move="up" aria-label="Monter ce bénéfice"><i class="fa-solid fa-arrow-up" aria-hidden="true"></i></button>
+                                        <button type="button" class="btn-crm btn-crm-outline btn-crm-sm" data-move="down" aria-label="Descendre ce bénéfice"><i class="fa-solid fa-arrow-down" aria-hidden="true"></i></button>
+                                    </span>
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-12">
+                                        <label class="form-field-label" for="{{ bf.title.id_for_label }}">{{ bf.title.label }}</label>
+                                        {{ bf.title }}
+                                        {% if bf.title.errors %}<div class="form-error">{{ bf.title.errors|striptags }}</div>{% endif %}
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-field-label" for="{{ bf.description.id_for_label }}">{{ bf.description.label }}</label>
+                                        {{ bf.description }}
+                                        {% if bf.description.errors %}<div class="form-error">{{ bf.description.errors|striptags }}</div>{% endif %}
+                                    </div>
+                                    <div class="col-12 d-flex gap-4 flex-wrap">
+                                        <div class="form-check">
+                                            {{ bf.is_bonus }}
+                                            <label class="form-check-label small" for="{{ bf.is_bonus.id_for_label }}">{{ bf.is_bonus.label }}</label>
+                                        </div>
+                                        {% if bf.instance.pk %}
+                                        <div class="form-check">
+                                            {{ bf.DELETE }}
+                                            <label class="form-check-label small text-danger" for="{{ bf.DELETE.id_for_label }}">Supprimer ce bénéfice</label>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <p class="cell-sub mb-0">Les cases vides sont ignorées. Besoin de plus de bénéfices ? Enregistrez : de nouvelles cases apparaissent.</p>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-section-title">Message de fin</div>
+                        <label class="form-field-label" for="{{ form.closing_note.id_for_label }}">{{ form.closing_note.label }}</label>
+                        {{ form.closing_note }}
+                    </div>
+
+                    <div class="mt-4 d-flex gap-2 justify-content-end flex-wrap">
+                        {% if course %}
+                            <a href="{% url 'courses:detail' course.cf_course_id %}" class="btn-crm btn-crm-outline">Annuler</a>
+                        {% else %}
+                            <a href="{% url 'courses:list' %}" class="btn-crm btn-crm-outline">Annuler</a>
+                        {% endif %}
+                        <button type="submit" class="btn-crm btn-crm-primary px-5" id="product-form-submit">Enregistrer la page de vente</button>
                     </div>
                 </form>
             </div>
         </div>
 
         <div class="col-lg-4">
-            {% if offer %}
+            {% if checkout_url %}
             <div class="crm-card border-0 shadow-sm">
-                <h6 class="text-uppercase text-muted fw-bold small mb-3 letter-spacing-wide">Lien de paiement</h6>
-                <div class="link-field" style="width:100%;">
-                    <span id="product-checkout-link" style="flex:1;">{{ checkout_url }}</span>
-                    <button type="button" class="btn-crm btn-crm-outline btn-crm-sm js-copy" data-copy-target="product-checkout-link">Copier</button>
-                </div>
-                <div class="helper">Utilisable directement depuis un site externe — ouvre ce produit et ses plans actifs.</div>
-            </div>
-
-            <div class="crm-card border-0 shadow-sm">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6 class="text-uppercase text-muted fw-bold small mb-0 letter-spacing-wide">Plans de paiement</h6>
-                    {% if can_add_plan %}
-                        <a href="{% url 'plans:add' %}?course_id={{ offer.course.pk }}" class="btn-crm btn-crm-outline btn-crm-sm">
-                            <i class="fa-solid fa-plus small" aria-hidden="true"></i>
-                        </a>
-                    {% endif %}
-                </div>
-                {% if plans %}
-                    <div class="d-flex flex-column gap-2">
-                        {% for plan in plans %}
-                        <div class="plan-row">
-                            <div>
-                                <div class="plan-name">{{ plan.name }} {% if not plan.is_active %}<span class="pill neutral">Inactif</span>{% endif %}</div>
-                                <div class="plan-terms">
-                                    {% if plan.installment_count == 1 %}Paiement unique · {{ plan.installment_amount }} {{ plan.currency }}
-                                    {% else %}{{ plan.installment_count }} × {{ plan.installment_amount }} {{ plan.currency }}{% endif %}
-                                </div>
-                            </div>
-                            {% if can_edit_plan %}<a href="{% url 'plans:edit' plan.pk %}" class="btn-crm btn-crm-outline btn-crm-sm">Modifier</a>{% endif %}
-                        </div>
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    <p class="text-muted small fst-italic mb-2">Aucun plan pour ce cours.</p>
-                    {% if can_add_plan %}
-                        <a href="{% url 'plans:add' %}?course_id={{ offer.course.pk }}" class="btn-crm btn-crm-primary btn-crm-sm w-100">Créer un plan</a>
-                    {% endif %}
-                {% endif %}
-            </div>
-            {% else %}
-            <div class="p-3 rounded-3" style="background:var(--accent-soft);border:1px solid var(--accent-soft-border);">
-                <h6 class="fw-bold mb-1"><i class="fa-solid fa-circle-info me-2" aria-hidden="true"></i>Remarque</h6>
-                <p class="small mb-0">Enregistrez d'abord le produit — vous pourrez ensuite lui associer un ou plusieurs plans de paiement, et retrouver ici son lien de paiement, depuis cette même page.</p>
+                <h6 class="text-uppercase text-muted fw-bold small mb-2">Aperçu</h6>
+                <p class="small text-muted">Voyez la page exactement comme vos clients (dernière version enregistrée).</p>
+                <a href="{{ checkout_url }}" target="_blank" rel="noopener" class="btn-crm btn-crm-outline btn-crm-sm w-100">
+                    <i class="fa-solid fa-arrow-up-right-from-square me-1 small" aria-hidden="true"></i>Ouvrir la page de paiement
+                </a>
             </div>
             {% endif %}
+            <div class="p-3 rounded-3" style="background:var(--accent-soft);border:1px solid var(--accent-soft-border);">
+                <h6 class="fw-bold mb-1"><i class="fa-solid fa-circle-info me-2" aria-hidden="true"></i>Bon à savoir</h6>
+                <p class="small mb-0">Les prix se règlent à part, sur la page de l'offre (« Ajouter un prix »). Modifier cette page ne change rien aux ventes déjà faites.</p>
+            </div>
         </div>
     </div>
 </div>
@@ -148,10 +161,60 @@
 
 {% block extra_js %}
 <script>
-    document.getElementById("product-form").addEventListener("submit", function () {
+(function () {
+    var form = document.getElementById("product-form");
+    var list = document.getElementById("benefit-list");
+
+    function cards() { return Array.prototype.slice.call(list.querySelectorAll("[data-benefit-card]")); }
+    function isFilled(card) {
+        return card.dataset.existing === "1" || Array.prototype.some.call(
+            card.querySelectorAll("input[type=text], textarea"), function (el) { return el.value.trim() !== ""; }
+        );
+    }
+    function renumber() {
+        cards().forEach(function (card, index) { card.querySelector("[data-position]").textContent = index + 1; });
+    }
+
+    list.addEventListener("click", function (e) {
+        var btn = e.target.closest("[data-move]");
+        if (!btn) return;
+        var card = btn.closest("[data-benefit-card]");
+        if (btn.dataset.move === "up" && card.previousElementSibling) {
+            list.insertBefore(card, card.previousElementSibling);
+        } else if (btn.dataset.move === "down" && card.nextElementSibling) {
+            list.insertBefore(card.nextElementSibling, card);
+        }
+        renumber();
+    });
+
+    list.addEventListener("change", function (e) {
+        if (e.target.name && e.target.name.slice(-7) === "-DELETE") {
+            e.target.closest("[data-benefit-card]").classList.toggle("is-deleted", e.target.checked);
+        }
+    });
+
+    var fileInput = document.getElementById("{{ form.image.id_for_label }}");
+    var preview = document.getElementById("image-preview");
+    if (fileInput && preview) {
+        fileInput.addEventListener("change", function () {
+            if (fileInput.files && fileInput.files[0]) {
+                preview.src = URL.createObjectURL(fileInput.files[0]);
+                preview.hidden = false;
+            }
+        });
+    }
+
+    form.addEventListener("submit", function () {
+        // Display order = position on screen. Empty extra cards get no
+        // position so they stay "unchanged" and are ignored by the server.
+        var position = 1;
+        cards().forEach(function (card) {
+            card.querySelector("[data-order-input]").value = isFilled(card) ? position++ : "";
+        });
         var btn = document.getElementById("product-form-submit");
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Enregistrement…';
     });
+})();
 </script>
 {% endblock %}

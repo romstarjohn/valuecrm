@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
-from django.urls import path, include
+from django.urls import path, include, re_path
+from django.views.static import serve as serve_media
 from django.conf import settings
 from ninja import NinjaAPI
 from ninja.security import django_auth
@@ -67,6 +68,10 @@ urlpatterns = [
     path("paiement/", include("apps.payments.urls")),
     path("admin/", admin.site.urls),
     path("api/", api.urls),
+    # Staff-uploaded sales-page images. Served by Django on purpose so uploads
+    # work in production without an extra Apache Alias; traffic is a handful
+    # of images on the public checkout. Move to an Apache/CDN alias if that grows.
+    re_path(r"^media/(?P<path>.*)$", lambda request, path: serve_media(request, path, document_root=settings.MEDIA_ROOT)),
 ]
 
 handler403 = "shared.error_views.permission_denied"

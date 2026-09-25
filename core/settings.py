@@ -123,6 +123,10 @@ STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+# Files uploaded by staff (sales-page images). Served by Django itself, see core/urls.py.
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
 # /login/ — the portal's own sign-in, used by every @login_required staff
 # view. /admin/login/ still exists separately for superusers only (see
 # shared/admin_site.py, AGENT.md) — never the default for team members.

@@ -1,0 +1,88 @@
+/* Ventes & Clients pages (docs/UI_VOCABULARY.md) — built only from the
+   existing tokens (tokens.css) and components (comptoir-components.css). */
+
+/* ---------- État tabs on the Ventes list ---------- */
+.sale-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+.sale-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    background: var(--color-surface);
+    color: var(--ink-soft);
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+}
+.sale-tab:hover { color: var(--ink); border-color: var(--ink-faint); }
+.sale-tab.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.sale-tab-attention:not(.active) { border-color: var(--critical-border); color: var(--critical); }
+.sale-tab-count {
+    min-width: 20px;
+    padding: 0 6px;
+    border-radius: var(--radius-pill);
+    background: var(--critical);
+    color: var(--color-text-inverse);
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.sale-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+}
+.sale-more-filters summary { cursor: pointer; }
+
+.sale-row-attention td:first-child { box-shadow: inset 3px 0 0 var(--critical); }
+
+/* ---------- Vente page ---------- */
+.sale-hero {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2) 24px;
+}
+.sale-hero-text { flex: 1; min-width: 240px; }
+.sale-hero-text p { margin: 6px 0 0; color: var(--ink-soft); }
+.sale-hero.attention { border-left: 4px solid var(--critical); }
+
+.sale-section-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0 0 4px;
+}
+.sale-section-help {
+    font-size: 13px;
+    color: var(--ink-faint);
+    margin: 0 0 12px;
+}
+
+.sale-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-soft);
+}
+.sale-line:last-child { border-bottom: none; }
+.sale-line-main { flex: 1; min-width: 200px; }
+.sale-line-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.sale-technical summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--ink-soft);
+}
+.sale-technical .table-wrap { margin-top: 12px; }

@@ -14,7 +14,7 @@
     {% for product in products %}
     <a class="shop-card" href="{% url 'payments:checkout_start' product.course.slug %}">
         <div class="shop-card-art">
-            <img src="{{ product.offer.image_url }}" alt="{{ product.offer.mockup_alt }}" width="1536" height="1024" loading="lazy">
+            {% if product.offer.image_url %}<img src="{{ product.offer.image_url }}" alt="{{ product.offer.mockup_alt }}" width="1536" height="1024" loading="lazy">{% endif %}
         </div>
         <div class="shop-card-body">
             <h2>{{ product.offer.title }}</h2>

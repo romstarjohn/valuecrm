@@ -1,65 +1,59 @@
+{% load access_labels %}
 <div>
-    <div class="so-section-title">Statut</div>
-    <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
-        {% if attempt.status == "SUCCESS" %}
-            {% if attempt.cf_suspended %}<span class="pill critical"><span class="dot"></span>Suspendu</span>
-            {% else %}<span class="pill good"><span class="dot"></span>Actif</span>{% endif %}
-        {% else %}
-            <span class="pill warn"><span class="dot"></span>Échec</span>
-        {% endif %}
-    </div>
+    <div class="so-section-title">Accès</div>
+    <div class="d-flex align-items-center gap-2 flex-wrap mb-2">{% include "enrollments/_access_pill.html" %}</div>
     <div class="kv">
-        <div class="kv-row"><span>ID inscription CF</span><span>{{ attempt.cf_enrollment_id|default:"—" }}</span></div>
-        <div class="kv-row"><span>Traité le</span><span>{{ attempt.created_at|date:"d M Y, H:i" }}</span></div>
-        {% if order_reference %}<div class="kv-row"><span>Commande</span><span>{{ order_reference }}</span></div>{% endif %}
+        <div class="kv-row"><span>Depuis le</span><span>{{ attempt.created_at|date:"d/m/Y à H:i" }}</span></div>
+        {% if attempt.cf_suspended and attempt.cf_suspended_at %}<div class="kv-row"><span>Suspendu le</span><span>{{ attempt.cf_suspended_at|date:"d/m/Y" }}</span></div>{% endif %}
     </div>
-    {% if attempt.error_log %}
-        <div class="mt-2">
-            <div class="so-section-title">Erreur</div>
-            <div class="bg-danger bg-opacity-10 text-danger p-2 rounded-3 font-monospace small">{{ attempt.error_log }}</div>
+    {% if attempt.status != "SUCCESS" %}
+        <div class="mt-2 p-2 rounded-3 small" style="background:var(--warn-soft);color:var(--warn);">
+            <i class="fa-solid fa-circle-exclamation me-1" aria-hidden="true"></i>{{ attempt.error_log|access_error_plain|default:"L'accès n'a pas pu être ouvert." }}
         </div>
     {% endif %}
 </div>
 
 <div>
-    <div class="so-section-title">Actions</div>
+    <div class="so-section-title">Que faire ?</div>
     <div class="d-flex flex-wrap gap-2">
-        <a href="{% url 'enrollments:new' %}?email={{ attempt.contact.email }}&course_id={{ attempt.course.cf_course_id }}" class="btn-crm btn-crm-outline btn-crm-sm">
-            <i class="fa-solid fa-rotate me-1 small" aria-hidden="true"></i>Réessayer l'inscription
-        </a>
+        {% if attempt.status != "SUCCESS" %}
+            <a href="{% url 'enrollments:new' %}?email={{ attempt.contact.email|urlencode }}&course_id={{ attempt.course.cf_course_id|urlencode }}" class="btn-crm btn-crm-primary btn-crm-sm">
+                <i class="fa-solid fa-rotate me-1 small" aria-hidden="true"></i>Réessayer d'ouvrir l'accès
+            </a>
+        {% endif %}
         {% if attempt.status == "SUCCESS" and attempt.cf_enrollment_id %}
             {% if attempt.cf_suspended %}
                 {% if can_resume_enrollment %}
-                    <a href="{% url 'enrollments:resume' attempt.pk %}" class="btn-crm btn-crm-outline btn-crm-sm text-success">
-                        <i class="fa-solid fa-play me-1 small" aria-hidden="true"></i>Reprendre
+                    <a href="{% url 'enrollments:resume' attempt.pk %}" class="btn-crm btn-crm-outline btn-crm-sm">
+                        <i class="fa-solid fa-play me-1 small" aria-hidden="true"></i>Rétablir l'accès
                     </a>
                 {% endif %}
             {% else %}
                 {% if can_freeze_enrollment %}
-                    <a href="{% url 'enrollments:freeze' attempt.pk %}" class="btn-crm btn-crm-outline btn-crm-sm text-warning">
-                        <i class="fa-solid fa-pause me-1 small" aria-hidden="true"></i>Suspendre
+                    <a href="{% url 'enrollments:freeze' attempt.pk %}" class="btn-crm btn-crm-outline btn-crm-sm">
+                        <i class="fa-solid fa-pause me-1 small" aria-hidden="true"></i>Suspendre l'accès
                     </a>
                 {% endif %}
             {% endif %}
         {% endif %}
         {% if can_view_order and order_reference %}
             <a href="{% url 'operations:order_detail' order_reference %}" class="btn-crm btn-crm-outline btn-crm-sm">
-                <i class="fa-solid fa-arrow-up-right-from-square me-1 small" aria-hidden="true"></i>Voir la commande
+                <i class="fa-solid fa-receipt me-1 small" aria-hidden="true"></i>Voir la vente
             </a>
         {% endif %}
     </div>
 </div>
 
 <div>
-    <div class="so-section-title">Contact &amp; formation</div>
+    <div class="so-section-title">Client &amp; formation</div>
     <div class="kv">
-        <div class="kv-row"><span>Contact</span><span>{{ attempt.contact.email }}</span></div>
+        <div class="kv-row"><span>Client</span><span>{{ attempt.contact.email }}</span></div>
         <div class="kv-row"><span>Formation</span><span>{{ attempt.course.name }}</span></div>
     </div>
 </div>
 
 <div>
     <a href="{% url 'enrollments:detail' attempt.pk %}" class="btn-crm btn-crm-outline btn-crm-sm w-100">
-        <i class="fa-solid fa-arrow-up-right-from-square me-2 small" aria-hidden="true"></i>Voir la fiche complète
+        <i class="fa-solid fa-arrow-up-right-from-square me-2 small" aria-hidden="true"></i>Ouvrir la fiche de l'accès
     </a>
 </div>

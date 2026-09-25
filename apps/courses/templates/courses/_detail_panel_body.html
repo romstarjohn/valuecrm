@@ -1,14 +1,13 @@
 <div>
-    <div class="so-section-title">Import ClickFunnels</div>
+    <div class="so-section-title">Formation</div>
     <div class="kv">
-        <div class="kv-row"><span>Espace de travail</span><span>{{ course.workspace_id|default:"—" }}</span></div>
-        <div class="kv-row"><span>Dernière synchro</span><span>il y a {{ course.updated_at|timesince }}</span></div>
-        <div class="kv-row"><span>Inscrits actifs</span><span>{{ active_enrollment_count }}</span></div>
+                <div class="kv-row"><span>Importée de ClickFunnels</span><span>il y a {{ course.updated_at|timesince }}</span></div>
+        <div class="kv-row"><span>Élèves avec accès</span><span>{{ active_enrollment_count }}</span></div>
     </div>
 </div>
 
 <div>
-    <div class="so-section-title">Produit &amp; plans</div>
+    <div class="so-section-title">Prix</div>
     {% if plans %}
         <div class="d-flex flex-column gap-2">
             {% for plan in plans %}
@@ -16,18 +15,18 @@
                 <div>
                     <div class="plan-name">{{ plan.name }}</div>
                     <div class="plan-terms">
-                        {% if plan.installment_count == 1 %}Paiement unique · {{ plan.installment_amount }} {{ plan.currency }}
-                        {% else %}{{ plan.installment_count }} × {{ plan.installment_amount }} {{ plan.currency }} · tous les {{ plan.installment_interval_days }} jours{% endif %}
+                        {% if plan.installment_count == 1 %}En une fois · {{ plan.installment_amount|floatformat:"0g" }} {{ plan.currency }}
+                        {% else %}{{ plan.installment_count }} × {{ plan.installment_amount|floatformat:"0g" }} {{ plan.currency }} · tous les {{ plan.installment_interval_days }} jours{% endif %}
                     </div>
                 </div>
             </div>
             {% endfor %}
         </div>
     {% else %}
-        <p class="helper mb-2">Aucun plan de paiement actif pour ce cours.</p>
+        <p class="helper mb-2">Aucun prix en vente : ajoutez-en un pour pouvoir vendre.</p>
         {% if can_add_plan %}
             <a href="{{ add_plan_url }}" class="btn-crm btn-crm-primary btn-crm-sm">
-                <i class="fa-solid fa-plus me-1 small" aria-hidden="true"></i>Créer un plan de paiement
+                <i class="fa-solid fa-plus me-1 small" aria-hidden="true"></i>Ajouter un prix
             </a>
         {% endif %}
     {% endif %}
@@ -38,14 +37,14 @@
     <div class="so-section-title">Lien de paiement</div>
     <div class="link-field" style="width:100%;">
         <span id="panel-checkout-link" style="flex:1;">{{ checkout_url }}</span>
-        <button type="button" class="btn-crm btn-crm-outline btn-crm-sm js-copy" data-copy-target="panel-checkout-link">Copier</button>
+        <button type="button" class="btn-crm btn-crm-outline btn-crm-sm js-copy" data-copy-target="panel-checkout-link">Copier le lien</button>
     </div>
-    <div class="helper">Utilisable directement depuis un site externe — ouvre ce produit et ses plans actifs.</div>
+    <div class="helper">À partager avec vos clients ou à mettre sur votre site.</div>
 </div>
 {% endif %}
 
 <div>
     <a href="{% url 'courses:detail' course.cf_course_id %}" class="btn-crm btn-crm-outline btn-crm-sm w-100">
-        <i class="fa-solid fa-arrow-up-right-from-square me-2 small" aria-hidden="true"></i>Voir la fiche complète
+        <i class="fa-solid fa-arrow-up-right-from-square me-2 small" aria-hidden="true"></i>Ouvrir l'offre
     </a>
 </div>

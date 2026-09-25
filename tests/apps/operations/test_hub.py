@@ -87,3 +87,29 @@ def test_recent_verified_payments_shown(staff_client):
 
     response = staff_client.get(HUB_URL)
     assert len(response.context["recent_verified_payments"]) == 1
+
+
+# --- "Outils techniques" (plain-language landing page) ---
+
+def test_hub_explains_every_technical_tool(staff_client):
+    import html
+    content = html.unescape(staff_client.get(HUB_URL).content.decode())
+    assert "Outils techniques" in content
+    assert "Déroulement" not in content  # the 8-step diagram is gone
+    for title in (
+        "Paiements Tara", "Notifications Tara", "Échéancier", "E-mails de confirmation",
+        "Accès ClickFunnels (tâches)", "Rapprochement automatique", "Journal d'audit",
+    ):
+        assert title in content
+    assert content.count("Quand l'utiliser") == 8
+
+
+def test_hub_counts_unresolved_tara_notifications(staff_client):
+    from apps.payments.models import TaraWebhookEvent
+    TaraWebhookEvent.objects.create(
+        dedup_key="h1", raw_provider_status="SUCCESS",
+        processing_status=TaraWebhookEvent.ProcessingStatus.FAILED,
+    )
+    response = staff_client.get(HUB_URL)
+    tool = next(t for t in response.context["tools"] if t["title"] == "Notifications Tara")
+    assert tool["count"] == 1 and tool["alert"] is True

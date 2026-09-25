@@ -1,0 +1,26 @@
+/* "À traiter" inbox (apps/dashboard) — builds on .queue/.kpi/.chip from comptoir-components.css. */
+.inbox-tiles { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 720px) { .inbox-tiles { grid-template-columns: 1fr; } }
+
+.inbox-chips { margin-bottom: 18px; }
+.inbox-chips .chip { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+.inbox-chips .chip .count {
+    font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+    background: var(--border-soft); color: var(--ink); border-radius: var(--radius-pill); padding: 0 6px;
+}
+.inbox-chips .chip.active .count { background: var(--surface); color: var(--ink); }
+
+.inbox-section { margin-bottom: 22px; }
+.inbox-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.inbox-section-title { font-size: 14px; font-weight: 700; color: var(--ink); margin: 0; }
+.inbox-more { font-size: 12.5px; }
+
+.inbox .q-type { width: 132px; }
+.inbox .q-detail { font-size: 12.5px; color: var(--ink-soft); }
+@media (max-width: 720px) {
+    .inbox .q-type { width: auto; }
+    .inbox .queue-item .btn-crm { width: 100%; text-align: center; }
+}
+
+.inbox-empty { text-align: center; padding: 48px 16px; }
+.inbox-empty .inbox-empty-icon { font-size: 34px; color: var(--good); margin-bottom: 10px; }

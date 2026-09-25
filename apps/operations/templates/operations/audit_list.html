@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Journal d'audit | {{ BRAND_NAME }}{% endblock %}
 {% block content %}
-{% include "components/page_header.html" with title="Journal d'audit" subtitle="Registre immuable de chaque action administrative sensible." %}
+{% include "operations/_tech_header.html" with title="Journal d'audit" purpose="retrouver qui a fait quelle action manuelle (annulation, vérification de paiement, accès…), quand et pourquoi. Rien ne peut y être modifié." %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="table-container mb-4 shadow-sm border-0">
@@ -30,7 +30,7 @@
             {% include "components/table_start.html" with headers=headers %}
                 {% for event in page_obj %}
                 <tr>
-                    <td class="small text-muted">{{ event.created_at|date:"d M, H:i" }}</td>
+                    <td class="small text-muted">{{ event.created_at|date:"d/m/Y H:i" }}</td>
                     <td class="small">{{ event.administrator_username|default:"--" }}</td>
                     <td class="small fw-bold">{{ event.action_type }}</td>
                     <td class="small"><code>{{ event.target_reference }}</code></td>
@@ -41,7 +41,7 @@
                 {% endfor %}
             {% include "components/table_end.html" %}
         {% else %}
-            {% include "components/table_empty_state.html" with title="Aucun événement d'audit trouvé" description="Ajustez vos filtres." %}
+            {% include "components/table_empty_state.html" with title="Aucune action enregistrée" description="Modifiez ou réinitialisez les filtres." %}
         {% endif %}
     </div>
     {% if page_obj %}{% include "components/pagination.html" with page_obj=page_obj %}{% endif %}

@@ -55,14 +55,27 @@ class CheckoutOffer(TimeStampedModel):
     title = models.CharField(max_length=255)
     subtitle = models.TextField(blank=True)
     language = models.CharField(max_length=2, choices=[("en", "English"), ("fr", "French")], default="en")
-    mockup_image = models.CharField(max_length=1000, validators=[validate_mockup_image])
-    mockup_alt = models.CharField(max_length=255)
+    # Uploaded by staff from the "Page de vente" form (served from MEDIA_ROOT).
+    image = models.ImageField(upload_to="offers/", blank=True)
+    # Legacy source (HTTPS URL or static path), still used when no image was uploaded.
+    mockup_image = models.CharField(max_length=1000, blank=True, validators=[validate_mockup_image])
+    mockup_alt = models.CharField(max_length=255, blank=True)
     highlights = models.TextField(blank=True, help_text="Short facts, one per line (e.g. No prior knowledge required).")
     closing_note = models.TextField(blank=True)
 
     @property
     def image_url(self):
+        if self.image:
+            return self.image.url
+        if not self.mockup_image:
+            return ""
         return self.mockup_image if self.mockup_image.startswith("https://") else static(self.mockup_image)
+
+    def save(self, *args, **kwargs):
+        # Alt text is optional for staff — the title is a sensible description of the course visual.
+        if not self.mockup_alt:
+            self.mockup_alt = self.title[:255]
+        super().save(*args, **kwargs)
 
     @property
     def highlight_list(self):

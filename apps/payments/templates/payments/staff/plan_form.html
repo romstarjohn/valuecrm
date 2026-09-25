@@ -1,110 +1,126 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{{ title }} | {{ BRAND_NAME }}{% endblock %}
 
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/offres.css' %}">{% endblock %}
+
 {% block content %}
-{% include "components/page_header.html" with title=title subtitle="Un plan de paiement est toujours rattaché à un seul cours importé — c'est le produit commercial vendu sur son lien de paiement." %}
+{% include "components/page_header.html" with title=title subtitle="Le prix proposé au client sur le lien de paiement : en une fois, ou en plusieurs fois." %}
 
 <div class="container-fluid px-4 fade-in pb-5">
     <div class="row">
         <div class="col-lg-8">
             <div class="crm-card">
-                <form method="post" id="plan-form">
+                <form method="post" id="plan-form" novalidate>
                     {% csrf_token %}
+                    {% if form.non_field_errors %}<div class="alert alert-danger small">{{ form.non_field_errors|striptags }}</div>{% endif %}
 
-                    <div class="mb-4 p-3 rounded-3" style="background:var(--accent-soft);border:1px solid var(--accent-soft-border);">
-                        <label class="form-label small fw-bold text-uppercase mb-1" for="{{ form.course.id_for_label }}">
-                            <i class="fa-solid fa-link me-1" aria-hidden="true"></i>Cours associé
-                        </label>
-                        {{ form.course }}
-                        <div class="form-text small mt-1">Ce plan sera vendu pour ce cours uniquement — le lien de paiement s'ouvre depuis sa fiche.</div>
-                        {% if form.course.errors %}<div class="form-error">{{ form.course.errors|striptags }}</div>{% endif %}
+                    <div class="form-section">
+                        <div class="form-section-title">Formation</div>
+                        {% if form.course %}
+                            <div class="form-section-hint">Le prix s'applique à cette formation uniquement.</div>
+                            {{ form.course }}
+                            {% if form.course.errors %}<div class="form-error">{{ form.course.errors|striptags }}</div>{% endif %}
+                        {% else %}
+                            <p class="fw-bold mb-0">{{ course.name }}</p>
+                        {% endif %}
                     </div>
 
-                    <div class="row g-3">
-                        <div class="col-md-8">
-                            <label class="form-label small fw-bold text-muted" for="{{ form.name.id_for_label }}">Nom du plan</label>
-                            {{ form.name }}
-                            {% if form.name.errors %}<div class="form-error">{{ form.name.errors|striptags }}</div>{% endif %}
+                    <div class="form-section">
+                        <div class="form-section-title">{{ form.payment_mode.label }}</div>
+                        <div class="choice-cards mb-2" role="radiogroup">
+                            {% for choice in form.payment_mode %}
+                                <label for="{{ choice.id_for_label }}">{{ choice.tag }} {{ choice.choice_label }}</label>
+                            {% endfor %}
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label small fw-bold text-muted" for="{{ form.code.id_for_label }}">Code interne</label>
-                            {{ form.code }}
-                            <div class="form-text small">{{ form.code.help_text }}</div>
-                            {% if form.code.errors %}<div class="form-error">{{ form.code.errors|striptags }}</div>{% endif %}
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label small fw-bold text-muted" for="{{ form.description.id_for_label }}">Description</label>
-                            {{ form.description }}
-                        </div>
+                        {% if form.payment_mode.errors %}<div class="form-error">{{ form.payment_mode.errors|striptags }}</div>{% endif %}
                     </div>
 
-                    <hr class="my-4">
-                    <h5 class="fw-bold mb-3">Versements</h5>
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label small fw-bold text-muted" for="{{ form.installment_count.id_for_label }}">Nombre de versements</label>
-                            {{ form.installment_count }}
-                            <div class="form-text small">{{ form.installment_count.help_text }}</div>
-                            {% if form.installment_count.errors %}<div class="form-error">{{ form.installment_count.errors|striptags }}</div>{% endif %}
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label small fw-bold text-muted" for="{{ form.installment_amount.id_for_label }}">Montant par versement (XAF)</label>
-                            {{ form.installment_amount }}
-                            <div class="form-text small">{{ form.installment_amount.help_text }}</div>
-                            {% if form.installment_amount.errors %}<div class="form-error">{{ form.installment_amount.errors|striptags }}</div>{% endif %}
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label small fw-bold text-muted" for="{{ form.installment_interval_days.id_for_label }}">Intervalle (jours)</label>
-                            {{ form.installment_interval_days }}
-                            {% if form.installment_interval_days.errors %}<div class="form-error">{{ form.installment_interval_days.errors|striptags }}</div>{% endif %}
-                        </div>
-                    </div>
-
-                    <hr class="my-4">
-                    <h5 class="fw-bold mb-3">Accès &amp; publication</h5>
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted" for="{{ form.access_policy.id_for_label }}">Accès ouvert</label>
-                            {{ form.access_policy }}
-                            {% if form.access_policy.errors %}<div class="form-error">{{ form.access_policy.errors|striptags }}</div>{% endif %}
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label small fw-bold text-muted" for="{{ form.display_order.id_for_label }}">Ordre d'affichage</label>
-                            {{ form.display_order }}
-                        </div>
-                        <div class="col-md-3 d-flex align-items-end">
-                            <div class="form-check">
-                                {{ form.is_active }}
-                                <label class="form-check-label small fw-bold" for="{{ form.is_active.id_for_label }}">Plan actif</label>
+                    <div class="form-section">
+                        <div class="form-section-title">Montant</div>
+                        <div class="row g-3">
+                            <div class="col-md-6" data-several-only>
+                                <label class="form-field-label" for="{{ form.installment_count.id_for_label }}">{{ form.installment_count.label }}</label>
+                                {{ form.installment_count }}
+                                {% if form.installment_count.errors %}<div class="form-error">{{ form.installment_count.errors|striptags }}</div>{% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-field-label" for="{{ form.installment_amount.id_for_label }}">
+                                    <span data-once-only>Prix (XAF)</span><span data-several-only>{{ form.installment_amount.label }}</span>
+                                </label>
+                                {{ form.installment_amount }}
+                                {% if form.installment_amount.errors %}<div class="form-error">{{ form.installment_amount.errors|striptags }}</div>{% endif %}
+                            </div>
+                            <div class="col-md-6" data-several-only>
+                                <label class="form-field-label" for="{{ form.installment_interval_days.id_for_label }}">{{ form.installment_interval_days.label }}</label>
+                                {{ form.installment_interval_days }}
+                                <div class="form-text small">{{ form.installment_interval_days.help_text }}</div>
+                                {% if form.installment_interval_days.errors %}<div class="form-error">{{ form.installment_interval_days.errors|striptags }}</div>{% endif %}
+                            </div>
+                            <div class="col-12">
+                                <div class="price-total" id="price-total" aria-live="polite">Total : —</div>
                             </div>
                         </div>
-                        <div class="col-12">
-                            <div class="form-text small">{{ form.is_active.help_text }}</div>
+                    </div>
+
+                    <div class="form-section" data-several-only>
+                        <div class="form-section-title">{{ form.access_policy.label }}</div>
+                        <div class="choice-cards">
+                            {% for choice in form.access_policy %}
+                                <label for="{{ choice.id_for_label }}">{{ choice.tag }} {{ choice.choice_label }}</label>
+                            {% endfor %}
+                        </div>
+                        {% if form.access_policy.errors %}<div class="form-error">{{ form.access_policy.errors|striptags }}</div>{% endif %}
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-section-title">Ce que voit le client</div>
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-field-label" for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+                                {{ form.name }}
+                                {% if form.name.errors %}<div class="form-error">{{ form.name.errors|striptags }}</div>{% endif %}
+                            </div>
+                            <div class="col-12">
+                                <label class="form-field-label" for="{{ form.description.id_for_label }}">{{ form.description.label }}</label>
+                                {{ form.description }}
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check">
+                                    {{ form.is_active }}
+                                    <label class="form-check-label fw-bold" for="{{ form.is_active.id_for_label }}">{{ form.is_active.label }}</label>
+                                </div>
+                                <div class="form-text small">{{ form.is_active.help_text }}</div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="mt-5 d-flex gap-2 justify-content-end">
-                        <a href="{% url 'plans:list' %}" class="btn-crm btn-crm-outline">Annuler</a>
-                        <button type="submit" class="btn-crm btn-crm-primary px-5" id="plan-form-submit">Enregistrer le plan</button>
+                    <details class="mb-2">
+                        <summary class="small fw-bold text-muted">Options avancées</summary>
+                        <div class="pt-3" style="max-width:280px;">
+                            <label class="form-field-label" for="{{ form.display_order.id_for_label }}">{{ form.display_order.label }}</label>
+                            {{ form.display_order }}
+                            <div class="form-text small">{{ form.display_order.help_text }}</div>
+                        </div>
+                    </details>
+
+                    <div class="mt-4 d-flex gap-2 justify-content-end flex-wrap">
+                        {% if course %}
+                            <a href="{% url 'courses:detail' course.cf_course_id %}" class="btn-crm btn-crm-outline">Annuler</a>
+                        {% else %}
+                            <a href="{% url 'courses:list' %}" class="btn-crm btn-crm-outline">Annuler</a>
+                        {% endif %}
+                        <button type="submit" class="btn-crm btn-crm-primary px-5" id="plan-form-submit">Enregistrer le prix</button>
                     </div>
                 </form>
             </div>
         </div>
 
         <div class="col-lg-4">
-            {% if plan %}
-            <div class="crm-card border-0 shadow-sm">
-                <h6 class="text-uppercase text-muted fw-bold small mb-3">Résumé</h6>
-                <div class="kv">
-                    <div class="kv-row"><span>Cours</span><span>{{ plan.course.name }}</span></div>
-                    <div class="kv-row"><span>Total calculé</span><span>{{ plan.computed_total }} {{ plan.currency }}</span></div>
-                </div>
-            </div>
-            {% endif %}
-            <div class="alert alert-info border-0 shadow-sm rounded-4">
-                <h6 class="fw-bold"><i class="fa-solid fa-circle-info me-2" aria-hidden="true"></i>Remarque</h6>
-                <p class="small mb-0">Modifier un plan existant ne change jamais les commandes déjà passées avec ses anciennes conditions — leurs montants sont figés au moment de l'achat.</p>
+            <div class="p-3 rounded-3" style="background:var(--accent-soft);border:1px solid var(--accent-soft-border);">
+                <h6 class="fw-bold mb-1"><i class="fa-solid fa-circle-info me-2" aria-hidden="true"></i>Bon à savoir</h6>
+                <p class="small mb-0">Changer un prix ne modifie jamais les ventes déjà faites : chaque client garde le prix auquel il a acheté.</p>
             </div>
         </div>
     </div>
@@ -113,10 +129,47 @@
 
 {% block extra_js %}
 <script>
-    document.getElementById("plan-form").addEventListener("submit", function () {
+(function () {
+    var form = document.getElementById("plan-form");
+    var countInput = document.getElementById("{{ form.installment_count.id_for_label }}");
+    var amountInput = document.getElementById("{{ form.installment_amount.id_for_label }}");
+    var intervalInput = document.getElementById("{{ form.installment_interval_days.id_for_label }}");
+    var total = document.getElementById("price-total");
+
+    function mode() {
+        var checked = form.querySelector("input[name='{{ form.payment_mode.html_name }}']:checked");
+        return checked ? checked.value : "once";
+    }
+    function fmt(n) { return Math.round(n).toLocaleString("fr-FR"); }
+
+    function refresh() {
+        var several = mode() === "several";
+        form.querySelectorAll("[data-several-only]").forEach(function (el) {
+            el.hidden = !several;
+            // Hidden inputs are disabled so the browser neither validates nor sends them.
+            el.querySelectorAll("input, select").forEach(function (input) { input.disabled = !several; });
+        });
+        form.querySelectorAll("[data-once-only]").forEach(function (el) { el.hidden = several; });
+
+        var amount = parseFloat(amountInput.value);
+        if (!amount) { total.textContent = "Total : —"; return; }
+        if (!several) { total.textContent = "Total : " + fmt(amount) + " XAF, payé en une fois"; return; }
+        var count = parseInt(countInput.value, 10) || 0;
+        var interval = parseInt(intervalInput.value, 10) || 0;
+        if (count < 2) { total.textContent = "Indiquez au moins 2 paiements."; return; }
+        total.textContent = "Total : " + count + " × " + fmt(amount) + " = " + fmt(count * amount) + " XAF"
+            + (interval ? ", un paiement tous les " + interval + " jours" : "");
+    }
+
+    form.addEventListener("input", refresh);
+    form.addEventListener("change", refresh);
+    refresh();
+
+    form.addEventListener("submit", function () {
         var btn = document.getElementById("plan-form-submit");
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Enregistrement…';
     });
+})();
 </script>
 {% endblock %}

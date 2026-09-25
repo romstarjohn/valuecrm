@@ -51,3 +51,6 @@ coverage.xml
 # OS / Office temp files
 .DS_Store
 ~$*
+
+# Staff uploads (sales-page images)
+media/

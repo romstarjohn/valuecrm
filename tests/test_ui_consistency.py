@@ -1,3 +1,4 @@
+import re
 import pytest
 from django.urls import reverse
 from apps.courses.models import Course
@@ -14,16 +15,16 @@ def test_courses_list_layout_consistency(staff_client):
     url = reverse("courses:list")
     response = staff_client.get(url)
     content = response.content.decode()
-    
-    # 1. Check for single table container (no nesting)
-    assert content.count('class="table-container') == 1
-    
+
+    # 1. Check for single table wrapper (no nesting)
+    assert content.count('class="table-wrap') == 1
+
     # 2. Check for exactly one table and tbody
     assert content.count('<table') == 1
     assert content.count('<tbody') == 1
-    
-    # 3. Check column count (5 columns: Name, Workspace, Enrollments, Updated At, Actions)
-    # Each <tr> should have 5 <td> elements because selectable=False
+
+    # 3. Check column count (5 columns: Offre, Page de vente, Prix, Lien de paiement, État)
+    assert content.count('<th>') == 5
     assert content.count('<td') == 5
 
 @pytest.mark.django_db
@@ -35,10 +36,11 @@ def test_contacts_list_layout_consistency(staff_client):
     url = reverse("contacts:list")
     response = staff_client.get(url)
     content = response.content.decode()
-    
-    assert content.count('class="table-container') == 1
-    # 6 columns: Checkbox, Name, Status, Tags, Source, Actions
-    assert content.count('<td') == 6
+
+    assert content.count('class="table-wrap') == 1
+    # One row, one cell per header: Client, Téléphone, Ventes, Déjà payé, Accès, Dernière activité
+    assert len(re.findall(r"<th[\s>]", content)) == 6
+    assert len(re.findall(r"<td[\s>]", content)) == 6
 
 @pytest.mark.django_db
 def test_enrollments_list_layout_consistency(staff_client):
@@ -53,7 +55,6 @@ def test_enrollments_list_layout_consistency(staff_client):
     response = staff_client.get(url)
     content = response.content.decode()
     
-    assert content.count('class="table-container') == 1
-    # 5 columns: Student, Course, Status, ID, Date, Actions? 
-    # Check headers in enrollment_list: Student, Course, Status, ClickFunnels ID, Date + Actions = 6
-    assert content.count('<td') == 6
+    assert content.count('class="table-wrap') == 1
+    # One row, 5 columns: Client, Formation, Accès, Depuis, action
+    assert content.count('<td') == 5

@@ -1,3 +1,5 @@
+import logging
+
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -16,6 +18,8 @@ from apps.operations.actions import render_confirmation_or_process
 from apps.payments.admin_services import EnrollmentAdministrationService
 from apps.provisioning.models import ProvisioningRequest
 from integrations.clickfunnels.client import ClickFunnelsClient
+
+logger = logging.getLogger(__name__)
 
 
 ENROLLMENT_SORT_FIELDS = {
@@ -95,8 +99,10 @@ def enrollment_list(request):
     
     if query:
         attempts = attempts.filter(
-            Q(contact__email__icontains=query) | 
-            Q(course__name__icontains=query)
+            Q(contact__email__icontains=query)
+            | Q(contact__first_name__icontains=query)
+            | Q(contact__last_name__icontains=query)
+            | Q(course__name__icontains=query)
         )
     
     if status_filter:
@@ -121,18 +127,18 @@ def enrollment_list(request):
     page_obj = paginator.get_page(page_number)
     page_obj.object_list = _attach_order_references(page_obj.object_list)
 
-    status_labels_fr = {"SUCCESS": "Succès", "FAILURE": "Échec"}
+    status_labels_fr = {"SUCCESS": "Accès ouvert", "FAILURE": "Échec"}
     status_options = [(value, status_labels_fr.get(value, label)) for value, label in EnrollmentAttempt.Status.choices]
     course_options = Course.objects.all().order_by("name")
     course_choices = [(c.cf_course_id, c.name) for c in course_options]
     course_label = next((name for cf_id, name in course_choices if cf_id == course_filter), course_filter) if course_filter else "Toutes"
 
     headers = [
-        {"label": "Étudiant", "sortable": True, "sort_key": "student"},
+        {"label": "Client", "sortable": True, "sort_key": "student"},
         {"label": "Formation", "sortable": True, "sort_key": "course"},
-        {"label": "Statut", "sortable": True, "sort_key": "status"},
-        {"label": "ID ClickFunnels", "sortable": False},
-        {"label": "Date", "sortable": True, "sort_key": "date"},
+        {"label": "Accès", "sortable": True, "sort_key": "status"},
+        {"label": "Depuis", "sortable": True, "sort_key": "date"},
+        {"label": "", "sortable": False, "align": "text-end"},
     ]
 
     context = {
@@ -142,9 +148,9 @@ def enrollment_list(request):
         "course_filter": course_filter,
         "status_options": status_options,
         "course_options": course_options,
-        "status_filter_options": _filter_options(request, param="status", options=status_options, all_label="Tous les statuts"),
+        "status_filter_options": _filter_options(request, param="status", options=status_options, all_label="Tous les accès"),
         "course_filter_options": _filter_options(request, param="course_id", options=course_choices, all_label="Toutes les formations"),
-        "status_label": f"Statut : {status_filter or 'Tous'}",
+        "status_label": f"Accès : {dict(status_options).get(status_filter, 'Tous')}",
         "course_label": f"Formation : {course_label}",
         "headers": headers,
         "sort_key": sort_key,
@@ -168,7 +174,7 @@ def enrollment_new(request):
         form = EnrollmentForm(request.POST)
         if form.is_valid():
             if not service:
-                messages.error(request, "Aucune configuration ClickFunnels active trouvée.")
+                messages.error(request, "ClickFunnels n'est pas encore connecté. Connectez-le dans Réglages → Connexion ClickFunnels.")
                 return redirect("enrollments:new")
 
             email = form.cleaned_data["email"]
@@ -176,7 +182,7 @@ def enrollment_new(request):
 
             # Validation
             if not config.workspace_id or not config.workspace_subdomain:
-                messages.error(request, "Sélectionnez un espace de travail dans les paramètres avant d'inscrire des contacts.")
+                messages.error(request, "Choisissez d'abord votre espace de travail ClickFunnels sur la page Connexion ClickFunnels.")
                 return redirect("configuration:settings")
 
             try:
@@ -187,14 +193,15 @@ def enrollment_new(request):
                     cf_course_id=course_id
                 )
                 if result_dto.status == EnrollmentAttempt.Status.SUCCESS:
-                    messages.success(request, f"{email} inscrit(e) avec succès à la formation.")
+                    messages.success(request, f"Accès ouvert pour {email}.")
                     return redirect("enrollments:detail", pk=result_dto.enrollment_attempt_id)
                 else:
-                    messages.error(request, f"Échec de l'inscription : {result_dto.error_message}")
+                    messages.error(request, f"L'accès n'a pas pu être ouvert pour {email}.")
                     if result_dto.enrollment_attempt_id:
                         return redirect("enrollments:detail", pk=result_dto.enrollment_attempt_id)
-            except Exception as e:
-                messages.error(request, f"Erreur inattendue : {str(e)}")
+            except Exception:
+                logger.exception("Unexpected error while granting course access")
+                messages.error(request, "Une erreur inattendue est survenue. Réessayez ; si cela se reproduit, contactez le support technique.")
                 
     else:
         # Pre-fill from query params if available (e.g. from contact detail)
@@ -218,7 +225,7 @@ def enrollment_bulk(request):
         form = BulkEnrollmentForm(request.POST)
         if form.is_valid():
             if not service:
-                messages.error(request, "Aucune configuration ClickFunnels active trouvée.")
+                messages.error(request, "ClickFunnels n'est pas encore connecté. Connectez-le dans Réglages → Connexion ClickFunnels.")
                 return redirect("enrollments:bulk")
 
             emails = form.cleaned_data["emails"]
@@ -226,7 +233,7 @@ def enrollment_bulk(request):
 
             # Validation
             if not config.workspace_id or not config.workspace_subdomain:
-                messages.error(request, "Sélectionnez un espace de travail dans les paramètres avant d'inscrire des contacts.")
+                messages.error(request, "Choisissez d'abord votre espace de travail ClickFunnels sur la page Connexion ClickFunnels.")
                 return redirect("configuration:settings")
 
             try:
@@ -236,9 +243,10 @@ def enrollment_bulk(request):
                     emails=emails,
                     cf_course_id=course_id
                 )
-                messages.info(request, f"Inscription groupée traitée : {bulk_result['success_count']} réussites, {bulk_result['failure_count']} échecs.")
-            except Exception as e:
-                messages.error(request, f"Erreur inattendue : {str(e)}")
+                messages.info(request, f"{bulk_result['success_count']} accès ouvert(s), {bulk_result['failure_count']} échec(s).")
+            except Exception:
+                logger.exception("Unexpected error while granting course access")
+                messages.error(request, "Une erreur inattendue est survenue. Réessayez ; si cela se reproduit, contactez le support technique.")
     else:
         form = BulkEnrollmentForm()
         
@@ -309,11 +317,13 @@ def enrollment_freeze(request, pk):
 
     def do_freeze(reason):
         EnrollmentAdministrationService().freeze_enrollment_attempt(attempt.pk, reason, request.user, request)
-        return f"Inscription suspendue pour {attempt.contact.email} dans {attempt.course.name}."
+        return f"Accès suspendu pour {attempt.contact.email} à « {attempt.course.name} »."
 
     context = {
-        "title": "Suspendre l'inscription",
-        "description": "Suspend l'accès de cet étudiant à la formation ClickFunnels. Il continue de voir la formation mais ne peut pas terminer les leçons tant que l'accès n'est pas repris. Entièrement réversible.",
+        "title": "Suspendre l'accès",
+        "submit_label": "Suspendre l'accès",
+        "reason_placeholder": "Ex. : paiement en retard, demande du client…",
+        "description": "Le client voit toujours la formation, mais ne peut plus suivre les leçons. Vous pourrez rétablir l'accès à tout moment.",
         "target_label": f"{attempt.contact.email} — {attempt.course.name}",
         "back_url": reverse("enrollments:detail", args=[attempt.pk]),
     }
@@ -331,11 +341,13 @@ def enrollment_resume(request, pk):
 
     def do_resume(reason):
         EnrollmentAdministrationService().resume_enrollment_attempt(attempt.pk, reason, request.user, request)
-        return f"Inscription reprise pour {attempt.contact.email} dans {attempt.course.name}."
+        return f"Accès rétabli pour {attempt.contact.email} à « {attempt.course.name} »."
 
     context = {
-        "title": "Reprendre l'inscription",
-        "description": "Restaure l'accès de cet étudiant à la formation ClickFunnels après une suspension.",
+        "title": "Rétablir l'accès",
+        "submit_label": "Rétablir l'accès",
+        "reason_placeholder": "Ex. : paiement reçu, erreur corrigée…",
+        "description": "Le client peut de nouveau suivre toutes les leçons de la formation.",
         "target_label": f"{attempt.contact.email} — {attempt.course.name}",
         "back_url": reverse("enrollments:detail", args=[attempt.pk]),
     }

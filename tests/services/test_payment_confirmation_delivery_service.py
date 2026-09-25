@@ -71,7 +71,7 @@ def test_sent_email_contains_expected_safe_content_and_no_secrets():
     assert "Ada" in body
     assert str(order.reference) in body
     assert order.course_name in body
-    assert "now accessible" in body  # single-installment FULL_PAYMENT order is eligible after this payment
+    assert "accès ouvert" in body  # single-installment FULL_PAYMENT order is eligible after this payment
     for forbidden in ("api_key", "webhook_secret", "Bearer", "tara_product_id", "raw_payload"):
         assert forbidden not in body
     assert "http://" not in body and "https://" not in body  # no payment link/URL ever included

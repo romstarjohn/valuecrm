@@ -1,18 +1,18 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static vente_format %}
 
-{% block title %}Contacts | {{ BRAND_NAME }}{% endblock %}
+{% block title %}Clients | {{ BRAND_NAME }}{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title="Contacts" subtitle="Retrouver un client et traiter son dossier de bout en bout, en une seule fiche." action_label="Ajouter un contact" action_url="/contacts/add/" action_icon="fa-solid fa-user-plus" %}
+{% include "components/page_header.html" with title="Clients" subtitle="Retrouvez une personne : ce qu'elle a acheté, payé, et à quelles formations elle a accès." action_label="Ajouter un client" action_url="/contacts/add/" action_icon="fa-solid fa-user-plus" %}
 
 <div class="container-fluid px-4 fade-in pb-5">
     <div class="mb-4">
         <form method="get" class="d-flex align-items-center flex-grow-1 gap-3 flex-wrap">
-            {% include "components/search_bar.html" with placeholder="Rechercher des étudiants..." %}
+            {% include "components/search_bar.html" with placeholder="Nom, e-mail ou téléphone" %}
             <div class="d-flex gap-2 flex-wrap">
-                {% include "components/filter_dropdown.html" with label=status_label options=status_filter_options %}
                 {% include "components/filter_dropdown.html" with label=course_label options=course_filter_options %}
+                {% include "components/filter_dropdown.html" with label=status_label options=status_filter_options %}
             </div>
             {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
             {% if course_filter %}<input type="hidden" name="course_id" value="{{ course_filter }}">{% endif %}
@@ -46,23 +46,24 @@
                 {% for contact in page_obj %}
                 <tr class="clickable" data-panel-url="{% url 'contacts:detail_panel' contact.id %}" data-panel-title="{{ contact.first_name }} {{ contact.last_name }}">
                     <td>
-                        <div class="cell-title">{{ contact.first_name }} {{ contact.last_name }}</div>
+                        <div class="cell-title">{% if contact.first_name or contact.last_name %}{{ contact.first_name }} {{ contact.last_name }}{% else %}{{ contact.email }}{% endif %}</div>
                         <div class="cell-sub">{{ contact.email }}</div>
                     </td>
+                    <td class="cell-sub">{{ contact.phone|default:"—" }}</td>
+                    <td class="num">{{ contact.sale_count }}</td>
+                    <td class="num">{{ contact.total_paid_amount|default_if_none:0|money }}</td>
                     <td>
-                        {% for tag in contact.tags %}<span class="pill accent">{{ tag }}</span>{% empty %}<span class="cell-sub">—</span>{% endfor %}
+                        {% if contact.open_access_count %}<span class="pill good"><span class="dot"></span>{{ contact.open_access_count }} formation{{ contact.open_access_count|pluralize }}</span>
+                        {% else %}<span class="cell-sub">Aucun</span>{% endif %}
                     </td>
-                    <td>{% include "components/status_badge.html" with status=contact.status %}</td>
-                    <td class="num">{{ contact.total_paid_amount|default_if_none:0 }} XAF</td>
-                    <td class="cell-sub">{{ contact.created_at|date:"d/m/Y" }}</td>
-                    <td class="cell-sub">{{ contact.updated_at|date:"d/m/Y H:i" }}</td>
+                    <td class="cell-sub">{{ contact.updated_at|date:"d/m/Y" }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
     {% else %}
-        {% include "components/table_empty_state.html" with title="Aucun contact trouvé" description="Ajustez vos filtres ou ajoutez un nouvel étudiant à votre espace de travail." action_label="Ajouter un contact" action_url="/contacts/add/" action_icon="fa-solid fa-plus" %}
+        {% include "components/table_empty_state.html" with title="Aucun client trouvé" description="Vérifiez l'orthographe ou effacez les filtres. Les clients apparaissent automatiquement dès leur premier achat." action_label="Ajouter un client" action_url="/contacts/add/" action_icon="fa-solid fa-plus" %}
     {% endif %}
 
     {% if page_obj %}

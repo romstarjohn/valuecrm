@@ -1,42 +1,43 @@
 {% extends "base.html" %}
-{% block title %}Associer un paiement | {{ BRAND_NAME }}{% endblock %}
+{% load status_labels %}
+{% block title %}Associer un paiement à une vente | {{ BRAND_NAME }}{% endblock %}
 {% block content %}
-{% include "components/page_header.html" with title="Associer ce paiement" subtitle="Rattachement manuel réservé à l'administrateur — le montant confirmé ci-dessous est celui réellement crédité, jamais le montant attendu du plan." %}
+{% include "operations/_tech_header.html" with title="Associer un paiement à une vente" purpose="Tara a reçu un paiement que nous ne savons pas rattacher (souvent payé directement dans l'application Tara). Retrouvez la vente du client, puis confirmez le montant réellement reçu." %}
 
 <div class="container-fluid px-4 fade-in pb-5">
     <div class="row justify-content-center">
         <div class="col-lg-9">
 
             <div class="crm-card border-0 shadow-sm mb-4">
-                <h6 class="text-uppercase text-muted fw-bold small mb-3">Paiement non rapproché</h6>
+                <h6 class="text-uppercase text-muted fw-bold small mb-3">Le paiement reçu par Tara</h6>
                 <div class="row small">
                     <div class="col-sm-3 text-muted">Référence</div>
                     <div class="col-sm-9"><code>{{ event.reference }}</code></div>
-                    <div class="col-sm-3 text-muted mt-2">Montant reçu du webhook</div>
+                    <div class="col-sm-3 text-muted mt-2">Montant indiqué par Tara</div>
                     <div class="col-sm-9 mt-2 fw-bold">{% if event.amount %}{{ event.amount }} XAF{% else %}Non communiqué par Tara — à confirmer ci-dessous{% endif %}</div>
-                    <div class="col-sm-3 text-muted mt-2">Identifiant paiement Tara</div>
+                    <div class="col-sm-3 text-muted mt-2">Réf. paiement Tara</div>
                     <div class="col-sm-9 mt-2">{{ event.tara_payment_id|default:"—" }}</div>
-                    <div class="col-sm-3 text-muted mt-2">Motif de non-rapprochement</div>
+                    <div class="col-sm-3 text-muted mt-2">Pourquoi non rattaché</div>
                     <div class="col-sm-9 mt-2">{{ event.failure_category|default:"—" }}</div>
                     <div class="col-sm-3 text-muted mt-2">Reçu le</div>
-                    <div class="col-sm-9 mt-2">{{ event.received_at|date:"d M Y, H:i" }}</div>
+                    <div class="col-sm-9 mt-2">{{ event.received_at|date:"d/m/Y à H:i" }}</div>
                 </div>
             </div>
 
             <div class="crm-card border-0 shadow-sm mb-4">
-                <h6 class="text-uppercase text-muted fw-bold small mb-3">1. Retrouver le versement concerné</h6>
+                <h6 class="text-uppercase text-muted fw-bold small mb-3">1. Retrouver la vente du client</h6>
                 <form method="get" class="d-flex gap-2">
-                    <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Nom, e-mail, téléphone du client ou référence de commande…" autofocus>
+                    <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Nom, e-mail ou téléphone du client, ou réf. de la vente…" autofocus>
                     <button type="submit" class="btn btn-crm btn-crm-primary px-4">Rechercher</button>
                 </form>
             </div>
 
             {% if query %}
             <div class="crm-card border-0 shadow-sm">
-                <h6 class="text-uppercase text-muted fw-bold small mb-3">2. Confirmer l'association</h6>
+                <h6 class="text-uppercase text-muted fw-bold small mb-3">2. Choisir le versement et confirmer</h6>
 
                 {% if not candidates %}
-                    <p class="text-muted small mb-0">Aucune échéance non soldée ne correspond à « {{ query }} ». Vérifiez l'orthographe ou essayez la référence de commande.</p>
+                    <p class="text-muted small mb-0">Aucun versement à payer ne correspond à « {{ query }} ». Vérifiez l'orthographe ou essayez l'e-mail du client.</p>
                 {% else %}
                 <form method="post">
                     {% csrf_token %}
@@ -46,10 +47,10 @@
                                 <tr>
                                     <th></th>
                                     <th>Client</th>
-                                    <th>Commande</th>
+                                    <th>Vente</th>
                                     <th>Versement</th>
                                     <th class="text-end">Montant attendu</th>
-                                    <th>Échéance</th>
+                                    <th>Dû le</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -57,10 +58,10 @@
                                 <tr>
                                     <td><input class="form-check-input" type="radio" name="installment_id" value="{{ installment.pk }}" id="inst-{{ installment.pk }}" required></td>
                                     <td class="small"><label for="inst-{{ installment.pk }}" class="mb-0">{{ installment.order.customer.first_name }} {{ installment.order.customer.last_name }}<br><span class="text-muted">{{ installment.order.customer.email }}</span></label></td>
-                                    <td class="small"><code>{{ installment.order.reference }}</code><br><span class="text-muted">{{ installment.order.course_name }}</span></td>
+                                    <td class="small">Vente {{ installment.order.reference|short_ref }}<br><span class="text-muted">{{ installment.order.course_name }}</span></td>
                                     <td class="small">n°{{ installment.sequence }} / {{ installment.order.installment_count }}</td>
                                     <td class="text-end small fw-bold">{{ installment.expected_amount }} {{ installment.currency }}</td>
-                                    <td class="small text-muted">{{ installment.due_date|date:"d M Y" }}</td>
+                                    <td class="small text-muted">{{ installment.due_date|date:"d/m/Y" }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -69,26 +70,26 @@
 
                     <div class="row g-3">
                         <div class="col-sm-4">
-                            <label class="form-label small text-uppercase fw-bold text-muted" for="id_confirmed_amount">Montant confirmé (XAF)</label>
+                            <label class="form-label small text-uppercase fw-bold text-muted" for="id_confirmed_amount">Montant réellement reçu (XAF)</label>
                             <input type="number" step="0.01" min="0.01" id="id_confirmed_amount" name="confirmed_amount"
                                    class="form-control" value="{% if event.amount %}{{ event.amount }}{% endif %}" required>
-                            <div class="form-text small">Le montant réellement reçu — conservé tel quel, jamais arrondi au montant attendu.</div>
+                            <div class="form-text small">Vérifiez-le dans votre espace Tara. Il est enregistré tel quel.</div>
                         </div>
                         <div class="col-sm-8">
-                            <label class="form-label small text-uppercase fw-bold text-muted" for="id_reason">Motif (obligatoire)</label>
+                            <label class="form-label small text-uppercase fw-bold text-muted" for="id_reason">Pourquoi ? <span class="fw-normal text-muted text-lowercase">(obligatoire, noté dans l'historique)</span></label>
                             <textarea id="id_reason" name="reason" class="form-control" rows="2" required placeholder="Ex. : client confirmé par téléphone, paiement fait directement dans Tara."></textarea>
                         </div>
                     </div>
 
                     <div class="alert alert-warning border-0 small mt-3">
                         <i class="fa-solid fa-circle-exclamation me-2"></i>
-                        Si le montant confirmé est inférieur au montant attendu du versement sélectionné, l'association sera refusée —
-                        le rattachement d'un paiement partiel n'est pas encore pris en charge.
+                        Si le montant reçu est inférieur au montant du versement choisi, l'association est refusée :
+                        les paiements partiels ne sont pas encore pris en charge.
                     </div>
 
                     <div class="d-flex gap-2 mt-3">
-                        <button type="submit" class="btn btn-crm btn-crm-primary px-4 shadow-sm">Confirmer l'association</button>
-                        <a href="{% url 'operations:webhook_event_list' %}" class="btn btn-crm-outline px-4">Annuler</a>
+                        <button type="submit" class="btn btn-crm btn-crm-primary px-4 shadow-sm">Associer ce paiement à la vente</button>
+                        <a href="{% url 'operations:webhook_event_list' %}" class="btn btn-crm-outline px-4">Revenir sans rien changer</a>
                     </div>
                 </form>
                 {% endif %}

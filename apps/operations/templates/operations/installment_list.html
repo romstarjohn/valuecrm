@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Versements | {{ BRAND_NAME }}{% endblock %}
+{% block title %}Échéancier | {{ BRAND_NAME }}{% endblock %}
 {% block content %}
-{% include "components/page_header.html" with title="Versements" subtitle="Tous les versements planifiés, dus ou réglés, toutes commandes confondues." %}
+{% include "operations/_tech_header.html" with title="Échéancier" purpose="voir tous les versements prévus, dus ou payés, toutes ventes confondues — par exemple ce qui doit être encaissé cette semaine." %}
 
 <div class="container-fluid px-4 fade-in">
     <div class="table-container mb-4 shadow-sm border-0">
@@ -14,7 +14,7 @@
                     {% endfor %}
                 </select>
                 <select name="plan" class="form-select form-select-sm w-auto">
-                    <option value="">Tous les plans</option>
+                    <option value="">Toutes les formules</option>
                     {% for plan_id, plan_name in plan_options %}
                         <option value="{{ plan_id }}" {% if plan_filter == plan_id|stringformat:"s" %}selected{% endif %}>{{ plan_name }}</option>
                     {% endfor %}
@@ -38,10 +38,10 @@
             {% include "components/table_start.html" with headers=headers %}
                 {% for installment in page_obj %}
                 <tr>
-                    <td><a href="{% url 'operations:order_detail' installment.order.reference %}" class="text-decoration-none small fw-bold">{{ installment.order.reference }}</a></td>
+                    <td>{% include "operations/_sale_cell.html" with order=installment.order %}</td>
                     <td class="small">{{ installment.order.customer.email }}</td>
                     <td class="small">{{ installment.sequence }}</td>
-                    <td class="small text-muted">{{ installment.due_date }}</td>
+                    <td class="small text-muted">{{ installment.due_date|date:"d/m/Y" }}</td>
                     <td class="small font-mono">{{ installment.expected_amount }} {{ installment.currency }}</td>
                     <td class="small font-mono">{{ installment.paid_amount|default:"--" }}</td>
                     <td>{% include "components/status_badge.html" with status=installment.status %}</td>
@@ -52,7 +52,7 @@
                 {% endfor %}
             {% include "components/table_end.html" %}
         {% else %}
-            {% include "components/table_empty_state.html" with title="Aucun versement trouvé" description="Ajustez vos filtres." %}
+            {% include "components/table_empty_state.html" with title="Aucun versement trouvé" description="Modifiez ou réinitialisez les filtres." %}
         {% endif %}
     </div>
     {% if page_obj %}{% include "components/pagination.html" with page_obj=page_obj %}{% endif %}

@@ -1,133 +1,125 @@
 {% extends "base.html" %}
 
-{% block title %}Configuration Tara | {{ BRAND_NAME }}{% endblock %}
+{% block title %}Connexion Tara | {{ BRAND_NAME }}{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title="Configuration Tara" subtitle="Configurez la passerelle sécurisée vers Tara Money pour l’encaissement des paiements." %}
+{% include "components/page_header.html" with title="Connexion Tara" subtitle="Reliez votre compte Tara pour encaisser les paiements de vos clients (Orange Money, MTN, carte, PayPal)." %}
 
 <div class="container-fluid px-4 fade-in pb-5">
     <div class="row g-4">
         <div class="col-lg-8">
 
-            <div class="crm-card border-0 shadow-sm mb-4">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h5 class="fw-bold mb-0">Identifiants Tara</h5>
-                    {% if config.validation_status == 'VALID' %}
-                        <span class="badge bg-success rounded-pill px-3"><i class="fa-solid fa-check me-1"></i> Autorisé</span>
-                    {% endif %}
+            {% if api_key_configured and webhook_secret_configured and config.is_active %}
+            <div class="crm-card border-0 shadow-sm mb-4 border-start border-4 border-success">
+                <div class="d-flex align-items-start gap-3">
+                    <span class="pill good text-nowrap"><span class="dot"></span>Connecté ✓</span>
+                    <div class="small">
+                        Vos identifiants Tara sont enregistrés : les clients peuvent payer.
+                        {% if last_tara_notification %}Dernière notification reçue de Tara : <strong>{{ last_tara_notification|date:"d/m/Y à H:i" }}</strong>.
+                        {% else %}Aucune notification de Tara reçue pour l'instant — le premier paiement confirmera que tout fonctionne.{% endif %}
+                    </div>
                 </div>
+            </div>
+            {% else %}
+            <div class="crm-card border-0 shadow-sm mb-4 border-start border-4 border-warning">
+                <div class="d-flex align-items-start gap-3">
+                    <span class="pill warn text-nowrap"><span class="dot"></span>Non connecté</span>
+                    <div class="small">
+                        <div class="fw-bold mb-1">Que faire ?</div>
+                        {% if not config %}Renseignez les trois identifiants fournis par Tara ci-dessous, puis enregistrez.
+                        {% elif not config.is_active %}Les identifiants sont enregistrés, mais la connexion n'est pas activée. Cochez « Utiliser cette connexion », puis enregistrez.
+                        {% else %}Il manque {% if not api_key_configured %}la clé API{% endif %}{% if not api_key_configured and not webhook_secret_configured %} et {% endif %}{% if not webhook_secret_configured %}le secret de notification{% endif %}.{% endif %}
+                        Tant que ce n'est pas fait, les clients ne peuvent pas payer.
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="crm-card border-0 shadow-sm mb-4">
+                <h5 class="fw-bold mb-2">Vos identifiants Tara</h5>
+                <p class="small text-muted mb-4">Ces trois informations sont fournies par Tara, dans votre espace marchand ou par leur support.</p>
 
                 <form method="post">
                     {% csrf_token %}
 
                     <div class="row g-4">
                         <div class="col-md-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ form.name.id_for_label }}">Nom convivial</label>
-                            {{ form.name }}
-                            {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors|join:", " }}</div>{% endif %}
-                        </div>
-
-                        <div class="col-md-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ form.business_id.id_for_label }}">ID d’entreprise</label>
+                            <label class="form-label fw-bold small" for="{{ form.business_id.id_for_label }}">Identifiant de votre entreprise chez Tara <span class="fw-normal text-muted">(« Business ID »)</span></label>
                             {{ form.business_id }}
                             {% if form.business_id.errors %}<div class="text-danger small mt-1">{{ form.business_id.errors|join:", " }}</div>{% endif %}
                         </div>
 
                         <div class="col-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ form.api_key.id_for_label }}">Clé API</label>
+                            <label class="form-label fw-bold small" for="{{ form.api_key.id_for_label }}">Clé API <span class="fw-normal text-muted">(« API key »)</span></label>
                             {{ form.api_key }}
                             <div class="form-text small mt-2">
-                                <i class="fa-solid fa-shield-halved me-1 text-success"></i>
-                                Chiffrée avec Fernet AES-256. Laissez vide pour conserver la clé actuelle.
+                                <i class="fa-solid fa-lock me-1 text-success" aria-hidden="true"></i>
+                                Stockée chiffrée, jamais réaffichée. {% if api_key_configured %}Laissez vide pour garder la clé actuelle.{% endif %}
                             </div>
                             {% if form.api_key.errors %}<div class="text-danger small mt-1">{{ form.api_key.errors|join:", " }}</div>{% endif %}
                         </div>
 
                         <div class="col-12">
-                            <label class="form-label small text-uppercase fw-bold text-muted" for="{{ form.webhook_secret.id_for_label }}">Secret du webhook</label>
+                            <label class="form-label fw-bold small" for="{{ form.webhook_secret.id_for_label }}">Secret de notification <span class="fw-normal text-muted">(« webhook secret »)</span></label>
                             {{ form.webhook_secret }}
                             <div class="form-text small mt-2">
-                                <i class="fa-solid fa-shield-halved me-1 text-success"></i>
-                                Chiffré avec Fernet AES-256. Laissez vide pour conserver le secret actuel.
+                                <i class="fa-solid fa-lock me-1 text-success" aria-hidden="true"></i>
+                                Stocké chiffré, jamais réaffiché. {% if webhook_secret_configured %}Laissez vide pour garder le secret actuel.{% endif %}
                             </div>
                             {% if form.webhook_secret.errors %}<div class="text-danger small mt-1">{{ form.webhook_secret.errors|join:", " }}</div>{% endif %}
+                        </div>
+
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold small" for="{{ form.name.id_for_label }}">Nom de cette connexion <span class="fw-normal text-muted">(pour vous repérer)</span></label>
+                            {{ form.name }}
+                            {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors|join:", " }}</div>{% endif %}
                         </div>
 
                         <div class="col-12">
                             <div class="form-check form-switch p-3 bg-light rounded-3 border border-dashed">
                                 <div class="ms-1">
                                     {{ form.is_active }}
-                                    <label class="form-check-label fw-bold ms-2" for="{{ form.is_active.id_for_label }}">Définir comme configuration active</label>
+                                    <label class="form-check-label fw-bold ms-2" for="{{ form.is_active.id_for_label }}">Utiliser cette connexion</label>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <div class="mt-4 d-flex gap-2">
-                        <button type="submit" class="btn btn-crm btn-crm-primary px-4 shadow-sm">Enregistrer les paramètres</button>
+                        <button type="submit" class="btn btn-crm btn-crm-primary px-4 shadow-sm">Enregistrer</button>
                     </div>
                 </form>
             </div>
 
-            <div class="crm-card border-0 shadow-sm bg-light">
-                <h6 class="text-uppercase text-muted fw-bold small mb-4 letter-spacing-wider">Livraison du webhook</h6>
-                <label class="text-muted x-small fw-bold text-uppercase d-block mb-1">URL du webhook de l’application</label>
-                <code class="small text-primary fw-bold">{{ webhook_url|default:"--" }}</code>
-                <div class="form-text small mt-2">
-                    Configurez cette URL exacte dans votre tableau de bord Tara. Générée côté serveur à partir de
-                    <code>PUBLIC_BASE_URL</code> — jamais déduite de la requête du navigateur, et non modifiable ici.
+            <div class="crm-card border-0 shadow-sm">
+                <h6 class="fw-bold mb-2">Adresse à donner à Tara</h6>
+                <p class="small text-muted mb-3">Tara utilise cette adresse pour nous prévenir de chaque paiement. Elle est déjà envoyée automatiquement avec chaque lien de paiement ; si Tara vous la demande, copiez-la telle quelle.</p>
+                {% if webhook_url %}
+                <div class="link-field" style="width:100%;">
+                    <span id="tara-webhook-url" style="flex:1;">{{ webhook_url }}</span>
+                    <button type="button" class="btn-crm btn-crm-outline btn-crm-sm js-copy" data-copy-target="tara-webhook-url">Copier</button>
                 </div>
+                {% else %}
+                <p class="small text-danger mb-0">Adresse publique du site non configurée sur le serveur (PUBLIC_BASE_URL) — à signaler au support technique.</p>
+                {% endif %}
             </div>
         </div>
 
         <div class="col-lg-4">
-            <div class="crm-card bg-dark text-white border-0 shadow-lg p-4 sticky-top" style="top: 100px;">
-                <h5 class="fw-bold mb-4 text-white">État de la passerelle</h5>
-
-                <div class="mb-4">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="small fw-bold text-uppercase opacity-50">Clé API</span>
-                        {% if api_key_configured %}
-                            <span class="text-success small fw-bold">CONFIGURÉE</span>
-                        {% else %}
-                            <span class="text-warning small fw-bold">MANQUANTE</span>
-                        {% endif %}
-                    </div>
-                    <div class="progress" style="height: 6px; background-color: rgba(255,255,255,0.1);">
-                        <div class="progress-bar bg-success" style="width: {% if api_key_configured %}100%{% else %}0%{% endif %}"></div>
-                    </div>
+            <div class="crm-card border-0 shadow-sm">
+                <h6 class="fw-bold mb-3"><i class="fa-solid fa-circle-question me-2 text-muted" aria-hidden="true"></i>À quoi ça sert ?</h6>
+                <p class="small mb-3">Tara encaisse les paiements de vos clients. Cette connexion permet à l'application de :</p>
+                <ul class="small ps-3 mb-3">
+                    <li class="mb-2">créer le lien de paiement de chaque vente ;</li>
+                    <li class="mb-2">être prévenue quand un client a payé ;</li>
+                    <li>vérifier chaque paiement directement auprès de Tara avant d'ouvrir l'accès.</li>
+                </ul>
+                <div class="small text-muted border-top pt-3">
+                    <div class="d-flex justify-content-between mb-1"><span>Business ID</span><span>{% if config.business_id %}✓ renseigné{% else %}manquant{% endif %}</span></div>
+                    <div class="d-flex justify-content-between mb-1"><span>Clé API</span><span>{% if api_key_configured %}✓ enregistrée{% else %}manquante{% endif %}</span></div>
+                    <div class="d-flex justify-content-between mb-1"><span>Secret de notification</span><span>{% if webhook_secret_configured %}✓ enregistré{% else %}manquant{% endif %}</span></div>
+                    <div class="d-flex justify-content-between"><span>Connexion utilisée</span><span>{% if config.is_active %}✓ oui{% else %}non{% endif %}</span></div>
                 </div>
-
-                <div class="mb-4">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="small fw-bold text-uppercase opacity-50">Secret du webhook</span>
-                        {% if webhook_secret_configured %}
-                            <span class="text-success small fw-bold">CONFIGURÉ</span>
-                        {% else %}
-                            <span class="text-warning small fw-bold">MANQUANT</span>
-                        {% endif %}
-                    </div>
-                    <div class="progress" style="height: 6px; background-color: rgba(255,255,255,0.1);">
-                        <div class="progress-bar bg-success" style="width: {% if webhook_secret_configured %}100%{% else %}0%{% endif %}"></div>
-                    </div>
-                </div>
-
-                <div class="mb-4">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="small fw-bold text-uppercase opacity-50">Statut de validation</span>
-                        <span class="text-white small fw-bold">{{ config.validation_status|default:"--" }}</span>
-                    </div>
-                </div>
-
-                {% if api_key_configured and webhook_secret_configured %}
-                    <div class="alert alert-success border-0 bg-white bg-opacity-10 text-white small mb-0 mt-4">
-                        <i class="fa-solid fa-check-circle me-2"></i> La passerelle est prête pour les transactions.
-                    </div>
-                {% else %}
-                    <div class="alert alert-warning border-0 bg-white bg-opacity-10 text-white small mb-0 mt-4">
-                        <i class="fa-solid fa-circle-exclamation me-2"></i> Renseignez les deux identifiants pour terminer.
-                    </div>
-                {% endif %}
             </div>
         </div>
     </div>
@@ -135,6 +127,5 @@
 
 <style>
     .border-dashed { border-style: dashed !important; }
-    .x-small { font-size: 0.65rem; }
 </style>
 {% endblock %}

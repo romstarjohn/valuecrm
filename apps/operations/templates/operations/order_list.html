@@ -1,91 +1,120 @@
 {% extends "base.html" %}
+{% load static status_labels vente_format %}
 
-{% block title %}Commandes | {{ BRAND_NAME }}{% endblock %}
+{% block title %}Ventes | {{ BRAND_NAME }}{% endblock %}
+
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/ventes.css' %}">{% endblock %}
 
 {% block content %}
-{% include "components/page_header.html" with title="Commandes" subtitle="Recherchez, filtrez et ouvrez n'importe quelle commande client." %}
+{% include "components/page_header.html" with title="Ventes" subtitle="Toutes les ventes, avec leur état et ce qu'il reste à faire. Cliquez sur une vente pour la traiter." %}
 
-<div class="container-fluid px-4 fade-in">
-    <div class="table-container mb-4 shadow-sm border-0">
-        <div class="table-toolbar flex-wrap gap-3">
-            <form method="get" class="d-flex flex-wrap align-items-center gap-2 flex-grow-1">
-                {% include "components/search_bar.html" with placeholder="Rechercher référence, client, plan, formation..." %}
+<div class="container-fluid px-4 fade-in pb-5">
 
-                <select name="status" class="form-select form-select-sm w-auto">
-                    <option value="">Tous les statuts</option>
-                    {% for value, label in status_options %}
-                        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
+    <!-- État: the one filter a non-technical user needs, as tabs -->
+    <nav class="sale-tabs mb-3" aria-label="Filtrer par état">
+        <a href="?{% if query %}q={{ query|urlencode }}{% endif %}" class="sale-tab {% if not etat_filter %}active{% endif %}">Toutes</a>
+        {% for value, label in etat_options %}
+            <a href="?etat={{ value }}{% if query %}&q={{ query|urlencode }}{% endif %}" class="sale-tab {% if etat_filter == value %}active{% endif %} {% if value == 'a_verifier' %}sale-tab-attention{% endif %}">
+                {{ label }}
+                {% if value == "a_verifier" and to_verify_count %}<span class="sale-tab-count">{{ to_verify_count }}</span>{% endif %}
+            </a>
+        {% endfor %}
+    </nav>
 
-                <select name="plan" class="form-select form-select-sm w-auto">
-                    <option value="">Tous les plans</option>
+    <form method="get" class="sale-filters mb-4">
+        {% if etat_filter %}<input type="hidden" name="etat" value="{{ etat_filter }}">{% endif %}
+        {% include "components/search_bar.html" with placeholder="Nom, e-mail ou réf. (#B40D…)" %}
+
+        <label class="visually-hidden" for="filter-course">Offre</label>
+        <select name="course" id="filter-course" class="form-select form-select-sm w-auto">
+            <option value="">Toutes les offres</option>
+            {% for course_id, course_name in course_options %}
+                <option value="{{ course_id }}" {% if course_filter == course_id|stringformat:"s" %}selected{% endif %}>{{ course_name }}</option>
+            {% endfor %}
+        </select>
+
+        <label class="small text-muted mb-0" for="filter-from">Du</label>
+        <input type="date" name="date_from" id="filter-from" class="form-control form-control-sm w-auto" value="{{ date_from }}">
+        <label class="small text-muted mb-0" for="filter-to">au</label>
+        <input type="date" name="date_to" id="filter-to" class="form-control form-control-sm w-auto" value="{{ date_to }}">
+
+        <button type="submit" class="btn btn-crm btn-crm-primary btn-sm">Filtrer</button>
+        <a href="{% url 'operations:order_list' %}" class="btn btn-crm-outline btn-sm">Tout effacer</a>
+
+        <details class="sale-more-filters w-100" {% if has_more_filters %}open{% endif %}>
+            <summary class="small text-muted">Plus de filtres</summary>
+            <div class="d-flex flex-wrap gap-2 mt-2">
+                <select name="plan" class="form-select form-select-sm w-auto" aria-label="Formule de prix">
+                    <option value="">Toutes les formules de prix</option>
                     {% for plan_id, plan_name in plan_options %}
                         <option value="{{ plan_id }}" {% if plan_filter == plan_id|stringformat:"s" %}selected{% endif %}>{{ plan_name }}</option>
                     {% endfor %}
                 </select>
-
-                <select name="access" class="form-select form-select-sm w-auto">
-                    <option value="">Tout état d'accès</option>
-                    <option value="eligible" {% if access_filter == "eligible" %}selected{% endif %}>Accès éligible</option>
-                    <option value="not_eligible" {% if access_filter == "not_eligible" %}selected{% endif %}>Pas encore éligible</option>
+                <select name="access" class="form-select form-select-sm w-auto" aria-label="Accès à la formation">
+                    <option value="">Accès : tous</option>
+                    <option value="eligible" {% if access_filter == "eligible" %}selected{% endif %}>Accès ouvert</option>
+                    <option value="not_eligible" {% if access_filter == "not_eligible" %}selected{% endif %}>Accès pas encore ouvert</option>
                 </select>
-
-                <select name="disposition" class="form-select form-select-sm w-auto">
-                    <option value="">Toute disposition</option>
+                <select name="disposition" class="form-select form-select-sm w-auto" aria-label="Signalement">
+                    <option value="">Signalement : tous</option>
                     {% for value, label in disposition_options %}
-                        <option value="{{ value }}" {% if disposition_filter == value %}selected{% endif %}>{{ label }}</option>
+                        {% if value != "NONE" %}<option value="{{ value }}" {% if disposition_filter == value %}selected{% endif %}>{{ value|status_label }}</option>{% endif %}
                     {% endfor %}
                 </select>
+                <select name="status" class="form-select form-select-sm w-auto" aria-label="Statut technique">
+                    <option value="">Statut technique : tous</option>
+                    {% for value, label in status_options %}
+                        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ value|status_label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </details>
+    </form>
 
-                <input type="date" name="date_from" class="form-control form-control-sm w-auto" value="{{ date_from }}" placeholder="Du">
-                <input type="date" name="date_to" class="form-control form-control-sm w-auto" value="{{ date_to }}" placeholder="Au">
-
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" name="needs_review" value="1" id="needsReview" {% if needs_review == "1" %}checked{% endif %}>
-                    <label class="form-check-label small" for="needsReview">À vérifier</label>
-                </div>
-
-                <button type="submit" class="btn btn-crm btn-crm-primary btn-sm">Appliquer</button>
-                <a href="{% url 'operations:order_list' %}" class="btn btn-crm-outline btn-sm">Réinitialiser</a>
-            </form>
-        </div>
-
-        {% if page_obj %}
-            {% include "components/table_start.html" with headers=headers %}
+    {% if page_obj %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>{% for header in headers %}<th>{{ header.label }}</th>{% endfor %}</tr>
+            </thead>
+            <tbody>
                 {% for order in page_obj %}
-                <tr class="row-linked">
-                    <td class="row-link-cell">
-                        <a href="{% url 'operations:order_detail' order.reference %}" class="row-link-stretched text-decoration-none fw-bold text-dark small">{{ order.reference }}</a>
+                <tr class="clickable {% if order.state.needs_attention %}sale-row-attention{% endif %}" onclick="window.location='{% url 'operations:order_detail' order.reference %}'">
+                    <td>
+                        <a href="{% url 'operations:order_detail' order.reference %}" class="cell-title text-decoration-none text-reset">
+                            {% if order.customer.first_name or order.customer.last_name %}{{ order.customer.first_name }} {{ order.customer.last_name }}{% else %}{{ order.customer.email }}{% endif %}
+                        </a>
+                        <div class="cell-sub">{{ order.customer.email }}</div>
                     </td>
                     <td>
-                        <div class="fw-bold text-dark small">{{ order.customer.first_name }} {{ order.customer.last_name }}</div>
-                        <div class="text-muted small">{{ order.customer.email }}</div>
+                        <div class="cell-title">{{ order.course_name }}</div>
+                        <div class="cell-sub">{{ order|formule }}</div>
                     </td>
-                    <td>
-                        <div class="small fw-medium">{{ order.plan_name }}</div>
-                        <div class="text-muted small">{{ order.course_name }}</div>
-                    </td>
-                    <td>
-                        <div class="small">Attendu : <strong>{{ order.total_expected_amount }} {{ order.currency }}</strong></div>
-                        <div class="small text-success">Payé : {{ order.display_total_paid }}</div>
-                        <div class="small text-muted">Restant : {{ order.display_remaining_balance }}</div>
-                    </td>
-                    <td>
-                        <span class="small fw-medium">{{ order.display_paid_count }}/{{ order.installment_count }}</span>
-                        {% if order.display_access_eligible %}
-                            <span class="badge-status badge-success ms-1">ÉLIGIBLE</span>
+                    <td class="text-nowrap">
+                        {% if order.state.key == "paid" %}
+                            <span class="cell-title">Payé {{ order.display_total_paid|money:order.currency }}</span>
+                        {% else %}
+                            <span class="cell-title">{{ order.display_total_paid|money:"" }} / {{ order.total_expected_amount|money:order.currency }}</span>
+                            <div class="cell-sub">payé / total</div>
                         {% endif %}
                     </td>
-                    <td>{% include "components/status_badge.html" with status=order.status %}</td>
-                    <td class="text-muted small">{{ order.created_at|date:"d M Y" }}</td>
+                    <td style="min-width:220px;">
+                        {% include "components/sale_state.html" with state=order.state with_explanation=1 %}
+                    </td>
+                    <td class="cell-sub text-nowrap">{{ order.created_at|date:"d/m/Y" }}</td>
+                    <td class="cell-sub text-nowrap">{{ order.reference|short_ref }}</td>
                 </tr>
                 {% endfor %}
-            {% include "components/table_end.html" %}
-        {% else %}
-            {% include "components/table_empty_state.html" with title="Aucune commande trouvée" description="Ajustez vos filtres — aucune commande ne correspond aux critères actuels." %}
-        {% endif %}
+            </tbody>
+        </table>
     </div>
+    {% else %}
+        {% if etat_filter == "a_verifier" %}
+            {% include "components/table_empty_state.html" with title="Rien à vérifier" description="Aucune vente ne demande votre attention pour le moment." %}
+        {% else %}
+            {% include "components/table_empty_state.html" with title="Aucune vente trouvée" description="Essayez une autre recherche, ou cliquez sur « Tout effacer » pour revoir toutes les ventes." %}
+        {% endif %}
+    {% endif %}
 
     {% if page_obj %}
         {% include "components/pagination.html" with page_obj=page_obj %}
