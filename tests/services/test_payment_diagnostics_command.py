@@ -33,3 +33,21 @@ def test_payment_diagnostics_is_read_only_and_hides_personal_data():
     assert "private@example.com" not in text and "Secret" not in text
     attempt.refresh_from_db()
     assert attempt.status == PaymentAttempt.Status.LINK_CREATED
+
+
+def test_raw_status_masks_values_outside_whitelist(mocker):
+    client = mocker.Mock(api_key="k", business_id="b", BASE_URL="https://tara.invalid")
+    client._request.return_value = {
+        "status": "FAILED", "message": "Transaction not found",
+        "data": {"transactionId": "tx-1", "phoneNumber": "690000000"},
+    }
+    mocker.patch("apps.payments.management.commands.payment_diagnostics.TaraConfigService.get_client", return_value=client)
+
+    out = StringIO()
+    call_command("payment_diagnostics", raw_status="vcrm-abc", stdout=out)
+    text = out.getvalue()
+
+    assert "status: 'FAILED'" in text
+    assert "message: 'Transaction not found'" in text
+    assert "phoneNumber: <str, masked>" in text
+    assert "690000000" not in text and "tx-1" not in text
