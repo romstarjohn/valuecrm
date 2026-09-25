@@ -51,3 +51,41 @@ def test_raw_status_masks_values_outside_whitelist(mocker):
     assert "message: 'Transaction not found'" in text
     assert "phoneNumber: <str, masked>" in text
     assert "690000000" not in text and "tx-1" not in text
+
+
+def test_paid_list_marks_transactions_matching_webhook_payment_id(mocker):
+    from apps.payments.models import TaraWebhookEvent
+    from integrations.payments.tara.schemas import TaraTransactionListItem
+
+    TaraWebhookEvent.objects.create(dedup_key="d1", tara_product_id="vcrm-1", tara_payment_id="pay-1", raw_provider_status="SUCCESS")
+    client = mocker.Mock()
+    client.list_paid_transactions.return_value = [
+        TaraTransactionListItem.model_validate({"transactionId": "pay-1", "amount": 1000, "currency": "XAF", "status": "PAID"}),
+        TaraTransactionListItem.model_validate({"transactionId": "other", "amount": 500, "currency": "XAF", "status": "PAID"}),
+    ]
+    mocker.patch("apps.payments.management.commands.payment_diagnostics.TaraConfigService.get_client", return_value=client)
+
+    out = StringIO()
+    call_command("payment_diagnostics", paid_list=True, stdout=out)
+    text = out.getvalue()
+
+    assert "transactionId=pay-1" in text and "matches webhook for product vcrm-1" in text
+    assert text.count("<== matches") == 1
+
+
+def test_raw_status_expands_json_text_fields(mocker):
+    import json
+    client = mocker.Mock(api_key="k", business_id="b", BASE_URL="https://tara.invalid")
+    client._request.return_value = {
+        "status": "SUCCESS",
+        "payload": json.dumps({"productId": "vcrm-1", "amount": "1000", "phoneNumber": "690000000"}),
+    }
+    mocker.patch("apps.payments.management.commands.payment_diagnostics.TaraConfigService.get_client", return_value=client)
+
+    out = StringIO()
+    call_command("payment_diagnostics", raw_status="pay-1", stdout=out)
+    text = out.getvalue()
+
+    assert "payload (JSON text): {" in text
+    assert "productId: 'vcrm-1'" in text and "amount: '1000'" in text
+    assert "690000000" not in text

@@ -1,3 +1,5 @@
+import json
+
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
@@ -7,7 +9,10 @@ from integrations.payments.tara.exceptions import TaraMalformedResponseError
 from integrations.payments.tara.schemas import TaraTransactionStatusRequest
 
 # Values printed as-is by --raw-status; every other value is masked (may hold phone numbers or other personal data).
-_RAW_STATUS_VISIBLE_KEYS = {"status", "message", "productId", "code", "error", "success"}
+_RAW_STATUS_VISIBLE_KEYS = {
+    "status", "message", "productId", "code", "error", "success",
+    "amount", "currency", "productPrice", "price", "paymentId", "businessId", "type", "paymentMethod",
+}
 
 
 class Command(BaseCommand):
@@ -24,14 +29,21 @@ class Command(BaseCommand):
         parser.add_argument("--limit", type=int, default=50, help="Most recent N orders (default 50).")
         parser.add_argument("--check-tara", action="store_true", help="Also query Tara's live status per attempt (read-only).")
         parser.add_argument(
-            "--raw-status", metavar="PRODUCT_ID",
-            help="Only show the shape of Tara's raw /transactions/status answer for one productId (values masked).",
+            "--raw-status", metavar="ID",
+            help="Only show the shape of Tara's raw /transactions/status answer for one id (values masked).",
+        )
+        parser.add_argument(
+            "--paid-list", action="store_true",
+            help="Only list Tara's paid transactions (first 100) and mark those matching a received webhook's paymentId.",
         )
 
     def handle(self, *args, **options):
         out = self.stdout.write
         if options["raw_status"]:
             self._print_raw_status(options["raw_status"])
+            return
+        if options["paid_list"]:
+            self._print_paid_list()
             return
         out(f"PUBLIC_BASE_URL = {settings.PUBLIC_BASE_URL or '(not set)'}")
         out(f"Webhook URL sent to Tara = {settings.PUBLIC_BASE_URL}/api/tara/webhook/")
@@ -66,7 +78,8 @@ class Command(BaseCommand):
                     for event in events:
                         out(
                             f"      webhook {event.received_at:%m-%d %H:%M}  claimed={event.raw_provider_status or '-'}  "
-                            f"-> {event.processing_status}/{event.verification_result}  {event.failure_category or ''}"
+                            f"-> {event.processing_status}/{event.verification_result}  {event.failure_category or ''}  "
+                            f"paymentId={event.tara_payment_id or '-'}  amount={event.amount if event.amount is not None else '-'}"
                         )
 
         uncorrelated = TaraWebhookEvent.objects.filter(payment_attempt__isnull=True).count()
@@ -111,6 +124,29 @@ class Command(BaseCommand):
                 lines.append(cls._describe(value[0], indent + 1, "first item"))
             lines.append(f"{pad}]")
             return "\n".join(lines)
+        if isinstance(value, str) and value.strip()[:1] in ("{", "["):
+            try:
+                return cls._describe(json.loads(value), indent, f"{key} (JSON text)")
+            except ValueError:
+                pass
         shown = repr(value) if key in _RAW_STATUS_VISIBLE_KEYS else f"<{type(value).__name__}, masked>"
         return f"{pad}{key}: {shown}"
+
+    def _print_paid_list(self) -> None:
+        out = self.stdout.write
+        client = TaraConfigService().get_client()
+        items = client.list_paid_transactions(start=0, size=100)
+        webhook_payment_ids = {
+            pid: product for pid, product in
+            TaraWebhookEvent.objects.exclude(tara_payment_id="").values_list("tara_payment_id", "tara_product_id")
+        }
+        out(f"Tara paid transactions returned: {len(items)}")
+        for item in items:
+            match = webhook_payment_ids.get(item.transaction_id or "")
+            marker = f"  <== matches webhook for product {match}" if match else ""
+            out(
+                f"  transactionId={item.transaction_id or '-'}  amount={item.amount} {item.currency or ''}  "
+                f"status={item.status or '-'}  created={item.created_at or '-'}  paid={item.paid_at or '-'}{marker}"
+            )
+        out(f"Webhook paymentIds on record: {', '.join(webhook_payment_ids) or '(none)'}")
 
