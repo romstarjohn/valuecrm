@@ -110,6 +110,7 @@ class ReconciliationRun(TimeStampedModel):
 
     missing_work_repaired = models.PositiveIntegerField(default=0)
     uncorrelated_transaction_list_records = models.PositiveIntegerField(default=0)
+    orders_expired = models.PositiveIntegerField(default=0)
     safe_error_count = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -218,6 +219,10 @@ class Order(TimeStampedModel):
         COMPLETED = "COMPLETED", "Completed"
         CANCELLED = "CANCELLED", "Cancelled"
         SUSPENDED = "SUSPENDED", "Suspended"
+        # Checkout started but never paid within the expiry window
+        # (OrderExpiryService). Not terminal: a verified late payment
+        # reactivates the order, and the same checkout can be reopened.
+        EXPIRED = "EXPIRED", "Expired"
 
     reference = models.UUIDField(
         default=uuid.uuid4, editable=False, unique=True, db_index=True,
@@ -278,7 +283,7 @@ class Order(TimeStampedModel):
             models.CheckConstraint(condition=models.Q(total_expected_amount__gt=0), name="order_total_positive"),
             models.CheckConstraint(condition=models.Q(installment_count__gte=1), name="order_installment_count_positive"),
             models.CheckConstraint(
-                condition=models.Q(status__in=["PENDING", "ACTIVE", "PAST_DUE", "COMPLETED", "CANCELLED", "SUSPENDED"]),
+                condition=models.Q(status__in=["PENDING", "ACTIVE", "PAST_DUE", "COMPLETED", "CANCELLED", "SUSPENDED", "EXPIRED"]),
                 name="order_status_valid",
             ),
         ]
@@ -534,6 +539,7 @@ class TaraWebhookEvent(TimeStampedModel):
         PAYMENT_ID_CONFLICT = "PAYMENT_ID_CONFLICT", "Tara paymentId already linked to a different attempt"
         DUPLICATE_PAYMENT = "DUPLICATE_PAYMENT", "Verified payment for an installment already paid via another attempt"
         INVALID_STATE_TRANSITION = "INVALID_STATE_TRANSITION", "Verified payment could not be applied in the current state"
+        PROVIDER_PRODUCT_MISMATCH = "PROVIDER_PRODUCT_MISMATCH", "Tara's answer belongs to another productId/business"
         PROVIDER_LOOKUP_INDETERMINATE = "PROVIDER_LOOKUP_INDETERMINATE", "Server-to-server status lookup was indeterminate"
         MALFORMED = "MALFORMED", "Malformed or inconsistent provider response"
 

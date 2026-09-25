@@ -163,6 +163,10 @@ def order_list(request):
 
     if status_filter in dict(Order.Status.choices):
         orders = orders.filter(status=status_filter)
+    elif not query:
+        # Expired checkouts are noise in the default view; filtering by status
+        # EXPIRED or searching (e.g. by customer email) still finds them.
+        orders = orders.exclude(status=Order.Status.EXPIRED)
 
     if plan_filter.isdigit():
         orders = orders.filter(plan_id=int(plan_filter))

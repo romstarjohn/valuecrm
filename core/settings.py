@@ -153,6 +153,14 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@valuedcrm.example
 # Apache terminates HTTPS and forwards requests to Gunicorn over HTTP.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
+# Unpaid checkout orders are marked EXPIRED by the hourly reconciliation
+# (apps/payments/services.py::OrderExpiryService): after
+# ORDER_PENDING_EXPIRY_DAYS, or after ORDER_FAILED_CHECKOUT_EXPIRY_MINUTES
+# when Tara never even issued a payment link. Tara documents no link
+# validity period — align the day count with Tara once known.
+ORDER_PENDING_EXPIRY_DAYS = int(os.getenv("ORDER_PENDING_EXPIRY_DAYS", "7"))
+ORDER_FAILED_CHECKOUT_EXPIRY_MINUTES = int(os.getenv("ORDER_FAILED_CHECKOUT_EXPIRY_MINUTES", "60"))
+
 # Number of reverse proxies in front of Gunicorn that append to
 # X-Forwarded-For (Apache = 1). 0 keeps REMOTE_ADDR, correct only without a
 # proxy — behind Apache it would turn every per-IP rate limit into one global

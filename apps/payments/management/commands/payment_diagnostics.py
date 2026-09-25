@@ -4,7 +4,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from apps.payments.models import Order, TaraWebhookEvent
-from apps.payments.services import TaraConfigService
+from apps.payments.services import TaraConfigService, TaraVerificationService
 from integrations.payments.tara.exceptions import TaraMalformedResponseError
 from integrations.payments.tara.schemas import TaraTransactionStatusRequest
 
@@ -71,7 +71,7 @@ class Command(BaseCommand):
                         f"created={attempt.created_at:%m-%d %H:%M}"
                     )
                     if client is not None and attempt.status != attempt.Status.CREATED:
-                        out(f"      TARA LIVE: {self._live_status(client, attempt.tara_product_id)}")
+                        out(f"      TARA LIVE: {self._live_status(client, attempt)}")
                     events = TaraWebhookEvent.objects.filter(tara_product_id=attempt.tara_product_id).order_by("received_at")
                     if not events:
                         out("      (no webhook received)")
@@ -86,15 +86,22 @@ class Command(BaseCommand):
         out(f"\nWebhook events not linked to any attempt = {uncorrelated}")
 
     @staticmethod
-    def _live_status(client, product_id: str) -> str:
+    def _live_status(client, attempt) -> str:
+        """Same verification the webhook/admin/reconciliation paths use — printed only, never applied."""
+        service = TaraVerificationService()
         try:
-            response = client.check_transaction_status(product_id)
+            verification = service.verify(client, attempt, service.candidate_payment_ids(attempt))
         except TaraMalformedResponseError as e:
             # TaraClient builds these messages from field names only, never response values.
             return f"lookup failed (TaraMalformedResponseError: {e})"
         except Exception as e:  # noqa: BLE001 — never leak str(e) (may contain a raw provider body)
             return f"lookup failed ({type(e).__name__})"
-        return f"{response.status} (normalized {response.normalized_status.value})"
+        if verification.failure_category:
+            return f"{verification.normalized.value} — NOT creditable ({verification.failure_category}, amount={verification.amount})"
+        return (
+            f"{verification.normalized.value} (paymentId={verification.payment_id or '-'}, amount={verification.amount})"
+            + ("  => would be credited" if verification.normalized.value == "SUCCESS" else "")
+        )
 
     def _print_raw_status(self, product_id: str) -> None:
         out = self.stdout.write

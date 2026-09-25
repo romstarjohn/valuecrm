@@ -44,6 +44,7 @@ from .models import (
     TaraWebhookEvent,
 )
 from .services import (
+    TaraVerificationService,
     DuplicatePaymentError,
     InstallmentService,
     InvalidStateTransitionError,
@@ -451,7 +452,10 @@ class PaymentAttemptAdministrationService:
             raise AdminActionError("Tara is not configured; status could not be checked.") from e
 
         try:
-            status_response = client.check_transaction_status(attempt.tara_product_id)
+            verification_service = TaraVerificationService()
+            verification = verification_service.verify(
+                client, attempt, verification_service.candidate_payment_ids(attempt),
+            )
         except (TaraTimeoutError, TaraConnectionError, TaraServerError, TaraClientError, TaraMalformedResponseError, Exception) as e:
             # Broad `Exception` deliberately included, not just the documented
             # Tara exception taxonomy — any unexpected error from the client
@@ -469,7 +473,7 @@ class PaymentAttemptAdministrationService:
             )
             return attempt  # non-final — never raised as an error to keep the attempt inspectable, not a hard failure
 
-        if status_response.product_id != attempt.tara_product_id:
+        if verification.failure_category == TaraWebhookEvent.FailureCategory.MALFORMED:
             AdminAuditService().record(
                 administrator=administrator, action_type=AdminAuditLog.ActionType.CHECK_TARA_STATUS,
                 target_type=AdminAuditLog.TargetType.PAYMENT_ATTEMPT, target_reference=_safe_reference(attempt),
@@ -480,7 +484,27 @@ class PaymentAttemptAdministrationService:
             )
             return attempt
 
-        normalized = status_response.normalized_status
+        if verification.failure_category:
+            # Tara answered, but not in a way that may be applied: the payment
+            # belongs to another productId/business, or its amount differs.
+            AdminAuditService().record(
+                administrator=administrator, action_type=AdminAuditLog.ActionType.CHECK_TARA_STATUS,
+                target_type=AdminAuditLog.TargetType.PAYMENT_ATTEMPT, target_reference=_safe_reference(attempt),
+                order=attempt.installment.order, installment=attempt.installment, payment_attempt=attempt,
+                previous_state=previous_status, resulting_state=previous_status,
+                reason=reason, outcome_category=AdminAuditLog.OutcomeCategory.FAILED,
+                request=request,
+            )
+            if verification.failure_category == TaraWebhookEvent.FailureCategory.AMOUNT_MISMATCH:
+                raise AdminActionError(
+                    f"Tara reports a payment of {verification.amount} for this attempt, "
+                    f"but {attempt.expected_amount} was expected. Not credited — manual review required."
+                )
+            raise AdminActionError(
+                "Tara's answer does not belong to this payment attempt (other product or business). Not credited."
+            )
+
+        normalized = verification.normalized
 
         def write_audit(applied_attempt: PaymentAttempt, outcome: str) -> None:
             # Invoked from inside PaymentCreditService's own transaction (via
@@ -498,7 +522,7 @@ class PaymentAttemptAdministrationService:
         if normalized == TaraTransactionStatus.SUCCESS:
             try:
                 attempt = PaymentCreditService().apply_verified_success(
-                    attempt.id,
+                    attempt.id, tara_payment_id=verification.payment_id, verified_amount=verification.amount,
                     on_applied=lambda a, newly_applied: write_audit(a, AdminAuditLog.OutcomeCategory.SUCCESS),
                 )
             except PaymentIdConflictError as e:

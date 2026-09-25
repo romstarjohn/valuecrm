@@ -3,6 +3,7 @@ import hmac as hmac_module
 import json
 import re
 import smtplib
+from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Callable, Optional, Tuple
@@ -157,7 +158,10 @@ class TaraConfigService:
 
 
 _ORDER_TRANSITIONS = {
-    Order.Status.PENDING: {Order.Status.ACTIVE, Order.Status.CANCELLED, Order.Status.SUSPENDED},
+    Order.Status.PENDING: {Order.Status.ACTIVE, Order.Status.CANCELLED, Order.Status.SUSPENDED, Order.Status.EXPIRED},
+    # Not terminal: a verified late payment reactivates it (-> ACTIVE), the
+    # customer reopening the same checkout reopens it (-> PENDING).
+    Order.Status.EXPIRED: {Order.Status.ACTIVE, Order.Status.PENDING, Order.Status.CANCELLED},
     Order.Status.ACTIVE: {Order.Status.PAST_DUE, Order.Status.COMPLETED, Order.Status.CANCELLED, Order.Status.SUSPENDED},
     Order.Status.PAST_DUE: {Order.Status.ACTIVE, Order.Status.COMPLETED, Order.Status.CANCELLED, Order.Status.SUSPENDED},
     Order.Status.COMPLETED: set(),  # terminal
@@ -546,7 +550,14 @@ class CheckoutService:
         log_service_start(logger, "CheckoutService", "start_checkout")
         base_url = self._require_public_base_url()
 
-        order, _ = OrderService().create_order(customer, plan_id, idempotency_key)
+        order = None
+        if not Order.objects.filter(idempotency_key=idempotency_key).exists():
+            order = self._find_reusable_order(customer, plan_id)
+        if order is None:
+            order, _ = OrderService().create_order(customer, plan_id, idempotency_key)
+        if order.status == Order.Status.EXPIRED:
+            # Same checkout reopened (e.g. an old tab) — the customer is actively paying again.
+            order = OrderService().transition(order, Order.Status.PENDING)
         signed_reference = self.build_signed_reference(order.reference)
 
         installment = (
@@ -572,6 +583,31 @@ class CheckoutService:
         # LINK_CREATED without a stored link, defensively) -> call Tara.
         log_service_success(logger, "CheckoutService", "start_checkout", order_id=order.id)
         return self._create_link_for_attempt(order, signed_reference, installment, attempt, base_url)
+
+    def _find_reusable_order(self, customer: Contact, plan_id: int) -> Optional[Order]:
+        """
+        The customer restarting checkout for the same plan (new visit, so a
+        new idempotency key) continues their open unpaid order instead of
+        creating a duplicate. Only a PENDING order without any payment, still
+        inside the expiry window, and whose frozen price terms still equal the
+        plan's current ones — a price change always yields a fresh order.
+        Never an order with a paid installment, so reuse can never reveal
+        anything a brand-new order wouldn't show (checkout is guest, by email).
+        """
+        plan = PaymentPlan.objects.filter(pk=plan_id).first()
+        if plan is None:
+            return None
+        cutoff = timezone.now() - timedelta(days=settings.ORDER_PENDING_EXPIRY_DAYS)
+        return (
+            Order.objects.filter(
+                customer=customer, plan_id=plan_id, status=Order.Status.PENDING, created_at__gte=cutoff,
+                installment_amount=plan.installment_amount, installment_count=plan.installment_count,
+                currency=plan.currency,
+            )
+            .exclude(installments__status__in=[Installment.Status.PAID, Installment.Status.WAIVED])
+            .order_by("-created_at")
+            .first()
+        )
 
     def _require_public_base_url(self) -> str:
         base_url = (getattr(settings, "PUBLIC_BASE_URL", "") or "").strip()
@@ -931,7 +967,7 @@ class PaymentCreditService:
         )
 
         order_service = OrderService()
-        if (any_paid or all_settled) and order.status == Order.Status.PENDING:
+        if (any_paid or all_settled) and order.status in (Order.Status.PENDING, Order.Status.EXPIRED):
             order = order_service.transition(order, Order.Status.ACTIVE)
 
         if all_settled and order.status != Order.Status.COMPLETED:
@@ -1121,6 +1157,179 @@ class PaymentConfirmationDeliveryService:
         return subject, body
 
 
+class OrderExpiryService:
+    """
+    Marks unpaid checkout orders EXPIRED so they stop looking like open work
+    (run hourly from ReconciliationService; `expire_stale_orders` command for
+    manual/dry runs). Two thresholds:
+    - ORDER_FAILED_CHECKOUT_EXPIRY_MINUTES when Tara never issued a payment
+      link (the customer could never pay — pure noise);
+    - ORDER_PENDING_EXPIRY_DAYS otherwise (link issued, never paid).
+
+    Never expires an order that might have been paid: any attempt that is
+    SUCCEEDED/PENDING/UNKNOWN, or any Tara webhook for its attempts that is
+    not cleanly PROCESSED, keeps the order visible for review. Installments
+    are deliberately left untouched and open attempts only become EXPIRED —
+    both stay payable, so a verified late payment still credits normally
+    (PaymentCreditService reopens the attempt and reactivates the order).
+    """
+
+    def eligible_orders(self, now=None):
+        now = now or timezone.now()
+        stale_cutoff = now - timedelta(days=settings.ORDER_PENDING_EXPIRY_DAYS)
+        no_link_cutoff = now - timedelta(minutes=settings.ORDER_FAILED_CHECKOUT_EXPIRY_MINUTES)
+
+        has_link = models.Exists(
+            PaymentAttempt.objects.filter(installment__order=models.OuterRef("pk")).exclude(general_link="")
+        )
+        might_be_paid = models.Exists(
+            PaymentAttempt.objects.filter(
+                installment__order=models.OuterRef("pk"),
+                status__in=[PaymentAttempt.Status.SUCCEEDED, PaymentAttempt.Status.PENDING, PaymentAttempt.Status.UNKNOWN],
+            )
+        )
+        unresolved_webhook = models.Exists(
+            TaraWebhookEvent.objects.filter(
+                tara_product_id__in=PaymentAttempt.objects.filter(
+                    installment__order=models.OuterRef(models.OuterRef("pk")),
+                ).values("tara_product_id"),
+            ).exclude(processing_status=TaraWebhookEvent.ProcessingStatus.PROCESSED)
+        )
+        return (
+            Order.objects.filter(status=Order.Status.PENDING)
+            .annotate(_has_link=has_link, _might_be_paid=might_be_paid, _unresolved_webhook=unresolved_webhook)
+            .filter(_might_be_paid=False, _unresolved_webhook=False)
+            .exclude(installments__status__in=[Installment.Status.PAID, Installment.Status.WAIVED])
+            .filter(models.Q(created_at__lte=stale_cutoff) | models.Q(_has_link=False, created_at__lte=no_link_cutoff))
+            .distinct()
+        )
+
+    def expire_stale_orders(self, now=None, limit: int = 200) -> int:
+        expired = 0
+        for order_id in list(self.eligible_orders(now).order_by("created_at").values_list("id", flat=True)[:limit]):
+            if self._expire_one(order_id):
+                expired += 1
+        log_service_success(logger, "OrderExpiryService", "expire_stale_orders", created=expired)
+        return expired
+
+    def _expire_one(self, order_id: int) -> bool:
+        with transaction.atomic():
+            order = Order.objects.select_for_update().get(pk=order_id)
+            if order.status != Order.Status.PENDING:
+                return False  # changed since selection (paid, cancelled, reopened)
+            attempts = list(
+                PaymentAttempt.objects.select_for_update().filter(installment__order=order)
+            )
+            if any(a.status in (PaymentAttempt.Status.SUCCEEDED, PaymentAttempt.Status.PENDING, PaymentAttempt.Status.UNKNOWN) for a in attempts):
+                return False
+            for attempt in attempts:
+                if attempt.status in (PaymentAttempt.Status.CREATED, PaymentAttempt.Status.LINK_CREATED):
+                    PaymentAttemptService().transition(attempt, PaymentAttempt.Status.EXPIRED)
+            OrderService().transition(order, Order.Status.EXPIRED)
+            log_service_success(logger, "OrderExpiryService", "_expire_one", order_id=order.id)
+            return True
+
+
+@dataclass
+class TaraVerification:
+    """
+    Outcome of one server-to-server verification of a PaymentAttempt.
+    `failure_category` is set when Tara's answer must NOT be applied even
+    though Tara answered (it belongs to another product, or the amount differs).
+    """
+    normalized: TaraTransactionStatus
+    raw_status: str = ""
+    payment_id: Optional[str] = None
+    amount: Optional[Decimal] = None
+    failure_category: str = ""
+
+
+class TaraVerificationService:
+    """
+    The single place that asks Tara whether a PaymentAttempt was paid — used
+    by the webhook, the admin "Vérifier le statut Tara" action and
+    reconciliation alike.
+
+    Production finding (2026-09-25): /tara/transactions/status does NOT find
+    payment-link payments by our productId (answers
+    PAYMENT_FOR_TRANSACTION_NOT_FOUND), but DOES find them by Tara's
+    paymentId, returning a payload that names the productId, paymentId,
+    businessId and gross amount (see TaraPaymentStatusResponse). So each
+    candidate paymentId is queried first, and its answer is only trusted
+    when Tara itself says it belongs to THIS attempt's productId, under our
+    businessId. A paymentId is only ever a lookup key — it typically comes
+    from an (untrusted) webhook, and a forged one pointing at someone else's
+    real payment is caught by exactly that productId check. The documented
+    productId lookup remains as a fallback.
+
+    Transport/configuration exceptions from TaraClient propagate unchanged,
+    so each caller keeps its own indeterminate-outcome handling.
+    """
+
+    MAX_CANDIDATES = 5
+
+    def candidate_payment_ids(self, attempt: PaymentAttempt, preferred: Optional[str] = None) -> list:
+        ids = [preferred, attempt.tara_payment_id]
+        ids += list(
+            TaraWebhookEvent.objects.filter(tara_product_id=attempt.tara_product_id)
+            .exclude(tara_payment_id="")
+            .order_by("-received_at")
+            .values_list("tara_payment_id", flat=True)[: self.MAX_CANDIDATES]
+        )
+        unique = []
+        for payment_id in ids:
+            # A paymentId equal to our own productId (seen on PayPal webhooks) is no separate lookup key.
+            if payment_id and payment_id != attempt.tara_product_id and payment_id not in unique:
+                unique.append(payment_id)
+        return unique[: self.MAX_CANDIDATES]
+
+    def verify(self, client, attempt: PaymentAttempt, candidate_payment_ids) -> TaraVerification:
+        definitive = None
+        rejected = None
+        for payment_id in candidate_payment_ids:
+            response = client.check_payment_status(payment_id)
+            normalized = response.normalized_status
+            if normalized == TaraTransactionStatus.UNKNOWN:
+                continue  # not found under this id — not a verdict
+            raw_status = response.status[:50]
+            belongs_to_attempt = (
+                response.product_id == attempt.tara_product_id
+                and response.payment_id in (None, payment_id)
+                and response.business_id in (None, client.business_id)
+            )
+            if not belongs_to_attempt:
+                rejected = rejected or TaraVerification(
+                    TaraTransactionStatus.UNKNOWN, raw_status,
+                    failure_category=TaraWebhookEvent.FailureCategory.PROVIDER_PRODUCT_MISMATCH,
+                )
+                continue
+            if normalized == TaraTransactionStatus.SUCCESS:
+                if response.amount is None or response.amount != attempt.expected_amount:
+                    rejected = rejected or TaraVerification(
+                        TaraTransactionStatus.SUCCESS, raw_status, payment_id, response.amount,
+                        failure_category=TaraWebhookEvent.FailureCategory.AMOUNT_MISMATCH,
+                    )
+                    continue
+                return TaraVerification(TaraTransactionStatus.SUCCESS, raw_status, payment_id, response.amount)
+            definitive = definitive or TaraVerification(normalized, raw_status, payment_id)
+
+        if rejected is not None:
+            return rejected
+        if definitive is not None:
+            return definitive
+
+        # Documented lookup by our productId. TaraClient already rejects a
+        # mismatching productId; re-checked here so this service never depends
+        # on a client implementation detail for its binding guarantee.
+        legacy = client.check_transaction_status(attempt.tara_product_id)
+        if legacy.product_id != attempt.tara_product_id:
+            return TaraVerification(
+                TaraTransactionStatus.UNKNOWN, legacy.status[:50],
+                failure_category=TaraWebhookEvent.FailureCategory.MALFORMED,
+            )
+        return TaraVerification(legacy.normalized_status, legacy.status[:50])
+
+
 class WebhookProcessingService:
     """
     Entry point for POST /api/tara/webhook/ (Phase 6,
@@ -1226,7 +1435,10 @@ class WebhookProcessingService:
 
         try:
             client = TaraConfigService().get_client()
-            status_response = client.check_transaction_status(attempt.tara_product_id)
+            verification_service = TaraVerificationService()
+            verification = verification_service.verify(
+                client, attempt, verification_service.candidate_payment_ids(attempt, preferred=payload.payment_id),
+            )
         except (TaraConfigurationError, TaraCredentialError) as e:
             log_service_failure(logger, "WebhookProcessingService", "_verify_and_apply", e, product_id=attempt.tara_product_id)
             event.verification_result = TaraWebhookEvent.VerificationResult.SKIPPED
@@ -1243,19 +1455,22 @@ class WebhookProcessingService:
             event.save()
             return
 
-        if status_response.product_id != attempt.tara_product_id:
+        event.raw_provider_status = verification.raw_status
+        normalized = verification.normalized
+
+        if verification.failure_category in (
+            TaraWebhookEvent.FailureCategory.PROVIDER_PRODUCT_MISMATCH, TaraWebhookEvent.FailureCategory.MALFORMED,
+        ):
             event.verification_result = TaraWebhookEvent.VerificationResult.UNKNOWN
             event.processing_status = TaraWebhookEvent.ProcessingStatus.FAILED
-            event.failure_category = TaraWebhookEvent.FailureCategory.MALFORMED
+            event.failure_category = verification.failure_category
             event.processed_at = timezone.now()
             event.save()
             return
 
-        event.raw_provider_status = status_response.status[:50]
-        normalized = status_response.normalized_status
-
         if normalized == TaraTransactionStatus.SUCCESS:
-            if payload.amount is not None and payload.amount != attempt.expected_amount:
+            amount_mismatch = verification.failure_category == TaraWebhookEvent.FailureCategory.AMOUNT_MISMATCH
+            if amount_mismatch or (payload.amount is not None and payload.amount != attempt.expected_amount):
                 # Webhook amount is never proof by itself, but a present-and-differing
                 # value is an anomaly-review signal — do not credit automatically.
                 event.verification_result = TaraWebhookEvent.VerificationResult.SUCCESS
@@ -1267,7 +1482,9 @@ class WebhookProcessingService:
 
             try:
                 PaymentCreditService().apply_verified_success(
-                    attempt.id, tara_payment_id=payload.payment_id, verified_amount=payload.amount,
+                    attempt.id,
+                    tara_payment_id=verification.payment_id or payload.payment_id,
+                    verified_amount=verification.amount if verification.amount is not None else payload.amount,
                 )
                 event.verification_result = TaraWebhookEvent.VerificationResult.SUCCESS
                 event.processing_status = TaraWebhookEvent.ProcessingStatus.PROCESSED

@@ -31,6 +31,7 @@ from django.db.models import Q
 from .models import Installment, Order, PaymentAttempt, PaymentConfirmation, ReconciliationRun
 from .services import (
     DuplicatePaymentError,
+    OrderExpiryService,
     InvalidStateTransitionError,
     PaymentAttemptService,
     PaymentConfirmationDeliveryService,
@@ -38,6 +39,7 @@ from .services import (
     PaymentCreditService,
     PaymentIdConflictError,
     TaraConfigService,
+    TaraVerificationService,
 )
 from integrations.payments.tara.exceptions import (
     TaraClientError,
@@ -113,7 +115,7 @@ class ReconciliationService:
             "still_pending_or_unknown": 0, "confirmation_jobs_processed": 0, "confirmation_jobs_sent": 0,
             "confirmation_jobs_failed": 0, "provisioning_jobs_processed": 0, "provisioning_jobs_completed": 0,
             "provisioning_jobs_failed": 0, "missing_work_repaired": 0, "uncorrelated_transaction_list_records": 0,
-            "safe_error_count": 0,
+            "orders_expired": 0, "safe_error_count": 0,
         }
 
         try:
@@ -122,6 +124,7 @@ class ReconciliationService:
             self._process_confirmations(counters)
             self._process_provisioning(counters)
             self._repair_missing_followups(counters)
+            self._expire_stale_orders(counters)
             run.run_status = (
                 ReconciliationRun.RunStatus.SUCCESS if counters["safe_error_count"] == 0
                 else ReconciliationRun.RunStatus.PARTIAL_FAILURE
@@ -178,26 +181,29 @@ class ReconciliationService:
         if attempt.status not in (PaymentAttempt.Status.PENDING, PaymentAttempt.Status.UNKNOWN):
             return  # resolved before we got to it (e.g. a concurrent webhook)
 
-        product_id = attempt.tara_product_id
         counters["status_checks"] += 1
 
         # Network call happens here — deliberately outside any DB transaction/lock.
         try:
-            status_response = client.check_transaction_status(product_id)
-            mismatch = status_response.product_id != product_id
+            verification_service = TaraVerificationService()
+            verification = verification_service.verify(
+                client, attempt, verification_service.candidate_payment_ids(attempt),
+            )
         except _RETRYABLE_STATUS_CHECK_ERRORS:
-            status_response = None
-            mismatch = False
+            verification = None
 
-        if status_response is None or mismatch:
+        if verification is None or verification.failure_category:
+            # Indeterminate, or an answer that must not be applied (other product / amount differs) — left for review.
             self._bump_check_count(attempt_id)
             counters["still_pending_or_unknown"] += 1
             return
 
-        normalized = status_response.normalized_status
+        normalized = verification.normalized
         if normalized == TaraTransactionStatus.SUCCESS:
             try:
-                PaymentCreditService().apply_verified_success(attempt_id)
+                PaymentCreditService().apply_verified_success(
+                    attempt_id, tara_payment_id=verification.payment_id, verified_amount=verification.amount,
+                )
                 counters["verified_successes"] += 1
             except (InvalidStateTransitionError, PaymentIdConflictError, DuplicatePaymentError):
                 counters["still_pending_or_unknown"] += 1
@@ -233,6 +239,15 @@ class ReconciliationService:
                 PaymentAttemptService().transition(attempt, PaymentAttempt.Status.UNKNOWN)
 
     # --- Transaction-list pull: reporting/manual review only, never credit ---
+
+    def _expire_stale_orders(self, counters: dict) -> None:
+        # Last step on purpose: attempts verified as paid earlier in this same
+        # run are already SUCCEEDED, so their orders are never expired.
+        try:
+            counters["orders_expired"] += OrderExpiryService().expire_stale_orders()
+        except Exception as e:
+            counters["safe_error_count"] += 1
+            log_service_failure(logger, "ReconciliationService", "_expire_stale_orders", e)
 
     def _pull_transaction_list_for_reporting(self, counters: dict) -> None:
         try:

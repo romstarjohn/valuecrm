@@ -30,6 +30,7 @@ from .schemas import (
     TaraPaymentDTO,
     TaraPaymentLinkRequest,
     TaraPaymentLinkResponse,
+    TaraPaymentStatusResponse,
     TaraResendWebhookRequest,
     TaraTransactionListItem,
     TaraTransactionListRequest,
@@ -296,6 +297,37 @@ class TaraClient(PaymentProviderClient):
         log_service_success(
             logger, "TaraClient", "check_transaction_status",
             product_id=product_id, normalized_result=response_dto.normalized_status.value,
+        )
+        return response_dto
+
+    def check_payment_status(self, payment_id: str) -> TaraPaymentStatusResponse:
+        """
+        POST /tara/transactions/status with a Tara paymentId in the productId
+        field — see TaraPaymentStatusResponse for why (and the captured
+        response shape). Returns the parsed answer only; binding it to one of
+        our attempts (productId, paymentId, businessId, amount) is the
+        caller's job (apps/payments/services.py::TaraVerificationService) —
+        this method never decides that a payment is ours.
+        """
+        log_service_start(logger, "TaraClient", "check_payment_status", payment_id=payment_id)
+        try:
+            request_dto = TaraTransactionStatusRequest(
+                api_key=self.api_key, business_id=self.business_id, product_id=payment_id,
+            )
+        except PydanticValidationError as e:
+            raise TaraInvalidRequestError(f"Invalid payment status request ({_safe_validation_summary(e)}).") from e
+
+        data = self._request(
+            "POST", f"{self.BASE_URL}/transactions/status",
+            json=request_dto.model_dump(by_alias=True, exclude_none=True),
+            timeout=(TARA_CONNECT_TIMEOUT_SECONDS, TARA_READ_TIMEOUT_SECONDS),
+            allow_redirects=False,
+            operation="check_payment_status",
+        )
+        response_dto = self._parse_response(data, TaraPaymentStatusResponse, "check_payment_status")
+        log_service_success(
+            logger, "TaraClient", "check_payment_status",
+            payment_id=payment_id, normalized_result=response_dto.normalized_status.value,
         )
         return response_dto
 

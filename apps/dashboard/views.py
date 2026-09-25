@@ -7,7 +7,7 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.payments.models import Installment, TaraWebhookEvent
+from apps.payments.models import Installment, Order, TaraWebhookEvent
 from apps.provisioning.models import ProvisioningRequest
 
 
@@ -49,12 +49,15 @@ def index(request):
         f"{i * (100 / 6):.1f},{24 - (value / peak) * 22:.1f}" for i, value in enumerate(series)
     )
 
-    overdue_qs = Installment.objects.filter(status__in=open_installment_statuses, due_date__lt=today)
+    # Installments of EXPIRED orders stay technically payable (a late payment
+    # still credits) but are not collectable work — kept out of the KPIs.
+    open_installments = Installment.objects.exclude(order__status=Order.Status.EXPIRED)
+    overdue_qs = open_installments.filter(status__in=open_installment_statuses, due_date__lt=today)
     overdue_sum = overdue_qs.aggregate(total=Sum("expected_amount"))
     overdue_count = overdue_qs.count()
     overdue_amount = overdue_sum["total"] or 0
 
-    upcoming_count = Installment.objects.filter(
+    upcoming_count = open_installments.filter(
         status__in=open_installment_statuses, due_date__gte=today, due_date__lte=week_ahead,
     ).count()
 

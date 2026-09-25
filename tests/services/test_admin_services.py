@@ -31,7 +31,7 @@ from integrations.payments.tara.exceptions import (
     TaraConnectionError,
     TaraMalformedResponseError,
 )
-from integrations.payments.tara.schemas import TaraTransactionStatusResponse
+from integrations.payments.tara.schemas import TaraPaymentStatusResponse, TaraTransactionStatusResponse
 
 pytestmark = pytest.mark.django_db
 
@@ -634,3 +634,58 @@ def test_duplicate_confirmation_retry_is_safely_rejected_not_corrupted(admin_use
 
     confirmation.refresh_from_db()
     assert confirmation.status == PaymentConfirmation.Status.PENDING  # unchanged by the rejected second call
+
+
+def test_check_tara_status_recovers_payment_via_webhook_payment_id(admin_user, mocker):
+    """Production recovery case: a SUCCESS webhook was stored as PROVIDER_LOOKUP_INDETERMINATE; the admin check now credits it."""
+    import json
+    from apps.payments.models import TaraWebhookEvent
+
+    order = make_order(email="check-status-via-payment-id@example.com")
+    installment = order.installments.get()
+    attempt = create_payable_attempt(installment)
+    TaraWebhookEvent.objects.create(
+        dedup_key="evt-1", tara_product_id=attempt.tara_product_id, tara_payment_id="2140600222",
+        raw_provider_status="SUCCESS", payment_attempt=attempt,
+    )
+    mock_client = Mock(business_id="biz_123")
+    mock_client.check_payment_status.return_value = TaraPaymentStatusResponse.model_validate({
+        "status": "SUCCESS", "message": "API_ORDER_SUCESSFULL",
+        "payload": json.dumps({
+            "businessId": "biz_123", "paymentId": "2140600222", "amount": "100000",
+            "status": "SUCCESS", "productId": attempt.tara_product_id,
+        }),
+    })
+    mocker.patch("apps.payments.admin_services.TaraConfigService.get_client", return_value=mock_client)
+
+    updated = PaymentAttemptAdministrationService().check_tara_status(attempt.id, "recover lost payment", admin_user)
+
+    assert updated.status == PaymentAttempt.Status.SUCCEEDED
+    assert updated.tara_payment_id == "2140600222"
+    installment.refresh_from_db()
+    assert installment.status == Installment.Status.PAID
+    mock_client.check_transaction_status.assert_not_called()
+
+
+def test_check_tara_status_amount_mismatch_raises_and_does_not_credit(admin_user, mocker):
+    import json
+    from apps.payments.models import TaraWebhookEvent
+
+    order = make_order(email="check-status-amount-mismatch@example.com")
+    installment = order.installments.get()
+    attempt = create_payable_attempt(installment)
+    TaraWebhookEvent.objects.create(
+        dedup_key="evt-2", tara_product_id=attempt.tara_product_id, tara_payment_id="p-9", payment_attempt=attempt,
+    )
+    mock_client = Mock(business_id="biz_123")
+    mock_client.check_payment_status.return_value = TaraPaymentStatusResponse.model_validate({
+        "status": "SUCCESS",
+        "payload": json.dumps({"paymentId": "p-9", "amount": "500", "status": "SUCCESS", "productId": attempt.tara_product_id}),
+    })
+    mocker.patch("apps.payments.admin_services.TaraConfigService.get_client", return_value=mock_client)
+
+    with pytest.raises(AdminActionError):
+        PaymentAttemptAdministrationService().check_tara_status(attempt.id, "checking", admin_user)
+
+    attempt.refresh_from_db()
+    assert attempt.status == PaymentAttempt.Status.LINK_CREATED

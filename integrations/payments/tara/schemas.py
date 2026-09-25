@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from enum import Enum
@@ -161,6 +162,71 @@ class TaraTransactionStatusResponse(BaseModel):
     product_id: str = Field(alias="productId", min_length=1)
     status: str
     message: str = ""
+
+    @property
+    def normalized_status(self) -> TaraTransactionStatus:
+        try:
+            return TaraTransactionStatus(self.status.strip().upper())
+        except ValueError:
+            return TaraTransactionStatus.UNKNOWN
+
+
+class TaraPaymentStatusResponse(BaseModel):
+    """
+    POST /tara/transactions/status queried with a Tara paymentId (not our
+    productId) — the only lookup that actually finds payment-link payments in
+    production (verified 2026-09-25: querying by our productId returns
+    {"status": "ERROR", "message": "PAYMENT_FOR_TRANSACTION_NOT_FOUND"} even
+    for a payment Tara lists under that productId). Undocumented shape,
+    captured from a real response:
+
+        {"status": "SUCCESS", "message": "API_ORDER_SUCESSFULL",
+         "transactionId": "...", "receiptUrl": "...",
+         "paymentData": "<JSON text>",
+         "payload": "<JSON text: businessId, paymentId, amount (gross, string),
+                     status, productId, ...>"}
+
+    Not-found answers are {"status": "ERROR", "message": "..._NOT_FOUND"} —
+    normalized to UNKNOWN, never FAILURE: "Tara can't find it by this id" is
+    not a verdict on the payment. Only the fields needed to bind the answer to
+    one of our attempts are extracted from `payload`; everything else
+    (phone numbers, receipt URLs, ...) is deliberately never kept.
+    """
+    model_config = ConfigDict(populate_by_name=True)
+
+    status: str
+    message: str = ""
+    product_id: Optional[str] = None
+    payment_id: Optional[str] = None
+    business_id: Optional[str] = None
+    amount: Optional[Decimal] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _extract_payload(cls, data):
+        if not isinstance(data, dict):
+            return data
+        payload = data.get("payload")
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except ValueError:
+                payload = None
+        if not isinstance(payload, dict):
+            payload = {}
+        amount = payload.get("amount")
+        try:
+            amount = Decimal(str(amount)) if amount not in (None, "") else None
+        except InvalidOperation:
+            amount = None
+        return {
+            "status": data.get("status") or "",
+            "message": data.get("message") or "",
+            "product_id": payload.get("productId") or None,
+            "payment_id": str(payload["paymentId"]) if payload.get("paymentId") not in (None, "") else None,
+            "business_id": payload.get("businessId") or None,
+            "amount": amount,
+        }
 
     @property
     def normalized_status(self) -> TaraTransactionStatus:
