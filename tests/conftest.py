@@ -58,3 +58,12 @@ def superuser_client(superuser):
     client = Client()
     client.login(username="admin", password="password")
     return client
+
+@pytest.fixture(autouse=True)
+def no_background_payment_followups(settings):
+    """
+    PAYMENT_FOLLOWUPS_MODE="thread" would start real threads after commits in
+    transactional tests. Off by default; tests that verify immediate
+    follow-ups switch to "inline" explicitly.
+    """
+    settings.PAYMENT_FOLLOWUPS_MODE = "off"

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Notifications | {{ BRAND_NAME }}{% endblock %}
+
+{% block content %}
+{% include "components/page_header.html" with title="Notifications" subtitle="Recevez un e-mail quand quelque chose demande votre intervention — pas besoin de surveiller « À traiter »." %}
+
+<div class="container-fluid px-4 fade-in pb-5">
+    <div class="row g-4">
+        <div class="col-lg-8">
+            {% if email_backend_is_console %}
+            <div class="crm-card border-0 shadow-sm mb-4 border-start border-4 border-warning">
+                <div class="d-flex align-items-start gap-3">
+                    <span class="pill warn text-nowrap"><span class="dot"></span>E-mails désactivés</span>
+                    <div class="small">
+                        <div class="fw-bold mb-1">Aucun e-mail ne part pour l'instant</div>
+                        L'envoi d'e-mails n'est pas encore configuré sur le serveur : ni ces alertes, ni les e-mails aux clients (confirmation de paiement, rappels) ne sont envoyés. La personne qui gère le serveur doit renseigner les réglages SMTP.
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="crm-card border-0 shadow-sm">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold" for="{{ form.alert_email.id_for_label }}">{{ form.alert_email.label }}</label>
+                        {{ form.alert_email }}
+                        {% if form.alert_email.errors %}<div class="form-error">{{ form.alert_email.errors|striptags }}</div>{% endif %}
+                        <div class="form-text small">Une seule adresse. Utilisez une adresse d'équipe si plusieurs personnes doivent être prévenues.</div>
+                    </div>
+                    <div class="form-check form-switch mb-4">
+                        {{ form.alerts_enabled }}
+                        <label class="form-check-label" for="{{ form.alerts_enabled.id_for_label }}">{{ form.alerts_enabled.label }}</label>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button type="submit" class="btn-crm btn-crm-primary">Enregistrer</button>
+                    </div>
+                </form>
+                <form method="post" class="mt-3">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="test">
+                    <button type="submit" class="btn-crm btn-crm-outline">Envoyer un e-mail de test</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="crm-card border-0 shadow-sm mb-4">
+                <h6 class="fw-bold mb-2">Quand recevez-vous un e-mail ?</h6>
+                <ul class="small mb-0 ps-3">
+                    <li>Tara signale un paiement que la vérification automatique n'a pas pu confirmer (après au moins 1 heure d'essais).</li>
+                    <li>Un paiement est confirmé mais l'accès à la formation n'a pas pu être ouvert.</li>
+                    <li>L'e-mail « paiement reçu » n'a pas pu être envoyé au client.</li>
+                    <li>Tara a reçu un paiement qui ne correspond à aucune vente.</li>
+                </ul>
+                <p class="small text-muted mt-2 mb-0">Au plus un e-mail par heure, qui regroupe les nouveautés. Jamais deux fois pour la même chose, jamais pour une vente normale.</p>
+            </div>
+            <div class="crm-card border-0 shadow-sm">
+                <h6 class="fw-bold mb-2">Dernières alertes envoyées</h6>
+                {% for alert in recent_alerts %}
+                    <div class="small mb-2"><span class="text-muted">{{ alert.created_at|date:"d/m H:i" }}</span> — {{ alert.summary }}</div>
+                {% empty %}
+                    <p class="small text-muted mb-0">Aucune alerte envoyée pour l'instant.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

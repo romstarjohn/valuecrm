@@ -7,4 +7,5 @@ urlpatterns = [
     path("settings/", views.settings_view, name="settings"),
     path("settings/verify/", views.verify_connection, name="verify"),
     path("tara/", views.tara_settings_view, name="tara_settings"),
+    path("notifications/", views.notifications_view, name="notifications"),
 ]

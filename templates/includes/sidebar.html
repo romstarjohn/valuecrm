@@ -32,14 +32,25 @@
             <i class="fa-solid fa-graduation-cap" aria-hidden="true"></i>Offres
         </a>
 
+        {% if perms.configuration.change_clickfunnelsconfig or perms.payments.change_taraconfig or perms.configuration.change_notificationsettings %}
         <div class="text-uppercase text-muted small fw-bold px-3 mb-2 mt-4" style="font-size: 0.65rem; letter-spacing: 0.1em;">Réglages</div>
+        {% endif %}
 
+        {% if perms.configuration.change_clickfunnelsconfig %}
         <a href="{% url 'configuration:settings' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if url == 'settings' %}active{% endif %}">
             <i class="fa-solid fa-plug" aria-hidden="true"></i>Connexion ClickFunnels
         </a>
+        {% endif %}
+        {% if perms.payments.change_taraconfig %}
         <a href="{% url 'configuration:tara_settings' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if url == 'tara_settings' %}active{% endif %}">
             <i class="fa-solid fa-money-bill-transfer" aria-hidden="true"></i>Connexion Tara
         </a>
+        {% endif %}
+        {% if perms.configuration.change_notificationsettings %}
+        <a href="{% url 'configuration:notifications' %}" class="list-group-item list-group-item-action rounded-3 mb-1 {% if url == 'notifications' %}active{% endif %}">
+            <i class="fa-solid fa-bell" aria-hidden="true"></i>Notifications
+        </a>
+        {% endif %}
 
         {% if user.is_superuser or perms.payments.view_paymentattempt %}
         <div class="text-uppercase text-muted small fw-bold px-3 mb-2 mt-4" style="font-size: 0.65rem; letter-spacing: 0.1em;">Technique</div>

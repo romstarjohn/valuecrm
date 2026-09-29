@@ -166,7 +166,7 @@ def test_timeout_becomes_unknown_no_new_attempt(service, contact, plan, mocker):
 
     result = service.start_checkout(contact, plan.id, "idem-1")
 
-    assert result.status == "verification_pending"
+    assert result.status == "not_started"  # customer: payment did not start
     attempt = PaymentAttempt.objects.get()
     assert attempt.status == PaymentAttempt.Status.UNKNOWN
     assert PaymentAttempt.objects.count() == 1
@@ -179,7 +179,7 @@ def test_connection_loss_becomes_unknown(service, contact, plan, mocker):
 
     result = service.start_checkout(contact, plan.id, "idem-1")
 
-    assert result.status == "verification_pending"
+    assert result.status == "not_started"  # customer: payment did not start
     assert PaymentAttempt.objects.get().status == PaymentAttempt.Status.UNKNOWN
 
 
@@ -190,7 +190,7 @@ def test_5xx_handled_as_unknown_not_failed(service, contact, plan, mocker):
 
     result = service.start_checkout(contact, plan.id, "idem-1")
 
-    assert result.status == "verification_pending"
+    assert result.status == "not_started"  # customer: payment did not start
     assert PaymentAttempt.objects.get().status == PaymentAttempt.Status.UNKNOWN
 
 
@@ -201,7 +201,7 @@ def test_definitive_business_failure_becomes_failed(service, contact, plan, mock
 
     result = service.start_checkout(contact, plan.id, "idem-1")
 
-    assert result.status == "failed"
+    assert result.status == "not_started"  # customer: payment did not start
     assert PaymentAttempt.objects.get().status == PaymentAttempt.Status.FAILED
 
 
@@ -212,7 +212,7 @@ def test_4xx_client_error_becomes_failed(service, contact, plan, mocker):
 
     result = service.start_checkout(contact, plan.id, "idem-1")
 
-    assert result.status == "failed"
+    assert result.status == "not_started"  # customer: payment did not start
     assert PaymentAttempt.objects.get().status == PaymentAttempt.Status.FAILED
 
 
@@ -223,7 +223,7 @@ def test_malformed_response_handled_safely_as_unknown(service, contact, plan, mo
 
     result = service.start_checkout(contact, plan.id, "idem-1")
 
-    assert result.status == "verification_pending"
+    assert result.status == "not_started"  # customer: payment did not start
     assert PaymentAttempt.objects.get().status == PaymentAttempt.Status.UNKNOWN
 
 
@@ -285,7 +285,7 @@ def test_unknown_attempt_recheck_still_pending_stays_unknown(service, contact, p
     assert PaymentAttempt.objects.count() == 1
 
 
-def test_unknown_attempt_recheck_itself_times_out_stays_pending(service, contact, plan, mocker):
+def test_unknown_attempt_without_link_gets_a_new_link_when_tara_is_inconclusive(service, contact, plan, mocker):
     mock_client = Mock()
     mock_client.create_payment_link.side_effect = TaraTimeoutError("timed out")
     mocker.patch("apps.payments.services.TaraConfigService.get_client", return_value=mock_client)
@@ -293,11 +293,16 @@ def test_unknown_attempt_recheck_itself_times_out_stays_pending(service, contact
 
     mock_client.check_transaction_status.side_effect = TaraTimeoutError("timed out again")
 
+    mock_client.create_payment_link.side_effect = None
+    mock_client.create_payment_link.return_value = success_response()
+
     result = service.start_checkout(contact, plan.id, "idem-1")
 
-    assert result.status == "verification_pending"
-    assert PaymentAttempt.objects.get().status == PaymentAttempt.Status.UNKNOWN
-    assert PaymentAttempt.objects.count() == 1
+    # A: the customer never got the first link, and Tara has nothing definitive
+    # about it -> that attempt is closed and a fresh link is created (no trap).
+    assert result.status == "link_ready" and result.checkout_url == "https://taramoney.com/pay/abc123"
+    assert PaymentAttempt.objects.count() == 2
+    assert PaymentAttempt.objects.filter(status=PaymentAttempt.Status.EXPIRED).count() == 1
 
 
 # --- Redirect URL safety ---
@@ -309,7 +314,7 @@ def test_disallowed_redirect_host_rejected(service, contact, plan, mocker):
 
     result = service.start_checkout(contact, plan.id, "idem-1")
 
-    assert result.status == "verification_pending"
+    assert result.status == "not_started"  # customer: payment did not start
     assert result.checkout_url is None
 
 
@@ -343,7 +348,7 @@ def test_non_https_general_link_rejected(service, contact, plan, mocker):
     result = service.start_checkout(contact, plan.id, "idem-1")
 
     assert result.checkout_url is None
-    assert result.status == "verification_pending"
+    assert result.status == "not_started"  # customer: payment did not start
 
 
 def test_whatsapp_telegram_dikalo_sms_never_used_as_checkout_url(service, contact, plan, mocker):
@@ -411,7 +416,7 @@ def test_dklo_co_link_not_accepted_as_checkout_redirect(service, contact, plan, 
     result = service.start_checkout(contact, plan.id, "idem-1")
 
     assert result.checkout_url is None
-    assert result.status == "verification_pending"
+    assert result.status == "not_started"  # customer: payment did not start
 
 
 def test_non_https_taramoney_link_rejected(service, contact, plan, mocker):

@@ -69,12 +69,15 @@ def test_sent_email_contains_expected_safe_content_and_no_secrets():
     body = mail.outbox[0].body
     order = confirmation.order
     assert "Ada" in body
-    assert str(order.reference) in body
+    assert f"#{str(order.reference)[:8].upper()}" in body  # short reference
     assert order.course_name in body
     assert "accès ouvert" in body  # single-installment FULL_PAYMENT order is eligible after this payment
     for forbidden in ("api_key", "webhook_secret", "Bearer", "tara_product_id", "raw_payload"):
         assert forbidden not in body
-    assert "http://" not in body and "https://" not in body  # no payment link/URL ever included
+    # F: exactly one link — to the customer's own order page on our site; never a payment link.
+    urls = [word for word in body.split() if word.startswith(("http://", "https://"))]
+    assert len(urls) == 1 and urls[0].startswith("https://checkout.example.com/paiement/status/")
+    assert "taramoney" not in body
 
 
 def test_missing_recipient_goes_to_manual_review_without_raising():

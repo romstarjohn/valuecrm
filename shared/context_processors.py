@@ -9,4 +9,5 @@ def branding(request):
     return {
         "BRAND_NAME": settings.BRAND_NAME,
         "BUSINESS_NAME": settings.BUSINESS_NAME,
+        "PRIVACY_POLICY_URL": getattr(settings, "PRIVACY_POLICY_URL", ""),
     }

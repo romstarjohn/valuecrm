@@ -1,4 +1,5 @@
 {% extends "public_base.html" %}
+{% load status_labels %}
 
 {% block title %}Votre inscription | {{ BRAND_NAME }} &amp; {{ BUSINESS_NAME }}{% endblock %}
 
@@ -31,7 +32,7 @@
         {% elif display_status == "failed" %}
             <span class="checkout-state-icon checkout-state-icon--error"><i class="fa-solid fa-xmark" aria-hidden="true"></i></span>
             <h1 id="status-heading">Paiement non abouti</h1>
-            <p>Ce paiement n’a pas pu être finalisé. Contactez votre organisme de formation avec la référence ci-dessous pour poursuivre votre inscription.</p>
+            <p>Ce paiement n’a pas abouti et rien n’a été débité. Vous pouvez réessayer ci-dessous.</p>
         {% elif display_status == "awaiting_payment" %}
             <span class="checkout-state-icon"><i class="fa-regular fa-clock" aria-hidden="true"></i></span>
             <h1 id="status-heading">En attente de paiement</h1>
@@ -58,7 +59,13 @@
                 <button type="submit"><i class="fa-solid fa-rotate me-1" aria-hidden="true"></i>Vérifier mon paiement</button>
             </form>
         {% endif %}
-        <p class="checkout-state-reference">Référence de commande : {{ order.reference }}</p>
+        {% if display_status == "failed" %}
+            <form method="post" action="{% url 'payments:checkout_retry' token %}" class="checkout-state-refresh">
+                {% csrf_token %}
+                <button type="submit" class="checkout-submit"><i class="fa-solid fa-rotate-right me-1" aria-hidden="true"></i>Réessayer le paiement</button>
+            </form>
+        {% endif %}
+        <p class="checkout-state-reference">Référence de commande : {{ order.reference|short_ref }}</p>
     {% endif %}
 </section>
 <p class="checkout-closing"><i class="fa-solid fa-leaf" aria-hidden="true"></i> Un nouveau départ pour votre apprentissage.</p>

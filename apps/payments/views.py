@@ -8,7 +8,7 @@ from apps.courses.models import CheckoutOffer, Course
 
 from .forms import CheckoutContactForm
 from .models import PaymentAttempt, PaymentPlan
-from .services import CheckoutConfigurationError, CheckoutError, CheckoutService
+from .services import NOT_STARTED, CheckoutConfigurationError, CheckoutError, CheckoutService
 
 
 @override("fr")
@@ -98,6 +98,8 @@ def checkout_start(request, slug):
 
             if result.checkout_url:
                 return redirect(result.checkout_url)
+            if result.status == NOT_STARTED:
+                return _render_not_started(request, result.signed_reference)
             return redirect("payments:checkout_status", token=result.signed_reference)
     else:
         form = CheckoutContactForm(initial=CheckoutContactForm.initial(), plans=plans)
@@ -132,16 +134,20 @@ def checkout_status(request, token):
     except CheckoutError:
         return render(request, "payments/checkout_status.html", {"error": "Ce lien de commande est invalide ou a expiré."}, status=400)
 
-    installment = order.installments.order_by("sequence").first()
+    # The installment the customer most recently tried to pay (installment 2+
+    # when coming back from a reminder link), not always installment 1.
+    latest = PaymentAttempt.objects.filter(installment__order=order).order_by("-created_at").first()
     attempt = None
-    if installment:
-        # A succeeded attempt wins over any newer one: a late verified success
-        # on an older attempt EXPIREs the newer one (PaymentCreditService._reopen_for_late_success).
+    if latest:
+        # Within that installment a succeeded attempt wins over any newer one: a late verified
+        # success on an older attempt EXPIREs the newer one (PaymentCreditService._reopen_for_late_success).
         attempt = (
-            installment.payment_attempts.filter(status=PaymentAttempt.Status.SUCCEEDED).first()
-            or installment.payment_attempts.order_by("-created_at").first()
+            latest.installment.payment_attempts.filter(status=PaymentAttempt.Status.SUCCEEDED).first()
+            or latest
         )
     display_status = _map_display_status(attempt)
+    if display_status == NOT_STARTED:
+        return _render_not_started(request, token, order=order)
 
     return render(request, "payments/checkout_status.html", {
         "order": order,
@@ -176,11 +182,41 @@ def checkout_status_refresh(request, token):
     return redirect("payments:checkout_status", token=token)
 
 
+def _render_not_started(request, token, order=None):
+    """B: nothing was charged — say so plainly and offer a one-click retry (no retyping)."""
+    if order is None:
+        order = CheckoutService().resolve_signed_reference(token)
+    return render(request, "payments/checkout_not_started.html", {"order": order, "token": token})
+
+
+@override("fr")
+@require_POST
+@ratelimit(key="ip", rate="10/m", block=True)
+def checkout_retry(request, token):
+    """B: "Réessayer" — starts the payment again for the same order (same verified path as the first try)."""
+    try:
+        order = CheckoutService().resolve_signed_reference(token)
+        result = CheckoutService().pay_next_installment(order)
+    except CheckoutConfigurationError:
+        return render(request, "payments/checkout_error.html", {
+            "message": "Le paiement est temporairement indisponible. Veuillez réessayer dans quelques instants.",
+        }, status=503)
+    except CheckoutError:
+        return render(request, "payments/checkout_status.html", {"error": "Ce lien de commande est invalide ou a expiré."}, status=400)
+    if result.checkout_url:
+        return redirect(result.checkout_url)
+    if result.status == NOT_STARTED:
+        return _render_not_started(request, result.signed_reference, order=order)
+    return redirect("payments:checkout_status", token=result.signed_reference)
+
+
 def _map_display_status(attempt) -> str:
     if attempt is None:
-        return "awaiting_payment"
+        return NOT_STARTED
+    if attempt.status == PaymentAttempt.Status.UNKNOWN and not attempt.general_link:
+        return NOT_STARTED  # Tara timed out creating the link: the customer never got one
     return {
-        PaymentAttempt.Status.CREATED: "awaiting_payment",
+        PaymentAttempt.Status.CREATED: NOT_STARTED,
         PaymentAttempt.Status.LINK_CREATED: "link_ready",
         PaymentAttempt.Status.PENDING: "verification_pending",
         PaymentAttempt.Status.SUCCEEDED: "payment_confirmed",
@@ -188,3 +224,41 @@ def _map_display_status(attempt) -> str:
         PaymentAttempt.Status.EXPIRED: "failed",
         PaymentAttempt.Status.UNKNOWN: "verification_pending",
     }.get(attempt.status, "error")
+
+
+@override("fr")
+@never_cache
+@ratelimit(key="ip", rate="20/m", block=True)
+def installment_pay(request, token):
+    """
+    Personal payment link for a later installment (reminder e-mails, or a link
+    staff copy from the sale page). GET only shows what is due — it never
+    calls Tara, because e-mail security scanners pre-open links. The POST
+    ("Payer") starts the same verified Tara payment as the first checkout.
+    """
+    checkout_service = CheckoutService()
+    try:
+        order = checkout_service.resolve_installment_payment_token(token)
+    except CheckoutError as e:
+        return render(request, "payments/installment_pay.html", {"error": str(e)}, status=400)
+
+    installment = checkout_service.next_outstanding_installment(order)
+    context = {"order": order, "installment": installment, "token": token}
+    if installment is None:
+        return render(request, "payments/installment_pay.html", {**context, "all_paid": True})
+
+    if request.method == "POST":
+        try:
+            result = checkout_service.pay_next_installment(order)
+        except CheckoutConfigurationError:
+            return render(request, "payments/checkout_error.html", {
+                "message": "Le paiement est temporairement indisponible. Veuillez réessayer dans quelques instants.",
+            }, status=503)
+        except CheckoutError as e:
+            return render(request, "payments/installment_pay.html", {**context, "error": str(e)}, status=400)
+        if result.checkout_url:
+            return redirect(result.checkout_url)
+        return redirect("payments:checkout_status", token=result.signed_reference)
+
+    return render(request, "payments/installment_pay.html", context)
+

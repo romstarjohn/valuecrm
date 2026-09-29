@@ -165,6 +165,30 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 ORDER_PENDING_EXPIRY_DAYS = int(os.getenv("ORDER_PENDING_EXPIRY_DAYS", "7"))
 ORDER_FAILED_CHECKOUT_EXPIRY_MINUTES = int(os.getenv("ORDER_FAILED_CHECKOUT_EXPIRY_MINUTES", "60"))
 
+# Checkout: a stored Tara payment link is reused for a returning customer only
+# while younger than this; older ones are replaced by a fresh link (Tara does
+# not document how long its links stay valid — align once Tara answers).
+CHECKOUT_LINK_REUSE_MAX_AGE_MINUTES = int(os.getenv("CHECKOUT_LINK_REUSE_MAX_AGE_MINUTES", "60"))
+
+# C: link shown under the checkout form's privacy notice (leave empty for text only).
+PRIVACY_POLICY_URL = os.getenv("PRIVACY_POLICY_URL", "").strip()
+
+# After a verified payment, the confirmation e-mail and course access are
+# handled right away in a background thread ("thread"), synchronously
+# ("inline", tests), or only by the scheduled jobs ("off"). The scheduled
+# jobs stay the safety net in every mode.
+PAYMENT_FOLLOWUPS_MODE = os.getenv("PAYMENT_FOLLOWUPS_MODE", "thread")
+
+# Installments after the first (apps/payments/services.py::InstallmentCollectionService,
+# run hourly): a reminder e-mail INSTALLMENT_REMINDER_DAYS_BEFORE days before and
+# on the due date (only if the customer has an e-mail), and course access is
+# suspended INSTALLMENT_SUSPENSION_GRACE_HOURS after the end of the due day if
+# still unpaid — lifted automatically once paid. Dates are interpreted in
+# BUSINESS_TIME_ZONE (customers' local time), independent of TIME_ZONE.
+BUSINESS_TIME_ZONE = os.getenv("BUSINESS_TIME_ZONE", "Africa/Douala")
+INSTALLMENT_REMINDER_DAYS_BEFORE = int(os.getenv("INSTALLMENT_REMINDER_DAYS_BEFORE", "3"))
+INSTALLMENT_SUSPENSION_GRACE_HOURS = int(os.getenv("INSTALLMENT_SUSPENSION_GRACE_HOURS", "24"))
+
 # Number of reverse proxies in front of Gunicorn that append to
 # X-Forwarded-For (Apache = 1). 0 keeps REMOTE_ADDR, correct only without a
 # proxy — behind Apache it would turn every per-IP rate limit into one global

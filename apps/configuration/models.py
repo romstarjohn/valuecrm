@@ -42,3 +42,36 @@ class ClickFunnelsConfig(TimeStampedModel):
         if self.is_active:
             ClickFunnelsConfig.objects.filter(is_active=True).exclude(pk=self.pk).update(is_active=False)
         super().save(*args, **kwargs)
+
+
+class NotificationSettings(TimeStampedModel):
+    """
+    Where the team is told about things that need a human (the "À traiter"
+    inbox), edited under Réglages → Notifications. A single row — use
+    NotificationSettings.current(). Only exceptions are sent, never routine sales.
+    """
+    alert_email = models.EmailField(
+        blank=True,
+        help_text="Adresse qui reçoit les alertes « À traiter ». Laisser vide pour ne rien envoyer.",
+    )
+    alerts_enabled = models.BooleanField(default=True)
+
+    @classmethod
+    def current(cls) -> "NotificationSettings":
+        settings_row = cls.objects.order_by("pk").first()
+        return settings_row or cls.objects.create(alert_email="contact@digital-mind.tech")
+
+    def __str__(self):
+        return self.alert_email or "(aucune adresse)"
+
+
+class StaffAlert(TimeStampedModel):
+    """
+    One "À traiter" item the team has already been e-mailed about — the unique
+    `key` (e.g. "access:12") is what keeps the hourly digest from repeating itself.
+    """
+    key = models.CharField(max_length=100, unique=True)
+    summary = models.CharField(max_length=500)
+
+    def __str__(self):
+        return self.key

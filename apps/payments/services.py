@@ -4,9 +4,10 @@ import json
 import re
 import smtplib
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Callable, Optional, Tuple
+from zoneinfo import ZoneInfo
 from urllib.parse import urlsplit
 
 from cryptography.fernet import InvalidToken
@@ -42,6 +43,7 @@ from integrations.payments.tara.schemas import TaraTransactionStatus, TaraWebhoo
 
 from .models import (
     Installment,
+    InstallmentReminder,
     Order,
     PaymentAttempt,
     PaymentConfirmation,
@@ -422,6 +424,11 @@ class PaymentAttemptService:
 
 
 _CHECKOUT_SIGNING_SALT = "apps.payments.checkout.v1"
+_INSTALLMENT_PAYMENT_SIGNING_SALT = "apps.payments.installment-payment.v1"
+INSTALLMENT_PAYMENT_LINK_MAX_AGE_SECONDS = 60 * 60 * 24 * 120
+# A later installment can be paid while the sale is running, late, or
+# suspended for non-payment (paying lifts that suspension).
+PAYABLE_LATER_ORDER_STATUSES = (Order.Status.PENDING, Order.Status.ACTIVE, Order.Status.PAST_DUE, Order.Status.SUSPENDED)
 
 # Phase 6 correction: the API host and the checkout-link (redirect) host are
 # DIFFERENT concepts and must never be conflated. TaraClient.BASE_URL
@@ -440,6 +447,12 @@ _CHECKOUT_SIGNING_SALT = "apps.payments.checkout.v1"
 _ALLOWED_TARA_CHECKOUT_HOSTS = {"taramoney.com"}
 
 
+# Customer-facing: "the payment could not start — nothing was charged, try again".
+# Covers every way link creation can fail (Tara rejected it, timed out, or our
+# own Tara configuration is incomplete); the attempt's own status keeps the detail.
+NOT_STARTED = "not_started"
+
+
 class CheckoutResult:
     """
     Safe, customer-facing checkout outcome only. Deliberately excludes: API
@@ -455,6 +468,7 @@ class CheckoutResult:
         self.status = status
         self.checkout_url = checkout_url
         self.message = message
+        self.tara_says_pending = False
 
 
 class CheckoutService:
@@ -497,7 +511,7 @@ class CheckoutService:
         """An opaque, signed, expiring capability — never a bare UUID/pk. See resolve_signed_reference()."""
         return signing.dumps({"order_reference": str(order_reference)}, salt=_CHECKOUT_SIGNING_SALT)
 
-    def resolve_signed_reference(self, token: str, max_age_seconds: int = 60 * 60 * 24 * 3) -> Order:
+    def resolve_signed_reference(self, token: str, max_age_seconds: int = 60 * 60 * 24 * 30) -> Order:
         """Returns the Order or raises CheckoutError (expired/tampered) — a bare UUID is never sufficient authorization on its own."""
         try:
             data = signing.loads(token, salt=_CHECKOUT_SIGNING_SALT, max_age=max_age_seconds)
@@ -558,18 +572,86 @@ class CheckoutService:
         if order.status == Order.Status.EXPIRED:
             # Same checkout reopened (e.g. an old tab) — the customer is actively paying again.
             order = OrderService().transition(order, Order.Status.PENDING)
-        signed_reference = self.build_signed_reference(order.reference)
+        log_service_success(logger, "CheckoutService", "start_checkout", order_id=order.id)
+        return self._pay_outstanding_installment(order, base_url)
 
-        installment = (
+    def pay_next_installment(self, order: Order) -> CheckoutResult:
+        """
+        Customer paying a later installment from their personal payment link
+        (reminder e-mail, or a link staff shared). Same verified Tara path as
+        the first payment — only the installment differs.
+        """
+        log_service_start(logger, "CheckoutService", "pay_next_installment", order_id=order.id)
+        base_url = self._require_public_base_url()
+        if order.status == Order.Status.EXPIRED:
+            order = OrderService().transition(order, Order.Status.PENDING)
+        if order.status not in PAYABLE_LATER_ORDER_STATUSES:
+            raise CheckoutError("Cette commande ne peut plus être payée.")
+        return self._pay_outstanding_installment(order, base_url)
+
+    def next_outstanding_installment(self, order: Order) -> Optional[Installment]:
+        return (
             order.installments
             .exclude(status__in=[Installment.Status.PAID, Installment.Status.WAIVED, Installment.Status.CANCELLED])
             .order_by("sequence")
             .first()
         )
+
+    def build_installment_payment_token(self, order_reference) -> str:
+        """Long-lived personal payment link for later installments (reminder e-mails) — separate salt from the 3-day status token."""
+        return signing.dumps({"order_reference": str(order_reference)}, salt=_INSTALLMENT_PAYMENT_SIGNING_SALT)
+
+    def resolve_installment_payment_token(self, token: str) -> Order:
+        try:
+            data = signing.loads(
+                token, salt=_INSTALLMENT_PAYMENT_SIGNING_SALT, max_age=INSTALLMENT_PAYMENT_LINK_MAX_AGE_SECONDS,
+            )
+        except signing.SignatureExpired as e:
+            raise CheckoutError("Ce lien de paiement a expiré.") from e
+        except signing.BadSignature as e:
+            raise CheckoutError("Ce lien de paiement est invalide.") from e
+        order = Order.objects.filter(reference=data.get("order_reference")).first()
+        if order is None:
+            raise CheckoutError("Ce lien de paiement est invalide.")
+        return order
+
+    def status_url(self, order: Order) -> str:
+        from django.urls import reverse
+
+        base_url = (getattr(settings, "PUBLIC_BASE_URL", "") or "").rstrip("/")
+        return f"{base_url}{reverse('payments:checkout_status', args=[self.build_signed_reference(order.reference)])}"
+
+    def installment_payment_url(self, order: Order) -> str:
+        from django.urls import reverse
+
+        base_url = (getattr(settings, "PUBLIC_BASE_URL", "") or "").rstrip("/")
+        return f"{base_url}{reverse('payments:installment_pay', args=[self.build_installment_payment_token(order.reference)])}"
+
+    def _pay_outstanding_installment(self, order: Order, base_url: str) -> CheckoutResult:
+        signed_reference = self.build_signed_reference(order.reference)
+        installment = self.next_outstanding_installment(order)
         if installment is None:
             return CheckoutResult(order.reference, signed_reference, "no_payment_due", message="This order has no outstanding payment.")
 
         attempt, _ = self._get_or_create_current_attempt(installment.id)
+
+        if self._customer_never_got_this_link(attempt):
+            # A: Tara timed out while creating the link, so the customer never
+            # received it. Still ask Tara first (it may have created — and in
+            # theory been paid on — that link); only when Tara has nothing
+            # definitive is the attempt closed so the customer can get a new
+            # link instead of being stuck on "vérification en cours".
+            recheck = self._recheck_unknown_attempt(order, signed_reference, attempt)
+            if recheck.status == "succeeded" or getattr(recheck, "tara_says_pending", False):
+                return recheck  # paid, or a payment is actually under way on it: never replaced
+            self._transition_attempt_locked(attempt.id, PaymentAttempt.Status.EXPIRED)  # no-op if now FAILED
+            attempt, _ = self._get_or_create_current_attempt(installment.id)
+        elif self._stored_link_too_old(attempt):
+            # E: Tara documents no link lifetime; an old stored link may be dead.
+            # A fresh link replaces it. If the old one is paid after all, the
+            # late-success path still credits it (and flags a double payment).
+            self._transition_attempt_locked(attempt.id, PaymentAttempt.Status.EXPIRED)
+            attempt, _ = self._get_or_create_current_attempt(installment.id)
 
         if attempt.status == PaymentAttempt.Status.SUCCEEDED:
             return CheckoutResult(order.reference, signed_reference, "succeeded")
@@ -581,8 +663,18 @@ class CheckoutService:
         # attempt.status == CREATED (a fresh attempt — including one just
         # created above to replace a FAILED/EXPIRED predecessor — or
         # LINK_CREATED without a stored link, defensively) -> call Tara.
-        log_service_success(logger, "CheckoutService", "start_checkout", order_id=order.id)
         return self._create_link_for_attempt(order, signed_reference, installment, attempt, base_url)
+
+    @staticmethod
+    def _customer_never_got_this_link(attempt: PaymentAttempt) -> bool:
+        return attempt.status == PaymentAttempt.Status.UNKNOWN and not attempt.general_link
+
+    @staticmethod
+    def _stored_link_too_old(attempt: PaymentAttempt) -> bool:
+        if attempt.status != PaymentAttempt.Status.LINK_CREATED or not attempt.initiated_at:
+            return False  # PENDING = Tara says a payment is under way on it: never replaced
+        max_age = timedelta(minutes=settings.CHECKOUT_LINK_REUSE_MAX_AGE_MINUTES)
+        return timezone.now() - attempt.initiated_at > max_age
 
     def _find_reusable_order(self, customer: Contact, plan_id: int) -> Optional[Order]:
         """
@@ -666,7 +758,9 @@ class CheckoutService:
             self._transition_attempt_locked(attempt.id, PaymentAttempt.Status.FAILED, raw_provider_status=status_response.status[:50])
             return CheckoutResult(order.reference, signed_reference, "failed")
         # PENDING or still UNKNOWN -> no transition, keep the same attempt, report pending.
-        return CheckoutResult(order.reference, signed_reference, "verification_pending")
+        result = CheckoutResult(order.reference, signed_reference, "verification_pending")
+        result.tara_says_pending = normalized == TaraTransactionStatus.PENDING
+        return result
 
     def _create_link_for_attempt(
         self, order: Order, signed_reference: str, installment: Installment, attempt: PaymentAttempt, base_url: str,
@@ -692,35 +786,30 @@ class CheckoutService:
             # Indeterminate — Tara may have created the link anyway. Never retry automatically; keep the same productId/attempt.
             log_service_failure(logger, "CheckoutService", "_create_link_for_attempt", e, product_id=attempt.tara_product_id)
             self._transition_attempt_locked(attempt.id, PaymentAttempt.Status.UNKNOWN)
-            return CheckoutResult(order.reference, signed_reference, "verification_pending")
+            # The customer has no link, so for them the payment simply did not start (A: a retry creates a new one).
+            return CheckoutResult(order.reference, signed_reference, NOT_STARTED)
         except TaraProviderBusinessError as e:
             log_service_failure(logger, "CheckoutService", "_create_link_for_attempt", e, product_id=attempt.tara_product_id)
             self._transition_attempt_locked(attempt.id, PaymentAttempt.Status.FAILED)
-            return CheckoutResult(order.reference, signed_reference, "failed", message="This payment could not be started. Please try again.")
+            return CheckoutResult(order.reference, signed_reference, NOT_STARTED)
         except TaraClientError as e:
             # Tara rejected the request outright (e.g. bad request shape) — definitive for THIS attempt.
             log_service_failure(logger, "CheckoutService", "_create_link_for_attempt", e, product_id=attempt.tara_product_id)
             self._transition_attempt_locked(attempt.id, PaymentAttempt.Status.FAILED)
-            return CheckoutResult(order.reference, signed_reference, "failed", message="This payment could not be started. Please try again.")
+            return CheckoutResult(order.reference, signed_reference, NOT_STARTED)
         except (TaraConfigurationError, TaraCredentialError, TaraInvalidRequestError) as e:
             # Our own configuration/programming problem, not a verdict on the
             # payment itself — the attempt was never actually sent to Tara, so
-            # it stays CREATED (never marked FAILED/UNKNOWN for this). Report
-            # "awaiting_payment", matching what the status page will show on
-            # reload for a still-CREATED attempt — not "verification_pending",
-            # which implies an indeterminate outcome from an attempt that was
-            # actually sent.
+            # it stays CREATED (never marked FAILED/UNKNOWN for this) and a
+            # retry sends it to Tara again with the same productId.
             log_service_failure(logger, "CheckoutService", "_create_link_for_attempt", e, product_id=attempt.tara_product_id)
-            return CheckoutResult(
-                order.reference, signed_reference, "awaiting_payment",
-                message="Checkout is temporarily unavailable. Please try again shortly.",
-            )
+            return CheckoutResult(order.reference, signed_reference, NOT_STARTED)
 
         self._persist_link_result_locked(attempt.id, response)
         checkout_url = self._select_safe_checkout_url(response)
         if checkout_url is None:
             # Tara reported success but gave us no link we're willing to redirect to automatically.
-            return CheckoutResult(order.reference, signed_reference, "verification_pending")
+            return CheckoutResult(order.reference, signed_reference, NOT_STARTED)
         return CheckoutResult(order.reference, signed_reference, "link_ready", checkout_url=checkout_url)
 
     def _persist_link_result_locked(self, attempt_id: int, response) -> PaymentAttempt:
@@ -861,12 +950,19 @@ class PaymentCreditService:
             InstallmentService().transition(installment, Installment.Status.PAID, paid_amount=credited_amount)
             self._update_order_status(order)
 
-            PaymentConfirmationService().create_confirmation(attempt, installment, order)
+            confirmation = PaymentConfirmationService().create_confirmation(attempt, installment, order)
 
+            provisioning_request = None
             if order.is_access_eligible:
                 from apps.provisioning.services import ProvisioningService
 
-                ProvisioningService().create_request_from_order(order)
+                provisioning_request = ProvisioningService().create_request_from_order(order)
+
+            # Customer notified (and access opened) right after this
+            # transaction commits — not at the next scheduled job run.
+            confirmation_id = confirmation.id
+            provisioning_request_id = provisioning_request.id if provisioning_request else None
+            transaction.on_commit(lambda: run_payment_followups(confirmation_id, provisioning_request_id))
 
             log_service_success(
                 logger, "PaymentCreditService", "apply_verified_success",
@@ -968,6 +1064,16 @@ class PaymentCreditService:
 
         order_service = OrderService()
         if (any_paid or all_settled) and order.status in (Order.Status.PENDING, Order.Status.EXPIRED):
+            order = order_service.transition(order, Order.Status.ACTIVE)
+
+        # Late sale caught up (InstallmentCollectionService marks PAST_DUE).
+        today = timezone.localdate(timezone=_business_tz())
+        still_late = any(
+            i.status not in (Installment.Status.PAID, Installment.Status.WAIVED, Installment.Status.CANCELLED)
+            and i.due_date < today
+            for i in installments
+        )
+        if order.status == Order.Status.PAST_DUE and not still_late and not all_settled:
             order = order_service.transition(order, Order.Status.ACTIVE)
 
         if all_settled and order.status != Order.Status.COMPLETED:
@@ -1140,7 +1246,9 @@ class PaymentConfirmationDeliveryService:
             "customer_name": customer_name,
             "amount_received": installment.paid_amount or installment.expected_amount,
             "currency": installment.currency,
-            "order_reference": str(order.reference),
+            "order_reference": f"#{str(order.reference)[:8].upper()}",
+            # F: the customer's way back to their order, whether or not Tara redirected them.
+            "status_url": CheckoutService().status_url(order),
             "plan_or_course_name": order.course_name,
             "installment_number": installment.sequence,
             "installment_count": order.installment_count,
@@ -1150,11 +1258,318 @@ class PaymentConfirmationDeliveryService:
             "course_access_status": "accès ouvert" if order.is_access_eligible else "accès pas encore ouvert",
         }
         subject = (
-            f"{settings.BUSINESS_NAME} — Paiement reçu (versement "
+            f"{settings.BUSINESS_NAME} — Paiement confirmé (versement "
             f"{installment.sequence}/{order.installment_count})"
         )
         body = render_to_string("payments/email/payment_confirmation.txt", context)
         return subject, body
+
+
+def run_payment_followups(confirmation_id: Optional[int], provisioning_request_id: Optional[int]) -> None:
+    """
+    Opens course access, then sends the "paiement confirmé" e-mail, for one
+    verified payment (settings.PAYMENT_FOLLOWUPS_MODE). Both workers claim
+    their row with a lock first, so a scheduled job running at the same time
+    can never send or enroll twice; anything that fails here is simply picked
+    up by process_pending_provisioning / process_payment_confirmations later.
+    """
+    mode = getattr(settings, "PAYMENT_FOLLOWUPS_MODE", "thread")
+    if mode == "off":
+        return
+
+    def work():
+        from django.db import connection
+
+        from apps.provisioning.models import ProvisioningRequest
+        from apps.provisioning.services import ProvisioningService
+
+        try:
+            if provisioning_request_id:
+                request = ProvisioningRequest.objects.filter(pk=provisioning_request_id).first()
+                if request is not None:
+                    ProvisioningService().execute(request)
+        except Exception as e:  # noqa: BLE001 — the scheduled job retries
+            log_service_failure(logger, "PaymentFollowups", "provisioning", e, provisioning_request_id=provisioning_request_id)
+        try:
+            if confirmation_id:
+                PaymentConfirmationDeliveryService()._process_one(confirmation_id)
+        except Exception as e:  # noqa: BLE001 — the scheduled job retries
+            log_service_failure(logger, "PaymentFollowups", "confirmation", e, confirmation_id=confirmation_id)
+        finally:
+            if mode == "thread":
+                connection.close()  # this thread's own DB connection
+
+    if mode == "inline":
+        work()
+    else:
+        import threading
+
+        threading.Thread(target=work, name="payment-followups", daemon=True).start()
+
+
+def resolve_reported_events(attempt_id: int) -> int:
+    """
+    Once an attempt is verified SUCCEEDED by any path (reconciliation, the
+    admin check), Tara's earlier unconfirmed SUCCESS notifications for it are
+    marked resolved — so the sale leaves "À traiter" and no team alert is sent.
+    """
+    attempt = PaymentAttempt.objects.filter(pk=attempt_id, status=PaymentAttempt.Status.SUCCEEDED).first()
+    if attempt is None:
+        return 0
+    return (
+        TaraWebhookEvent.objects.filter(tara_product_id=attempt.tara_product_id, raw_provider_status__iexact="SUCCESS")
+        .exclude(processing_status=TaraWebhookEvent.ProcessingStatus.PROCESSED)
+        .update(
+            processing_status=TaraWebhookEvent.ProcessingStatus.PROCESSED,
+            verification_result=TaraWebhookEvent.VerificationResult.SUCCESS,
+            payment_attempt=attempt,
+            processed_at=timezone.now(),
+        )
+    )
+
+
+def _lift_nonpayment_suspension(order_id: int) -> None:
+    """Right after a verified payment: restore access suspended for non-payment now, not at the next hourly run. Best effort."""
+    try:
+        InstallmentCollectionService().resume_if_settled(order_id)
+    except Exception as e:  # noqa: BLE001 — the hourly run retries; a payment must never fail because of this
+        log_service_failure(logger, "InstallmentCollectionService", "resume_if_settled", e, order_id=order_id)
+
+
+def _business_tz() -> ZoneInfo:
+    return ZoneInfo(getattr(settings, "BUSINESS_TIME_ZONE", "UTC") or "UTC")
+
+
+_UNPAID_INSTALLMENT_STATUSES = (
+    Installment.Status.SCHEDULED, Installment.Status.DUE, Installment.Status.PENDING, Installment.Status.FAILED,
+)
+_REMINDER_MAX_ATTEMPTS = 3
+
+
+class InstallmentCollectionService:
+    """
+    Collects installments after the first, run hourly from
+    ReconciliationService (`process_installments` command for manual/dry runs).
+    Business rules (decided 2026-09-25):
+    - reminder e-mail INSTALLMENT_REMINDER_DAYS_BEFORE days before the due
+      date and on the due date — only if the customer has an e-mail address;
+    - if still unpaid INSTALLMENT_SUSPENSION_GRACE_HOURS after the END of the
+      due day (customers' local time, BUSINESS_TIME_ZONE), course access is
+      suspended in ClickFunnels and the customer is told so, with the link;
+    - once paid, a suspension made HERE is lifted automatically. A manual
+      suspension (EnrollmentAdministrationService, by staff) never is.
+    Every e-mail carries the customer's personal payment link
+    (CheckoutService.installment_payment_url), which goes through the same
+    verified Tara path as the first payment. Payments are never inferred here.
+    """
+
+    SYSTEM_REASON_SUSPEND = "Automatique : versement {n}/{total} impayé (échéance du {due:%d/%m/%Y})."
+    SYSTEM_REASON_RESUME = "Automatique : versement payé, accès rétabli."
+
+    def run(self, now=None, dry_run: bool = False) -> dict:
+        now = now or timezone.now()
+        today = now.astimezone(_business_tz()).date()
+        result = {"marked_due": 0, "marked_late": 0, "reminders_sent": 0, "accesses_suspended": 0, "accesses_resumed": 0, "planned": []}
+        if not dry_run:
+            result["marked_due"] = self._mark_due(today)
+            result["marked_late"] = self._mark_late(today)
+        result["reminders_sent"] = self._send_reminders(today, result["planned"], dry_run)
+        result["accesses_suspended"] = self._suspend_overdue(now, result["planned"], dry_run)
+        result["accesses_resumed"] = self._resume_settled(now, result["planned"], dry_run)
+        log_service_success(
+            logger, "InstallmentCollectionService", "run",
+            created=result["reminders_sent"], suspended=result["accesses_suspended"],
+        )
+        return result
+
+    # --- rules ---
+
+    @staticmethod
+    def suspension_deadline(installment: Installment) -> datetime:
+        end_of_due_day = datetime.combine(installment.due_date + timedelta(days=1), time.min, tzinfo=_business_tz())
+        return end_of_due_day + timedelta(hours=settings.INSTALLMENT_SUSPENSION_GRACE_HOURS)
+
+    @staticmethod
+    def _collectable_installments():
+        return Installment.objects.filter(
+            status__in=_UNPAID_INSTALLMENT_STATUSES,
+            order__status__in=[Order.Status.ACTIVE, Order.Status.PAST_DUE],
+        ).select_related("order", "order__customer")
+
+    def _mark_due(self, today) -> int:
+        count = 0
+        for installment in self._collectable_installments().filter(status=Installment.Status.SCHEDULED, due_date__lte=today):
+            try:
+                InstallmentService().transition(installment, Installment.Status.DUE)
+                count += 1
+            except InvalidStateTransitionError:
+                pass
+        return count
+
+    def _mark_late(self, today) -> int:
+        late_order_ids = set(
+            self._collectable_installments().filter(due_date__lt=today, order__status=Order.Status.ACTIVE)
+            .values_list("order_id", flat=True)
+        )
+        count = 0
+        for order in Order.objects.filter(pk__in=late_order_ids):
+            try:
+                OrderService().transition(order, Order.Status.PAST_DUE)
+                count += 1
+            except InvalidStateTransitionError:
+                pass
+        return count
+
+    # --- reminders ---
+
+    def _send_reminders(self, today, planned: list, dry_run: bool) -> int:
+        days_before = settings.INSTALLMENT_REMINDER_DAYS_BEFORE
+        sent = 0
+        candidates = self._collectable_installments().filter(due_date__lte=today + timedelta(days=days_before))
+        for installment in candidates:
+            kind = InstallmentReminder.Kind.DUE_DAY if installment.due_date <= today else InstallmentReminder.Kind.BEFORE_DUE
+            if kind == InstallmentReminder.Kind.BEFORE_DUE and days_before <= 0:
+                continue
+            existing = InstallmentReminder.objects.filter(installment=installment, kind=kind).first()
+            if existing and (existing.status != InstallmentReminder.Status.FAILED or existing.attempts >= _REMINDER_MAX_ATTEMPTS):
+                continue
+            if dry_run:
+                planned.append(f"rappel {kind} — vente {installment.order.reference} versement {installment.sequence}")
+                continue
+            if self._deliver(installment, kind, existing):
+                sent += 1
+        return sent
+
+    def _deliver(self, installment: Installment, kind: str, existing: Optional[InstallmentReminder] = None) -> bool:
+        order = installment.order
+        recipient = (order.customer.email or "").strip()
+        if existing is None:
+            try:
+                with transaction.atomic():
+                    existing = InstallmentReminder.objects.create(
+                        installment=installment, kind=kind, status=InstallmentReminder.Status.FAILED,
+                    )
+            except IntegrityError:
+                return False  # a concurrent run already handles it
+        if not recipient:
+            existing.status = InstallmentReminder.Status.SKIPPED_NO_EMAIL
+            existing.save(update_fields=["status", "updated_at"])
+            return False
+        existing.attempts += 1
+        try:
+            subject, body = self._render(installment, kind)
+            send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [recipient], fail_silently=False)
+        except Exception as e:  # noqa: BLE001 — retried on the next run, up to _REMINDER_MAX_ATTEMPTS
+            log_service_failure(logger, "InstallmentCollectionService", "_deliver", e, installment_id=installment.id)
+            existing.status = InstallmentReminder.Status.FAILED
+            existing.save(update_fields=["status", "attempts", "updated_at"])
+            return False
+        existing.status = InstallmentReminder.Status.SENT
+        existing.sent_at = timezone.now()
+        existing.save(update_fields=["status", "attempts", "sent_at", "updated_at"])
+        return True
+
+    def _render(self, installment: Installment, kind: str) -> Tuple[str, str]:
+        order = installment.order
+        context = {
+            "kind": kind,
+            "business_name": settings.BUSINESS_NAME,
+            "customer_name": f"{order.customer.first_name} {order.customer.last_name}".strip(),
+            "course_name": order.course_name,
+            "installment_number": installment.sequence,
+            "installment_count": order.installment_count,
+            "amount": installment.expected_amount,
+            "currency": installment.currency,
+            "due_date": installment.due_date,
+            # Pre-formatted in the customers' time zone — the template's |date
+            # would render it in the server TIME_ZONE (UTC), i.e. an hour early.
+            "suspension_deadline_text": self.suspension_deadline(installment).astimezone(_business_tz()).strftime("%d/%m/%Y à %H:%M"),
+            "pay_url": CheckoutService().installment_payment_url(order),
+        }
+        subjects = {
+            InstallmentReminder.Kind.BEFORE_DUE: f"{settings.BUSINESS_NAME} — Votre prochain versement arrive bientôt",
+            InstallmentReminder.Kind.DUE_DAY: f"{settings.BUSINESS_NAME} — Votre versement est à payer aujourd'hui",
+            InstallmentReminder.Kind.SUSPENDED: f"{settings.BUSINESS_NAME} — Votre accès est suspendu",
+        }
+        return subjects[kind], render_to_string("payments/email/installment_reminder.txt", context)
+
+    # --- suspension / resume ---
+
+    def _suspend_overdue(self, now, planned: list, dry_run: bool) -> int:
+        from .admin_services import AdminActionError, EnrollmentAdministrationService
+
+        enrollment_service = EnrollmentAdministrationService()
+        overdue_by_order = {}
+        for installment in self._collectable_installments().filter(
+            due_date__lt=now.astimezone(_business_tz()).date(), order__suspended_for_nonpayment_at__isnull=True,
+        ).order_by("sequence"):
+            if now >= self.suspension_deadline(installment):
+                overdue_by_order.setdefault(installment.order_id, installment)
+
+        suspended = 0
+        for installment in overdue_by_order.values():
+            order = installment.order
+            if enrollment_service.find_open_access(order) is None:
+                continue  # access never opened (e.g. "une fois tout payé") — nothing to suspend
+            if dry_run:
+                planned.append(f"suspendre l'accès — vente {order.reference} (versement {installment.sequence} impayé)")
+                continue
+            reason = self.SYSTEM_REASON_SUSPEND.format(n=installment.sequence, total=order.installment_count, due=installment.due_date)
+            try:
+                enrollment_service.freeze_order_enrollment(order.id, reason, administrator=None)
+            except AdminActionError as e:
+                log_service_failure(logger, "InstallmentCollectionService", "_suspend_overdue", e, order_id=order.id)
+                continue  # e.g. ClickFunnels unreachable — retried next run
+            Order.objects.filter(pk=order.pk).update(suspended_for_nonpayment_at=now)
+            installment.refresh_from_db()
+            self._deliver(installment, InstallmentReminder.Kind.SUSPENDED)
+            suspended += 1
+        return suspended
+
+    def _resume_settled(self, now, planned: list, dry_run: bool) -> int:
+        resumed = 0
+        for order in Order.objects.filter(status=Order.Status.SUSPENDED, suspended_for_nonpayment_at__isnull=False):
+            if self._still_beyond_deadline(order, now):
+                continue
+            if dry_run:
+                planned.append(f"rétablir l'accès — vente {order.reference}")
+                continue
+            if self.resume_if_settled(order.id, now=now):
+                resumed += 1
+        return resumed
+
+    def _still_beyond_deadline(self, order: Order, now) -> bool:
+        return any(
+            now >= self.suspension_deadline(i)
+            for i in order.installments.filter(status__in=_UNPAID_INSTALLMENT_STATUSES)
+        )
+
+    def resume_if_settled(self, order_id: int, now=None) -> bool:
+        """
+        Lifts an automatic non-payment suspension once no installment is past
+        its deadline any more. Safe to call right after a verified payment
+        (best effort — the hourly run retries). Never touches manual suspensions.
+        """
+        from .admin_services import AdminActionError, EnrollmentAdministrationService
+
+        now = now or timezone.now()
+        order = Order.objects.filter(pk=order_id).first()
+        if order is None or order.status != Order.Status.SUSPENDED or order.suspended_for_nonpayment_at is None:
+            return False
+        if self._still_beyond_deadline(order, now):
+            return False
+        try:
+            EnrollmentAdministrationService().resume_order_enrollment(order.id, self.SYSTEM_REASON_RESUME, administrator=None)
+        except AdminActionError as e:
+            log_service_failure(logger, "InstallmentCollectionService", "resume_if_settled", e, order_id=order.id)
+            return False
+        with transaction.atomic():
+            locked = Order.objects.select_for_update().get(pk=order.pk)
+            locked.suspended_for_nonpayment_at = None
+            locked.save(update_fields=["suspended_for_nonpayment_at", "updated_at"])
+            PaymentCreditService()._update_order_status(locked)
+        log_service_success(logger, "InstallmentCollectionService", "resume_if_settled", order_id=order.id)
+        return True
 
 
 class OrderExpiryService:
@@ -1488,6 +1903,8 @@ class WebhookProcessingService:
                 )
                 event.verification_result = TaraWebhookEvent.VerificationResult.SUCCESS
                 event.processing_status = TaraWebhookEvent.ProcessingStatus.PROCESSED
+                resolve_reported_events(attempt.id)  # earlier unconfirmed notifications for the same payment
+                _lift_nonpayment_suspension(attempt.installment.order_id)
             except PaymentIdConflictError as e:
                 log_service_failure(logger, "WebhookProcessingService", "_verify_and_apply", e, product_id=attempt.tara_product_id)
                 event.verification_result = TaraWebhookEvent.VerificationResult.SUCCESS

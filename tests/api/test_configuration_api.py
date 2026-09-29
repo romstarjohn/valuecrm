@@ -5,9 +5,9 @@ from apps.configuration.models import ClickFunnelsConfig
 from shared.security import encrypt_value
 
 @pytest.mark.django_db
-def test_get_active_configuration_api(staff_client):
+def test_get_active_configuration_api(superuser_client):
     # No active config initially
-    response = staff_client.get("/api/config/active")
+    response = superuser_client.get("/api/config/active")
     assert response.status_code == 404
     
     # Create active config
@@ -18,14 +18,14 @@ def test_get_active_configuration_api(staff_client):
         workspace_name="My WS"
     )
     
-    response = staff_client.get("/api/config/active")
+    response = superuser_client.get("/api/config/active")
     assert response.status_code == 200
     data = response.json()
     assert data["name"] == "Active One"
     assert data["workspace_name"] == "My WS"
 
 @pytest.mark.django_db
-def test_verify_configuration_api(mocker, staff_client):
+def test_verify_configuration_api(mocker, superuser_client):
     # Create with properly encrypted keys for the service to decrypt
     config = ClickFunnelsConfig.objects.create(
         name="To Verify",
@@ -41,8 +41,14 @@ def test_verify_configuration_api(mocker, staff_client):
     mocker.patch("apps.configuration.api.ConfigurationService", return_value=mock_service)
     mocker.patch("apps.configuration.api.ClickFunnelsClient.from_configuration", return_value=MagicMock())
     
-    response = staff_client.post(f"/api/config/{config.id}/verify")
+    response = superuser_client.post(f"/api/config/{config.id}/verify")
     assert response.status_code == 200
     
     mock_service.verify_token.assert_called_once_with(config)
     mock_service.fetch_teams.assert_called_once_with(config)
+
+
+
+def test_configuration_api_is_admin_only(staff_client):
+    assert staff_client.get("/api/config/active").status_code == 403
+    assert staff_client.post("/api/config/1/verify").status_code == 403

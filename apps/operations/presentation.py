@@ -102,6 +102,13 @@ def sale_state(order: Order, reported_product_ids: Optional[Set[str]] = None, ca
             "expired", "Expirée", NEUTRAL,
             "Le client n'a pas payé dans le délai. Elle se réactive toute seule si un paiement arrive.",
         )
+    if order.status == Order.Status.SUSPENDED and order.suspended_for_nonpayment_at:
+        return SaleState(
+            "suspended_unpaid", "Accès suspendu (impayé)", CRITICAL,
+            "Un versement n'a pas été payé à temps : l'accès est suspendu. Il revient tout seul dès le paiement "
+            "— le lien de paiement du client est sur la page de la vente.",
+            needs_attention=True,
+        )
     if order.status == Order.Status.SUSPENDED:
         return SaleState("suspended", "Suspendue", WARN, "Vente suspendue manuellement.", needs_attention=True)
 

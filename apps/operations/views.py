@@ -494,7 +494,7 @@ def order_detail(request, reference):
         Order.objects.select_related("customer", "plan", "course"), reference=reference,
     )
     installments = list(
-        order.installments.all().prefetch_related("payment_attempts").order_by("sequence")
+        order.installments.all().prefetch_related("payment_attempts", "reminders").order_by("sequence")
     )
     attempt_ids = [a.id for i in installments for a in i.payment_attempts.all()]
     webhook_events = (
@@ -535,9 +535,22 @@ def order_detail(request, reference):
         )
     access = _access_in_words(order, list(provisioning_requests))
 
+    # Personal payment link for the next open installment — what staff send
+    # (e.g. by WhatsApp) when the customer has no e-mail for reminders.
+    from apps.payments.services import PAYABLE_LATER_ORDER_STATUSES, CheckoutService
+
+    next_installment = CheckoutService().next_outstanding_installment(order)
+    installment_pay_url = (
+        CheckoutService().installment_payment_url(order)
+        if next_installment and order.status in PAYABLE_LATER_ORDER_STATUSES and order.status != Order.Status.PENDING
+        else ""
+    )
+
     context = {
         "order": order,
         "state": state,
+        "next_installment": next_installment,
+        "installment_pay_url": installment_pay_url,
         "short_ref": short_ref(order.reference),
         "access": access,
         "installments": installments,

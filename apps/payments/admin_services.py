@@ -45,6 +45,8 @@ from .models import (
 )
 from .services import (
     TaraVerificationService,
+    _lift_nonpayment_suspension,
+    resolve_reported_events,
     DuplicatePaymentError,
     InstallmentService,
     InvalidStateTransitionError,
@@ -538,6 +540,9 @@ class PaymentAttemptAdministrationService:
                     "déjà payé par un autre paiement (le client a peut-être payé deux fois) ou a été annulé. "
                     "À examiner avec Tara, un remboursement peut être nécessaire."
                 ) from e
+            if attempt.status == PaymentAttempt.Status.SUCCEEDED:
+                resolve_reported_events(attempt.id)
+                _lift_nonpayment_suspension(attempt.installment.order_id)
         elif normalized == TaraTransactionStatus.FAILURE:
             attempt = PaymentCreditService().apply_verified_failure(
                 attempt.id, on_applied=lambda a: write_audit(a, AdminAuditLog.OutcomeCategory.SUCCESS),
@@ -876,6 +881,26 @@ class EnrollmentAdministrationService:
     def resume_order_enrollment(self, order_id: int, reason: str, administrator, request=None) -> Order:
         return self._set_order_suspension(order_id, suspended=False, reason=reason, administrator=administrator, request=request)
 
+    @staticmethod
+    def find_open_access(order: Order):
+        """The successful ClickFunnels provisioning attempt behind this sale's course access, or None if access was never opened."""
+        provisioning_request = (
+            ProvisioningRequest.objects.filter(contact_id=order.customer_id, course_id=order.course_id)
+            .exclude(status=ProvisioningRequest.Status.CANCELLED)
+            .order_by("-created_at")
+            .first()
+        )
+        if provisioning_request is None:
+            return None
+        return (
+            provisioning_request.attempts
+            .filter(status=ProvisioningAttempt.Status.SUCCESS, enrollment_attempt__isnull=False)
+            .exclude(enrollment_attempt__cf_enrollment_id="")
+            .exclude(enrollment_attempt__cf_enrollment_id__isnull=True)
+            .order_by("-created_at")
+            .first()
+        )
+
     def _set_order_suspension(self, order_id: int, suspended: bool, reason: str, administrator, request) -> Order:
         log_service_start(logger, "EnrollmentAdministrationService", "_set_order_suspension", order_id=order_id, suspended=suspended)
         action_type = AdminAuditLog.ActionType.FREEZE_ENROLLMENT if suspended else AdminAuditLog.ActionType.RESUME_ENROLLMENT
@@ -894,21 +919,7 @@ class EnrollmentAdministrationService:
             verb = "frozen" if suspended else "resumed"
             raise AdminActionError("Cette action n'est pas possible dans l'état actuel de la vente.")
 
-        provisioning_request = (
-            ProvisioningRequest.objects.filter(contact_id=order.customer_id, course_id=order.course_id)
-            .exclude(status=ProvisioningRequest.Status.CANCELLED)
-            .order_by("-created_at")
-            .first()
-        )
-        attempt = (
-            provisioning_request.attempts
-            .filter(status=ProvisioningAttempt.Status.SUCCESS, enrollment_attempt__isnull=False)
-            .exclude(enrollment_attempt__cf_enrollment_id="")
-            .exclude(enrollment_attempt__cf_enrollment_id__isnull=True)
-            .order_by("-created_at")
-            .first()
-            if provisioning_request else None
-        )
+        attempt = self.find_open_access(order)
         if attempt is None:
             AdminAuditService().record(
                 administrator=administrator, action_type=action_type,

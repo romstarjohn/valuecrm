@@ -1,0 +1,33 @@
+{% extends "public_base.html" %}
+
+{% block title %}Payer mon versement | {{ BRAND_NAME }} &amp; {{ BUSINESS_NAME }}{% endblock %}
+
+{% block content %}
+<section class="checkout-state-card" aria-labelledby="pay-heading">
+    {% if error and not order %}
+        <span class="checkout-state-icon checkout-state-icon--error"><i class="fa-solid fa-link-slash" aria-hidden="true"></i></span>
+        <h1 id="pay-heading">Lien de paiement invalide</h1>
+        <p>{{ error }}</p>
+        <p>Contactez votre organisme de formation : il peut vous envoyer un nouveau lien.</p>
+    {% elif all_paid %}
+        <span class="checkout-state-icon checkout-state-icon--success"><i class="fa-solid fa-check" aria-hidden="true"></i></span>
+        <h1 id="pay-heading">Tout est réglé</h1>
+        <p>Vous avez payé tous les versements pour « {{ order.course_name }} ». Merci pour votre confiance.</p>
+    {% else %}
+        <span class="checkout-state-icon"><i class="fa-solid fa-wallet" aria-hidden="true"></i></span>
+        <h1 id="pay-heading">Payer mon versement</h1>
+        <p>« {{ order.course_name }} »</p>
+        <p class="fs-4 fw-bold my-3">{{ installment.expected_amount }} {{ installment.currency }}</p>
+        <p>Versement {{ installment.sequence }} sur {{ order.installment_count }} — à payer au plus tard le {{ installment.due_date|date:"d/m/Y" }}.</p>
+        {% if order.status == "SUSPENDED" %}
+            <p><strong>Votre accès est suspendu.</strong> Il est rétabli automatiquement dès votre paiement.</p>
+        {% endif %}
+        {% if error %}<p class="text-danger">{{ error }}</p>{% endif %}
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" class="checkout-submit"><i class="fa-solid fa-lock" aria-hidden="true"></i> Payer {{ installment.expected_amount }} {{ installment.currency }}</button>
+        </form>
+        <p class="small text-muted mt-3">Paiement sécurisé par Tara (Mobile Money, carte…).</p>
+    {% endif %}
+</section>
+{% endblock %}

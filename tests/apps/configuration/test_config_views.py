@@ -22,7 +22,7 @@ def test_settings_page_requires_login(client):
     assert "/connexion/" in response.url
 
 @pytest.mark.django_db
-def test_verify_token_flow(mocker, staff_client, active_config):
+def test_verify_token_flow(mocker, superuser_client, active_config):
     mock_client = MagicMock()
     mock_client.validate_credentials.return_value = {"status": "ok"}
     mock_client.list_teams.return_value = [TeamDTO(id=193460, public_id="JNzNaa", name="Team 1")]
@@ -30,7 +30,7 @@ def test_verify_token_flow(mocker, staff_client, active_config):
     mocker.patch("apps.configuration.views.ClickFunnelsClient.from_configuration", return_value=mock_client)
     
     url = reverse("configuration:settings")
-    response = staff_client.post(url, data={"action": "verify_token"})
+    response = superuser_client.post(url, data={"action": "verify_token"})
     assert response.status_code == 302
     
     active_config.refresh_from_db()
@@ -38,7 +38,7 @@ def test_verify_token_flow(mocker, staff_client, active_config):
     assert active_config.raw_payload["available_teams"][0]["id"] == 193460
 
 @pytest.mark.django_db
-def test_select_team_flow(mocker, staff_client, active_config):
+def test_select_team_flow(mocker, superuser_client, active_config):
     active_config.raw_payload["available_teams"] = [{"id": 193460, "public_id": "p1", "name": "Team 1"}]
     active_config.save()
     
@@ -49,7 +49,7 @@ def test_select_team_flow(mocker, staff_client, active_config):
     mocker.patch("apps.configuration.views.ClickFunnelsClient.from_configuration", return_value=mock_client)
     
     url = reverse("configuration:settings")
-    response = staff_client.post(url, data={"action": "select_team", "team_id": 193460})
+    response = superuser_client.post(url, data={"action": "select_team", "team_id": 193460})
     assert response.status_code == 302
     
     active_config.refresh_from_db()
@@ -57,14 +57,14 @@ def test_select_team_flow(mocker, staff_client, active_config):
     assert active_config.raw_payload["available_workspaces"][0]["id"] == 198218
 
 @pytest.mark.django_db
-def test_select_workspace_flow(staff_client, active_config):
+def test_select_workspace_flow(superuser_client, active_config):
     active_config.raw_payload["available_workspaces"] = [
         {"id": 198218, "public_id": "p2", "team_id": 193460, "name": "WS 1", "subdomain": "test-sub"}
     ]
     active_config.save()
     
     url = reverse("configuration:settings")
-    response = staff_client.post(url, data={"action": "select_workspace", "workspace_id": 198218})
+    response = superuser_client.post(url, data={"action": "select_workspace", "workspace_id": 198218})
     assert response.status_code == 302
     
     active_config.refresh_from_db()
@@ -72,7 +72,7 @@ def test_select_workspace_flow(staff_client, active_config):
     assert active_config.workspace_subdomain == "test-sub"
 
 @pytest.mark.django_db
-def test_workspace_subdomain_is_mandatory(staff_client, active_config):
+def test_workspace_subdomain_is_mandatory(superuser_client, active_config):
     # Workspace without subdomain
     active_config.raw_payload["available_workspaces"] = [
         {"id": 198218, "public_id": "p2", "team_id": 193460, "name": "WS 1"}
@@ -80,7 +80,7 @@ def test_workspace_subdomain_is_mandatory(staff_client, active_config):
     active_config.save()
     
     url = reverse("configuration:settings")
-    response = staff_client.post(url, data={"action": "select_workspace", "workspace_id": 198218}, follow=True)
+    response = superuser_client.post(url, data={"action": "select_workspace", "workspace_id": 198218}, follow=True)
     
     assert "Workspace subdomain was not returned by ClickFunnels" in response.content.decode()
     active_config.refresh_from_db()
@@ -89,9 +89,9 @@ def test_workspace_subdomain_is_mandatory(staff_client, active_config):
 
 
 @pytest.mark.django_db
-def test_clickfunnels_page_plain_status_and_separate_test_button(staff_client, active_config):
+def test_clickfunnels_page_plain_status_and_separate_test_button(superuser_client, active_config):
     import html
-    content = html.unescape(staff_client.get(reverse("configuration:settings")).content.decode())
+    content = html.unescape(superuser_client.get(reverse("configuration:settings")).content.decode())
     assert "Connexion ClickFunnels" in content
     assert "Que faire ?" in content or "Connecté ✓" in content
     assert "Tester la connexion" in content

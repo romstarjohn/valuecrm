@@ -1,0 +1,24 @@
+{% autoescape off %}Bonjour {{ customer_name|default:"" }},
+
+{% if kind == "BEFORE_DUE" %}Votre versement {{ installment_number }} sur {{ installment_count }} pour « {{ course_name }} » arrive bientôt.
+
+Montant : {{ amount }} {{ currency }}
+À payer au plus tard le : {{ due_date|date:"d/m/Y" }}
+{% elif kind == "DUE_DAY" %}Votre versement {{ installment_number }} sur {{ installment_count }} pour « {{ course_name }} » est à payer aujourd'hui.
+
+Montant : {{ amount }} {{ currency }}
+
+Sans paiement, votre accès à la formation sera suspendu le {{ suspension_deadline_text }}.
+{% else %}Votre versement {{ installment_number }} sur {{ installment_count }} pour « {{ course_name }} » n'a pas été payé. Votre accès à la formation est donc suspendu.
+
+Montant à régler : {{ amount }} {{ currency }}
+
+Dès votre paiement, votre accès est rétabli automatiquement.
+{% endif %}
+Payer maintenant, en toute sécurité :
+{{ pay_url }}
+
+Si vous avez déjà payé, vous pouvez ignorer ce message.
+
+L'équipe {{ business_name }}
+{% endautoescape %}

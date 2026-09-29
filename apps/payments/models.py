@@ -111,6 +111,9 @@ class ReconciliationRun(TimeStampedModel):
     missing_work_repaired = models.PositiveIntegerField(default=0)
     uncorrelated_transaction_list_records = models.PositiveIntegerField(default=0)
     orders_expired = models.PositiveIntegerField(default=0)
+    installment_reminders_sent = models.PositiveIntegerField(default=0)
+    accesses_suspended = models.PositiveIntegerField(default=0)
+    accesses_resumed = models.PositiveIntegerField(default=0)
     safe_error_count = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -275,6 +278,12 @@ class Order(TimeStampedModel):
     manual_disposition = models.CharField(
         max_length=30, choices=ManualDisposition.choices, default=ManualDisposition.NONE, db_index=True,
         help_text="Administrator business annotation only — never read by any state-transition or eligibility rule.",
+    )
+    suspended_for_nonpayment_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Set when access was suspended automatically because an installment stayed unpaid "
+                  "(InstallmentCollectionService). Only such suspensions are lifted automatically on payment — "
+                  "a manual suspension never is.",
     )
 
     class Meta:
@@ -594,6 +603,41 @@ class TaraWebhookEvent(TimeStampedModel):
 
     def __str__(self):
         return f"WebhookEvent {self.reference} ({self.processing_status})"
+
+
+class InstallmentReminder(TimeStampedModel):
+    """
+    One customer e-mail about an unpaid installment. At most one per
+    (installment, kind) — the unique constraint is what makes the hourly
+    job safe to re-run. Only sent when the customer has an e-mail address;
+    otherwise recorded as SKIPPED_NO_EMAIL so staff can see they must share
+    the payment link another way.
+    """
+
+    class Kind(models.TextChoices):
+        BEFORE_DUE = "BEFORE_DUE", "Rappel avant l'échéance"
+        DUE_DAY = "DUE_DAY", "Rappel le jour de l'échéance"
+        SUSPENDED = "SUSPENDED", "Accès suspendu pour impayé"
+
+    class Status(models.TextChoices):
+        SENT = "SENT", "Envoyé"
+        FAILED = "FAILED", "Échec d'envoi"
+        SKIPPED_NO_EMAIL = "SKIPPED_NO_EMAIL", "Pas d'adresse e-mail"
+
+    installment = models.ForeignKey("payments.Installment", on_delete=models.CASCADE, related_name="reminders")
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    status = models.CharField(max_length=20, choices=Status.choices)
+    attempts = models.PositiveIntegerField(default=0)
+    sent_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["installment", "kind"], name="one_reminder_per_installment_and_kind"),
+        ]
+
+    def __str__(self):
+        return f"{self.get_kind_display()} — versement {self.installment_id}"
 
 
 class PaymentConfirmation(TimeStampedModel):

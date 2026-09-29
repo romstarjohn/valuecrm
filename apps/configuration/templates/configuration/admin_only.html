@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }} | {{ BRAND_NAME }}{% endblock %}
+
+{% block content %}
+{% include "components/page_header.html" with title=page_title %}
+
+<div class="container-fluid px-4 fade-in pb-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-7">
+            <div class="crm-card border-0 shadow-sm">
+                <div class="d-flex align-items-start gap-3">
+                    <span class="pill neutral text-nowrap"><span class="dot"></span>Réservé aux administrateurs</span>
+                    <div>
+                        <p class="mb-2">Cette page contient les identifiants de connexion. Pour la sécurité des paiements, seul un administrateur peut la consulter ou la modifier.</p>
+                        <p class="mb-3 text-muted small">Si une action vous a amené ici (par exemple « connexion non configurée »), demandez à un administrateur de terminer ce réglage, puis réessayez.</p>
+                        <a href="{% url 'dashboard:index' %}" class="btn-crm btn-crm-outline">Retour à « À traiter »</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

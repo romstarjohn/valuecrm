@@ -34,11 +34,24 @@
             <div class="crm-card border-0 shadow-sm mb-4">
                 <h3 class="sale-section-title">Paiements</h3>
                 <p class="sale-section-help">{{ order|formule }}.</p>
+                {% if installment_pay_url %}
+                <div class="p-3 rounded-3 mb-3" style="background:var(--accent-soft);border:1px solid var(--accent-soft-border);">
+                    <div class="fw-bold mb-1">Lien de paiement du client — versement {{ next_installment.sequence }} sur {{ order.installment_count }}</div>
+                    <div class="link-field" style="width:100%;">
+                        <span id="installment-pay-link" style="flex:1;word-break:break-all;">{{ installment_pay_url }}</span>
+                        <button type="button" class="btn-crm btn-crm-outline btn-crm-sm js-copy" data-copy-target="installment-pay-link">Copier</button>
+                    </div>
+                    <div class="cell-sub mt-1">Personnel à ce client. {% if order.customer.email %}Il le reçoit aussi par e-mail avec les rappels.{% else %}Ce client n'a pas d'e-mail : envoyez-lui ce lien vous-même (WhatsApp, SMS…).{% endif %}</div>
+                </div>
+                {% endif %}
                 {% for installment in installments %}
                 <div class="sale-line">
                     <div class="sale-line-main">
                         <div class="cell-title">{{ installment.plain.title }} — {{ installment.plain.amount }}</div>
                         <div class="cell-sub"><span class="pill {{ installment.plain.tone }}"><span class="dot"></span>{{ installment.plain.detail }}</span></div>
+                        {% for reminder in installment.reminders.all %}
+                        <div class="cell-sub mt-1"><i class="fa-regular fa-envelope me-1" aria-hidden="true"></i>{{ reminder.get_kind_display }} — {% if reminder.status == "SENT" %}envoyé le {{ reminder.sent_at|date:"d/m/Y H:i" }}{% elif reminder.status == "SKIPPED_NO_EMAIL" %}non envoyé : pas d'adresse e-mail{% else %}échec d'envoi{% endif %}</div>
+                        {% endfor %}
                     </div>
                     {% if installment.plain.is_open %}
                     <div class="sale-line-actions">

@@ -12,8 +12,11 @@ pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
-def rate_limiting(settings):
+def rate_limiting(settings, mocker):
     settings.RATELIMIT_ENABLE = True
+    # django_ratelimit counts in fixed time windows: pin the clock so a test
+    # crossing a minute boundary can't reset the counter mid-test (flaky).
+    mocker.patch("django_ratelimit.core.time.time", return_value=1_800_000_030.0)
     cache.clear()
     yield
     cache.clear()

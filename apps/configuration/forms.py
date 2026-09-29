@@ -1,5 +1,5 @@
 from django import forms
-from .models import ClickFunnelsConfig
+from .models import ClickFunnelsConfig, NotificationSettings
 from apps.payments.models import TaraConfig
 
 class ClickFunnelsSettingsForm(forms.ModelForm):
@@ -112,3 +112,17 @@ class WorkspaceSelectionForm(forms.Form):
         label="Sélectionner l’espace de travail",
         widget=forms.Select(attrs={"class": "form-select"})
     )
+
+
+class NotificationSettingsForm(forms.ModelForm):
+    class Meta:
+        model = NotificationSettings
+        fields = ["alert_email", "alerts_enabled"]
+        labels = {
+            "alert_email": "Adresse qui reçoit les alertes",
+            "alerts_enabled": "Envoyer les alertes",
+        }
+        widgets = {
+            "alert_email": forms.EmailInput(attrs={"class": "form-control", "placeholder": "equipe@exemple.com"}),
+            "alerts_enabled": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        }

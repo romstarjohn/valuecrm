@@ -96,6 +96,9 @@
                 <div class="checkout-access-note"><i class="fa-solid fa-unlock-keyhole" aria-hidden="true"></i><span id="summary-access">{% if selected_plan %}{% if selected_plan.access_policy == 'FIRST_INSTALLMENT' %}Accès à la formation après confirmation du premier paiement.{% else %}Accès à la formation après confirmation du paiement intégral.{% endif %}{% else %}Sélectionnez un plan pour connaître les conditions d’accès.{% endif %}</span></div>
             </div>
             <button type="submit" class="checkout-submit" id="checkout-submit"><span>Passer au paiement sécurisé</span><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></button>
+            <p class="checkout-help mt-2" id="privacy-note">
+                Vos nom, e-mail et téléphone servent uniquement à traiter votre commande, vous envoyer la confirmation et vous donner accès à la formation. Ils ne sont pas transmis à Tara.{% if PRIVACY_POLICY_URL %} <a href="{{ PRIVACY_POLICY_URL }}" target="_blank" rel="noopener">Politique de confidentialité</a>{% endif %}
+            </p>
             <p class="checkout-payment-hint"><i class="fa-solid fa-lock" aria-hidden="true"></i> Paiement sécurisé sur Tara. Formation 100 % en ligne.</p>
 
             <noscript><p class="checkout-help">Si vous changez de plan, référez-vous au prix du plan sélectionné ci-dessus. Le montant final sera confirmé sur la page de paiement.</p></noscript>

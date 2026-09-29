@@ -1,15 +1,38 @@
+from functools import wraps
+
 from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .models import ClickFunnelsConfig
-from .forms import ClickFunnelsSettingsForm, TaraConfigSettingsForm, TeamSelectionForm, WorkspaceSelectionForm
+from django.core.exceptions import PermissionDenied
+from .models import ClickFunnelsConfig, NotificationSettings, StaffAlert
+from .forms import ClickFunnelsSettingsForm, NotificationSettingsForm, TaraConfigSettingsForm, TeamSelectionForm, WorkspaceSelectionForm
 from .services import ConfigurationService
 from integrations.clickfunnels.client import ClickFunnelsClient
 from apps.payments.models import TaraConfig, TaraWebhookEvent
 from apps.payments.services import TaraConfigService
 
+# Connection credentials (ClickFunnels API key, Tara API key/secret) are
+# administrator-only: whoever can edit them can redirect or break every payment.
+# Superusers always pass; other staff only with the explicit model permission.
+CLICKFUNNELS_ADMIN_PERM = "configuration.change_clickfunnelsconfig"
+TARA_ADMIN_PERM = "payments.change_taraconfig"
+
+
+def admin_only(permission, page_title):
+    """Non-admins get a plain "ask an administrator" page (HTTP 403), not a raw error — other pages link here when a connection is missing."""
+    def decorator(view):
+        @wraps(view)
+        def wrapped(request, *args, **kwargs):
+            if not request.user.has_perm(permission):
+                return render(request, "configuration/admin_only.html", {"page_title": page_title}, status=403)
+            return view(request, *args, **kwargs)
+        return wrapped
+    return decorator
+
+
 @login_required
+@admin_only(CLICKFUNNELS_ADMIN_PERM, "Connexion ClickFunnels")
 def settings_view(request):
     """
     Refactored settings view for multi-step configuration.
@@ -121,11 +144,11 @@ def settings_view(request):
     return render(request, "configuration/settings.html", context)
 
 @login_required
+@admin_only(TARA_ADMIN_PERM, "Connexion Tara")
 def tara_settings_view(request):
     """
-    Separate sibling page to settings_view above — same @login_required
-    authorization rule (no repository evidence for a stricter/Tara-specific
-    permission), same "reload the current config server-side, bind a
+    Separate sibling page to settings_view above — administrator-only like it
+    (see CLICKFUNNELS_ADMIN_PERM), same "reload the current config server-side, bind a
     ModelForm to it, pop the write-only secrets, hand them to the *Service.
     update_credentials() helper, save" shape as settings_view's "save_token"
     branch. Deliberately has no verify/team/workspace steps and no
@@ -165,6 +188,7 @@ def tara_settings_view(request):
 
 
 @login_required
+@admin_only(CLICKFUNNELS_ADMIN_PERM, "Connexion ClickFunnels")
 def verify_connection(request):
     """Action remains for backward compatibility or direct trigger."""
     if request.method == "POST":
@@ -182,3 +206,43 @@ def verify_connection(request):
             except Exception as e:
                 messages.error(request, str(e))
     return redirect("configuration:settings")
+
+
+@login_required
+def notifications_view(request):
+    """Réglages → Notifications: where the team's "À traiter" alert e-mails go (apps/operations/alerts.py)."""
+    if not request.user.has_perm("configuration.change_notificationsettings"):
+        raise PermissionDenied
+
+    config = NotificationSettings.current()
+    if request.method == "POST" and request.POST.get("action") == "test":
+        if not config.alert_email:
+            messages.error(request, "Enregistrez d'abord une adresse e-mail.")
+        else:
+            from apps.operations.alerts import send_test_alert
+
+            try:
+                send_test_alert()
+            except Exception:  # noqa: BLE001 — shown to the user in plain words; details are in the logs
+                messages.error(
+                    request,
+                    "L'e-mail de test n'a pas pu partir : l'envoi d'e-mails n'est pas configuré sur le serveur "
+                    "(réglages SMTP). Contactez la personne qui gère le serveur.",
+                )
+            else:
+                messages.success(request, f"E-mail de test envoyé à {config.alert_email}. Vérifiez aussi les spams.")
+        return redirect("configuration:notifications")
+
+    form = NotificationSettingsForm(request.POST or None, instance=config)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Réglages des notifications enregistrés.")
+        return redirect("configuration:notifications")
+
+    return render(request, "configuration/notifications.html", {
+        "form": form,
+        "config": config,
+        "recent_alerts": StaffAlert.objects.order_by("-created_at")[:10],
+        "email_backend_is_console": "console" in settings.EMAIL_BACKEND,
+    })
+

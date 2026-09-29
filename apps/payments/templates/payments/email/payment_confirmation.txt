@@ -1,15 +1,19 @@
 {% if customer_name %}Bonjour {{ customer_name }},{% else %}Bonjour,{% endif %}
 
-Nous avons bien reçu votre paiement pour {{ business_name }}. Voici le détail :
+Votre paiement est confirmé : Tara nous a confirmé sa bonne réception. Voici le détail :
 
-Montant reçu : {{ amount_received }} {{ currency }}
-Référence de commande : {{ order_reference }}
-Formation / plan : {{ plan_or_course_name }}
+Montant payé : {{ amount_received }} {{ currency }}
+Formation : {{ plan_or_course_name }}
 Versement : {{ installment_number }} sur {{ installment_count }}
-{% if remaining_balance_positive %}Solde restant : {{ remaining_balance }} {{ currency }}{% else %}Cette commande est désormais soldée.{% endif %}
-{% if next_installment_due_date %}Prochaine échéance : {{ next_installment_due_date }}{% endif %}
+{% if remaining_balance_positive %}Reste à payer : {{ remaining_balance }} {{ currency }}{% else %}Tout est réglé pour cette formation.{% endif %}
+{% if next_installment_due_date %}Prochain versement : le {{ next_installment_due_date|date:"d/m/Y" }}{% endif %}
 
-Statut de l'accès à la formation : {{ course_access_status }}
+Accès à la formation : {{ course_access_status }}
+
+Suivre votre commande :
+{{ status_url }}
+
+Référence de commande : {{ order_reference }}
 
 Merci pour votre confiance.
 

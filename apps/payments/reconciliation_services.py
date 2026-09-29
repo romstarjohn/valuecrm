@@ -28,9 +28,10 @@ from shared.constants import (
 from shared.logging_utils import get_logger, log_service_start, log_service_success, log_service_failure
 from django.db.models import Q
 
-from .models import Installment, Order, PaymentAttempt, PaymentConfirmation, ReconciliationRun
+from .models import Installment, Order, PaymentAttempt, PaymentConfirmation, ReconciliationRun, TaraWebhookEvent
 from .services import (
     DuplicatePaymentError,
+    InstallmentCollectionService,
     OrderExpiryService,
     InvalidStateTransitionError,
     PaymentAttemptService,
@@ -40,6 +41,8 @@ from .services import (
     PaymentIdConflictError,
     TaraConfigService,
     TaraVerificationService,
+    _lift_nonpayment_suspension,
+    resolve_reported_events,
 )
 from integrations.payments.tara.exceptions import (
     TaraClientError,
@@ -53,6 +56,9 @@ from integrations.payments.tara.exceptions import (
 from integrations.payments.tara.schemas import TaraTransactionStatus
 
 logger = get_logger(__name__)
+
+# Statuses rechecked only when Tara reported a SUCCESS for them that we could not confirm.
+_REPORTED_RECHECK_STATUSES = (PaymentAttempt.Status.LINK_CREATED, PaymentAttempt.Status.FAILED, PaymentAttempt.Status.EXPIRED)
 
 _RETRYABLE_STATUS_CHECK_ERRORS = (
     TaraTimeoutError, TaraConnectionError, TaraServerError, TaraClientError, TaraMalformedResponseError,
@@ -115,7 +121,8 @@ class ReconciliationService:
             "still_pending_or_unknown": 0, "confirmation_jobs_processed": 0, "confirmation_jobs_sent": 0,
             "confirmation_jobs_failed": 0, "provisioning_jobs_processed": 0, "provisioning_jobs_completed": 0,
             "provisioning_jobs_failed": 0, "missing_work_repaired": 0, "uncorrelated_transaction_list_records": 0,
-            "orders_expired": 0, "safe_error_count": 0,
+            "orders_expired": 0, "installment_reminders_sent": 0, "accesses_suspended": 0,
+            "accesses_resumed": 0, "safe_error_count": 0,
         }
 
         try:
@@ -124,7 +131,9 @@ class ReconciliationService:
             self._process_confirmations(counters)
             self._process_provisioning(counters)
             self._repair_missing_followups(counters)
+            self._collect_installments(counters)
             self._expire_stale_orders(counters)
+            self._send_staff_alerts(counters)
             run.run_status = (
                 ReconciliationRun.RunStatus.SUCCESS if counters["safe_error_count"] == 0
                 else ReconciliationRun.RunStatus.PARTIAL_FAILURE
@@ -147,10 +156,18 @@ class ReconciliationService:
     def _verify_stale_attempts(self, counters: dict) -> None:
         now = timezone.now()
         cutoff = now - timedelta(minutes=RECONCILIATION_STALE_ATTEMPT_MIN_AGE_MINUTES)
+        # Also attempts where Tara reported SUCCESS that we could not confirm
+        # (e.g. the verification call failed at the time) — rechecked with the
+        # same backoff/cap, so a lost confirmation fixes itself without a click.
+        reported_product_ids = TaraWebhookEvent.objects.filter(
+            raw_provider_status__iexact="SUCCESS", received_at__lte=cutoff,
+        ).exclude(processing_status=TaraWebhookEvent.ProcessingStatus.PROCESSED).values("tara_product_id")
         candidate_ids = list(
-            PaymentAttempt.objects.filter(status__in=[PaymentAttempt.Status.PENDING, PaymentAttempt.Status.UNKNOWN])
+            PaymentAttempt.objects.filter(
+                Q(status__in=[PaymentAttempt.Status.PENDING, PaymentAttempt.Status.UNKNOWN], updated_at__lte=cutoff)
+                | Q(status__in=_REPORTED_RECHECK_STATUSES, tara_product_id__in=reported_product_ids)
+            )
             .filter(Q(next_reconciliation_check_at__isnull=True) | Q(next_reconciliation_check_at__lte=now))
-            .filter(updated_at__lte=cutoff)
             .filter(reconciliation_check_count__lt=RECONCILIATION_STALE_ATTEMPT_MAX_CHECKS)
             .order_by("updated_at")
             .values_list("id", flat=True)[:RECONCILIATION_STALE_ATTEMPT_BATCH_SIZE]
@@ -178,7 +195,7 @@ class ReconciliationService:
             attempt = PaymentAttempt.objects.get(pk=attempt_id)
         except PaymentAttempt.DoesNotExist:
             return
-        if attempt.status not in (PaymentAttempt.Status.PENDING, PaymentAttempt.Status.UNKNOWN):
+        if attempt.status not in (PaymentAttempt.Status.PENDING, PaymentAttempt.Status.UNKNOWN, *_REPORTED_RECHECK_STATUSES):
             return  # resolved before we got to it (e.g. a concurrent webhook)
 
         counters["status_checks"] += 1
@@ -205,7 +222,11 @@ class ReconciliationService:
                     attempt_id, tara_payment_id=verification.payment_id, verified_amount=verification.amount,
                 )
                 counters["verified_successes"] += 1
+                resolve_reported_events(attempt_id)
+                _lift_nonpayment_suspension(attempt.installment.order_id)
             except (InvalidStateTransitionError, PaymentIdConflictError, DuplicatePaymentError):
+                # e.g. paid twice — stays in "À traiter" for a human (and the team alert).
+                self._bump_check_count(attempt_id)
                 counters["still_pending_or_unknown"] += 1
         elif normalized == TaraTransactionStatus.FAILURE:
             try:
@@ -221,7 +242,7 @@ class ReconciliationService:
         """Short transaction: reload, lock, confirm still eligible, apply idempotently — steps 3-6 of the brief's per-candidate flow."""
         with transaction.atomic():
             attempt = PaymentAttempt.objects.select_for_update().get(pk=attempt_id)
-            if attempt.status not in (PaymentAttempt.Status.PENDING, PaymentAttempt.Status.UNKNOWN):
+            if attempt.status not in (PaymentAttempt.Status.PENDING, PaymentAttempt.Status.UNKNOWN, *_REPORTED_RECHECK_STATUSES):
                 return
             new_count = attempt.reconciliation_check_count + 1
             backoff_index = min(new_count - 1, len(RECONCILIATION_STALE_ATTEMPT_BACKOFF_MINUTES) - 1)
@@ -239,6 +260,28 @@ class ReconciliationService:
                 PaymentAttemptService().transition(attempt, PaymentAttempt.Status.UNKNOWN)
 
     # --- Transaction-list pull: reporting/manual review only, never credit ---
+
+    def _collect_installments(self, counters: dict) -> None:
+        # After _verify_stale_attempts on purpose: a payment verified earlier
+        # in this run is already credited, so its access is never suspended.
+        try:
+            result = InstallmentCollectionService().run()
+            counters["installment_reminders_sent"] += result["reminders_sent"]
+            counters["accesses_suspended"] += result["accesses_suspended"]
+            counters["accesses_resumed"] += result["accesses_resumed"]
+        except Exception as e:
+            counters["safe_error_count"] += 1
+            log_service_failure(logger, "ReconciliationService", "_collect_installments", e)
+
+    def _send_staff_alerts(self, counters: dict) -> None:
+        # Last: only what the automatic steps above could not resolve reaches the team.
+        try:
+            from apps.operations.alerts import send_staff_alerts
+
+            send_staff_alerts()
+        except Exception as e:
+            counters["safe_error_count"] += 1
+            log_service_failure(logger, "ReconciliationService", "_send_staff_alerts", e)
 
     def _expire_stale_orders(self, counters: dict) -> None:
         # Last step on purpose: attempts verified as paid earlier in this same

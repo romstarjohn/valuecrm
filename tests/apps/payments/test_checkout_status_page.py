@@ -31,7 +31,7 @@ def test_valid_signed_reference_resolves_order(client, order):
     token = CheckoutService().build_signed_reference(order.reference)
     response = client.get(status_url(token))
     assert response.status_code == 200
-    assert str(order.reference).encode() in response.content
+    assert f"#{str(order.reference)[:8].upper()}".encode() in response.content  # D: short reference
 
 
 def test_tampered_reference_rejected(client, order):
@@ -85,8 +85,8 @@ def test_another_customers_order_rejected_via_wrong_token(client, order):
 
     token_for_order = CheckoutService().build_signed_reference(order.reference)
     response = client.get(status_url(token_for_order))
-    assert str(order.reference).encode() in response.content
-    assert str(other_order.reference).encode() not in response.content
+    assert f"#{str(order.reference)[:8].upper()}".encode() in response.content  # D: short reference
+    assert f"#{str(other_order.reference)[:8].upper()}".encode() not in response.content
 
 
 def test_bare_uuid_reference_is_rejected(client, order):

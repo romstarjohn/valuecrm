@@ -1,0 +1,19 @@
+{% extends "public_base.html" %}
+{% load status_labels %}
+
+{% block title %}Paiement non démarré | {{ BRAND_NAME }} &amp; {{ BUSINESS_NAME }}{% endblock %}
+
+{% block content %}
+<section class="checkout-state-card" aria-labelledby="ns-heading">
+    <span class="checkout-state-icon checkout-state-icon--warning"><i class="fa-solid fa-plug-circle-exclamation" aria-hidden="true"></i></span>
+    <h1 id="ns-heading">Le paiement n’a pas pu démarrer</h1>
+    <p>Un problème technique nous a empêchés d’ouvrir la page de paiement. <strong>Rien n’a été débité.</strong></p>
+    <p>Vos informations sont enregistrées : il suffit de réessayer, sans rien ressaisir.</p>
+    <form method="post" action="{% url 'payments:checkout_retry' token %}">
+        {% csrf_token %}
+        <button type="submit" class="checkout-submit"><i class="fa-solid fa-rotate-right" aria-hidden="true"></i> Réessayer le paiement</button>
+    </form>
+    <p class="small text-muted mt-3">Si le problème persiste, contactez votre organisme de formation en indiquant la référence ci-dessous.</p>
+    <p class="checkout-state-reference">Référence de commande : {{ order.reference|short_ref }}</p>
+</section>
+{% endblock %}

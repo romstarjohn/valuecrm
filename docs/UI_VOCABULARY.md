@@ -45,6 +45,7 @@ everywhere. Technical terms only appear under the **Technique** menu.
 | Expirée | neutral | Not paid in time; reactivates if a payment arrives | — |
 | Annulée | neutral | Cancelled | — |
 | Suspendue | warn | Suspended manually | review |
+| Accès suspendu (impayé) | critical | Installment unpaid 24 h after its due day; access frozen automatically | send the client's payment link — access returns by itself once paid |
 
 ## Writing rules
 
