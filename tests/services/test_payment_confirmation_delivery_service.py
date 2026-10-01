@@ -168,3 +168,36 @@ def test_manual_review_confirmation_is_never_auto_retried():
     assert len(mail.outbox) == 0
     confirmation.refresh_from_db()
     assert confirmation.status == PaymentConfirmation.Status.MANUAL_REVIEW
+
+
+def test_send_interrupted_midway_is_retried_later():
+    """Process stopped between "sending" and the result: the e-mail must not stay stuck forever."""
+    from datetime import timedelta
+
+    from django.core import mail
+    from django.utils import timezone
+
+    confirmation = make_confirmation(email="stuck@example.com")
+    PaymentConfirmation.objects.filter(pk=confirmation.pk).update(
+        status=PaymentConfirmation.Status.SENDING, updated_at=timezone.now() - timedelta(minutes=20),
+    )
+
+    PaymentConfirmationDeliveryService().process_pending()
+
+    confirmation.refresh_from_db()
+    assert confirmation.status == PaymentConfirmation.Status.SENT
+    assert len(mail.outbox) == 1
+
+
+def test_send_in_progress_is_left_alone():
+    """A send started a moment ago (e.g. by the background thread) is not taken over — no double e-mail."""
+    from django.core import mail
+
+    confirmation = make_confirmation(email="busy@example.com")
+    PaymentConfirmation.objects.filter(pk=confirmation.pk).update(status=PaymentConfirmation.Status.SENDING)
+
+    PaymentConfirmationDeliveryService().process_pending()
+
+    confirmation.refresh_from_db()
+    assert confirmation.status == PaymentConfirmation.Status.SENDING
+    assert mail.outbox == []

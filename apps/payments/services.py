@@ -1131,9 +1131,13 @@ class PaymentConfirmationDeliveryService:
     """
 
     _CLAIMABLE_STATUSES = (PaymentConfirmation.Status.PENDING, PaymentConfirmation.Status.FAILED)
+    # A send that was interrupted (process stopped between claim and result)
+    # would stay SENDING forever; after this long it is simply retried.
+    STUCK_SENDING_AFTER = timedelta(minutes=15)
 
     def process_pending(self, limit: int = 100) -> int:
         now = timezone.now()
+        self.release_stuck_sends(now)
         ids = list(
             PaymentConfirmation.objects.filter(status__in=self._CLAIMABLE_STATUSES)
             .filter(models.Q(next_attempt_at__isnull=True) | models.Q(next_attempt_at__lte=now))
@@ -1145,6 +1149,12 @@ class PaymentConfirmationDeliveryService:
             self._process_one(confirmation_id)
             processed += 1
         return processed
+
+    def release_stuck_sends(self, now=None) -> int:
+        now = now or timezone.now()
+        return PaymentConfirmation.objects.filter(
+            status=PaymentConfirmation.Status.SENDING, updated_at__lt=now - self.STUCK_SENDING_AFTER,
+        ).update(status=PaymentConfirmation.Status.FAILED, next_attempt_at=now, updated_at=now)
 
     def _process_one(self, confirmation_id: int) -> None:
         claimed = self._claim(confirmation_id)
